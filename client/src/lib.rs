@@ -4,6 +4,8 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{WebSocket, MessageEvent};
 use pulldown_cmark::{Parser, Options, html};
+use gloo_net::http::Request;
+use web_sys::RequestCredentials;
 
 // Bindings to the JS Xterm library
 #[wasm_bindgen]
@@ -25,80 +27,162 @@ pub fn App() -> impl IntoView {
         <Router>
             <Routes>
                 <Route path="/new" view=CreatePage />
-                <Route path="/project/:slug" view=ViewPage />
+                <Route path="/:username/:slug" view=ViewPage />
             </Routes>
         </Router>
     }
 }
 
-// PAGE 1: CREATE (/new)
+#[derive(Clone, Debug, serde::Deserialize)]
+struct User {
+    login: String,
+    avatar_url: String,
+}
+
+#[component]
 #[component]
 fn CreatePage() -> impl IntoView {
-    // 1. Define State
     let (container_id, set_container_id) = create_signal("".to_string());
-    let (markdown, set_markdown) = create_signal("# My Awesome Tool\n\nRun the install command to get started...".to_string());
+    let (markdown, set_markdown) = create_signal("# My Awesome Tool\n\nRun the install command...".to_string());
     let (slug, set_slug) = create_signal("demo-project".to_string());
+    let (user, set_user) = create_signal(None::<User>);
 
-    // 2. On Load: Call Server to get a fresh container
     create_resource(|| (), move |_| async move {
-        let client = reqwest::Client::new();
-        let res = client.post("http://localhost:3000/api/spawn").send().await.unwrap();
-        let id = res.json::<String>().await.unwrap();
-        set_container_id.set(id);
+        let auth_req = Request::get("http://localhost:3000/api/me")
+            .credentials(RequestCredentials::Include)
+            .send()
+            .await;
+
+        match auth_req {
+            Ok(resp) => {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        set_user.set(Some(u));
+
+                        // --- DEBUGGING START ---
+                        let spawn_req = Request::post("http://localhost:3000/api/spawn")
+                            .credentials(RequestCredentials::Include)
+                            .send()
+                            .await;
+                            
+                        match spawn_req {
+                            Ok(spawn_resp) => {
+                                if spawn_resp.ok() {
+                                    if let Ok(id) = spawn_resp.json::<String>().await {
+                                        set_container_id.set(id);
+                                    }
+                                } else {
+                                    // If Server returns 500/401, show it in the UI
+                                    let status = spawn_resp.status();
+                                    let text = spawn_resp.text().await.unwrap_or_default();
+                                    set_container_id.set(format!("ERROR {}: {}", status, text));
+                                }
+                            }
+                            Err(e) => {
+                                // If Network/CORS fails, show it in the UI
+                                set_container_id.set(format!("NETWORK_FAIL: {}", e));
+                            }
+                        }
+                        // --- DEBUGGING END ---
+                    }
+                }
+            }
+            Err(e) => web_sys::console::log_1(&JsValue::from_str(&format!("Auth Error: {}", e))),
+        }
     });
 
-    // 3. Define the Publish Action
     let on_publish = move |_| {
         spawn_local(async move {
-            let client = reqwest::Client::new();
-            let _ = client.post("http://localhost:3000/api/publish")
-                .json(&serde_json::json!({
-                    "container_id": container_id.get(),
-                    "slug": slug.get(),
-                    "markdown": markdown.get()
-                }))
-                .send().await;
+            let body = serde_json::json!({
+                "container_id": container_id.get(),
+                "slug": slug.get(),
+                "markdown": markdown.get()
+            });
+
+            // STEP C: Publish
+            // Fix: Unwrap .body() because it returns a Result
+            let _ = Request::post("http://localhost:3000/api/publish")
+                .header("Content-Type", "application/json")
+                .credentials(RequestCredentials::Include)
+                .body(body.to_string()).unwrap() // <--- Added .unwrap() here
+                .send()
+                .await;
+
             window().alert_with_message("Published!").unwrap();
         });
     };
 
     view! {
-        <div class="nav">
-            <div class="brand">"TryCLI Studio"</div>
-            <div class="controls">
-                <span style="color: var(--text-muted); font-size: 0.9rem;">"trycli.com /"</span>
-                <input type="text" class="input-slug" 
-                       on:input=move |ev| set_slug.set(event_target_value(&ev)) 
-                       prop:value=slug />
-                <button class="btn-primary" on:click=on_publish prop:disabled=move || container_id.get().is_empty()>"Publish Demo"</button>
-            </div>
-        </div>
+       <div class="nav">
+        <div class="brand">"TryCLI Studio"</div>
+        <div class="controls">
+            {move || match user.get() {
+                Some(u) => view! {
+                     // UPDATED: User Profile Area with Avatar
+                     <div style="display: flex; align-items: center; margin-right: 20px;">
+                        <img src=u.avatar_url 
+                             style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid var(--border);" />
+                        <span style="color: var(--text-muted); font-size: 0.9rem;">
+                            {u.login.clone()}
+                        </span>
+                     </div>
 
-        <div class="workspace">
-            // Left Pane: Terminal
-            <div class="pane">
-                <div class="terminal-header">
-                    <div class="dot red"></div>
-                    <div class="dot yellow"></div>
-                    <div class="dot green"></div>
-                    <span class="terminal-title">"bash — interactive"</span>
-                </div>
-                <div class="terminal-body">
-                    {move || match container_id.get().as_str() {
-                        "" => view! { <div style="padding: 20px; color: #666;">"Initializing Environment..."</div> }.into_view(),
-                        id => view! { <TerminalView container_id=id.to_string() /> }.into_view()
-                    }}
-                </div>
-            </div>
-            
-            // Right Pane: Editor
-            <div class="pane">
-                 <textarea class="editor-textarea"
-                    spellcheck="false"
-                    on:input=move |ev| set_markdown.set(event_target_value(&ev))
-                 >{markdown}</textarea>
-            </div>
+                     // LOGOUT BUTTON
+                     <a href="http://localhost:3000/auth/logout" 
+                        class="btn-primary" 
+                        style="background: #27272a; margin-right: 12px; text-decoration: none; font-size: 0.8rem; border: 1px solid var(--border);">
+                        "Logout"
+                     </a>
+
+                     <span style="color: var(--text-muted); font-size: 0.9rem; margin-right: 8px;">"Project Slug:"</span>
+                     <input type="text" class="input-slug" 
+                            on:input=move |ev| set_slug.set(event_target_value(&ev)) 
+                            prop:value=slug />
+                     <button class="btn-primary" on:click=on_publish 
+                             prop:disabled=move || container_id.get().is_empty()>"Publish"</button>
+                }.into_view(),
+                None => view! {
+                    <a href="http://localhost:3000/auth/github" class="btn-primary" style="text-decoration: none;">
+                        "Login with GitHub"
+                    </a>
+                }.into_view()
+            }}
         </div>
+       </div>
+
+        {move || match user.get() {
+            Some(_) => view! {
+                <div class="workspace">
+                    <div class="pane">
+                        <div class="terminal-header">
+                            <div class="dot red"></div>
+                            <div class="dot yellow"></div>
+                            <div class="dot green"></div>
+                            <span class="terminal-title">"bash — interactive"</span>
+                        </div>
+                        <div class="terminal-body">
+                            {move || match container_id.get().as_str() {
+                                "" => view! { <div style="padding: 20px; color: #666;">"Initializing Environment..."</div> }.into_view(),
+                                id => view! { <TerminalView container_id=id.to_string() /> }.into_view()
+                            }}
+                        </div>
+                    </div>
+                    
+                    <div class="pane">
+                         <textarea class="editor-textarea"
+                            spellcheck="false"
+                            on:input=move |ev| set_markdown.set(event_target_value(&ev))
+                         >{markdown}</textarea>
+                    </div>
+                </div>
+            }.into_view(),
+            None => view! {
+                <div style="display: flex; height: calc(100vh - 60px); justify-content: center; align-items: center; flex-direction: column; gap: 20px;">
+                    <h2 style="color: var(--text-main);">"Welcome to TryCLI"</h2>
+                    <p style="color: var(--text-muted);">"Please sign in to start creating interactive demos."</p>
+                </div>
+            }.into_view()
+        }}
     }
 }
 
@@ -106,20 +190,32 @@ fn CreatePage() -> impl IntoView {
 #[component]
 fn ViewPage() -> impl IntoView {
     let params = use_params_map();
-    let slug = move || params.get().get("slug").cloned().unwrap_or_default();
+    let username = move || params.get().get("username").cloned().unwrap_or_default();
+    let slug = move || params.get().get("slug").cloned().unwrap_or_default();    
     
     // 1. Fetch project data
-    let project_data = create_resource(slug, |s| async move {
-        let url = format!("http://localhost:3000/api/project/{}", s);
-        reqwest::get(&url).await.unwrap()
-            .json::<serde_json::Value>().await.unwrap()
-    });
+    let project_data = create_resource(
+        move || (username(), slug()), 
+        |(u, s)| async move {
+            // New API URL structure
+            let url = format!("http://localhost:3000/api/project/{}/{}", u, s);
+            
+            // Note: Viewers don't strictly need Credentials unless you want to show "Edit" buttons later
+            // But simple GET is fine.
+            let req = Request::get(&url).send().await;
+            
+            match req {
+                Ok(resp) => resp.json::<serde_json::Value>().await.ok(),
+                Err(_) => None
+            }
+        }
+    );
 
     view! {
         {move || match project_data.get() {
-            Some(data) => {
-                let cid = data["container_id"].as_str().unwrap().to_string();
-                let md_raw = data["markdown"].as_str().unwrap().to_string();
+            Some(Some(data)) => {
+                let cid = data["container_id"].as_str().unwrap_or_default().to_string();
+            let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                 let html_output = render_markdown(&md_raw);
 
                 view! {
@@ -151,7 +247,16 @@ fn ViewPage() -> impl IntoView {
                      </div>
                 }.into_view()
             },
-            None => view! { <div style="padding: 50px; text-align: center;">"Loading Project..."</div> }.into_view()
+            // CASE 2: Resource Ready but API returned None (404)
+        Some(None) => view! { 
+            <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">
+                "Project not found." 
+            </div> 
+        }.into_view(),
+        // CASE 3: Resource Loading
+        None => view! { 
+            <div style="padding: 50px; text-align: center;">"Loading Project..."</div> 
+        }.into_view()
         }}
     }
 }

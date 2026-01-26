@@ -1,50 +1,88 @@
+mod auth; // Register auth module
+
 use axum::{
     extract::{Path, State, ws::{Message, WebSocket, WebSocketUpgrade}},
     routing::{get, post},
     Router, Json, response::IntoResponse,
-    http::StatusCode, // Import StatusCode for error handling
+    http::{StatusCode, Method}, 
 };
 use bollard::Docker;
-// BOLLARD 0.15 IMPORTS
+// Import HostConfig for Resource Limits
 use bollard::container::{CreateContainerOptions, Config}; 
-use bollard::image::{CommitContainerOptions}; 
+use bollard::models::HostConfig;
+use bollard::image::{CommitContainerOptions, CreateImageOptions}; // <--- ADDED CreateImageOptions
 use bollard::exec::{CreateExecOptions, StartExecResults};
 
-use futures::{stream::StreamExt, SinkExt};
+use futures::{stream::StreamExt, SinkExt, TryStreamExt}; // <--- ADDED TryStreamExt for image pull
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use sqlx::postgres::PgPoolOptions;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use tower_sessions::{Expiry, MemoryStore, Session, SessionManagerLayer};
+use axum::http::header::{CONTENT_TYPE, AUTHORIZATION};
 
-// Shared State
 #[derive(Clone)]
-struct AppState {
+pub struct AppState {
     docker: Arc<Docker>,
     db: sqlx::PgPool,
+    github_id: String,
+    github_secret: String,
 }
 
 #[tokio::main]
 async fn main() {
+    dotenvy::dotenv().ok(); 
+
     let docker = Arc::new(Docker::connect_with_local_defaults().unwrap());
-    
-    // Connect to Postgres on port 5433 (as per previous fix)
+    let database_url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set in .env");
+
     let db = PgPoolOptions::new()
-        .connect("postgres://postgres:password@localhost:5433/postgres").await.unwrap();
+        .connect(&database_url).await.unwrap();
 
-    // Init DB
-    sqlx::query("CREATE TABLE IF NOT EXISTS projects (slug TEXT PRIMARY KEY, image_tag TEXT, markdown TEXT)")
-        .execute(&db).await.unwrap();
+    // --- FIX 1: CORRECT TABLE SCHEMA ---
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS projects (
+            owner_username TEXT NOT NULL,
+            slug TEXT NOT NULL,
+            image_tag TEXT NOT NULL,
+            markdown TEXT NOT NULL,
+            owner_id BIGINT,
+            PRIMARY KEY (owner_username, slug)
+        )
+        "#
+    ).execute(&db).await.unwrap();
 
-    let state = AppState { docker, db };
+    let session_store = MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(false) 
+        .with_same_site(tower_sessions::cookie::SameSite::Lax) // Ensure Lax for redirects
+        .with_expiry(Expiry::OnInactivity(time::Duration::minutes(60)));
 
-    // Define Routes
+    let state = AppState { 
+        docker, 
+        db,
+        github_id: std::env::var("GITHUB_CLIENT_ID").expect("Missing GITHUB_CLIENT_ID"),
+        github_secret: std::env::var("GITHUB_CLIENT_SECRET").expect("Missing GITHUB_CLIENT_SECRET"),
+    };
+
     let app = Router::new()
+        .merge(auth::routes()) 
         .route("/api/spawn", post(spawn_handler))      
         .route("/api/publish", post(publish_handler))  
-        .route("/api/project/:slug", get(get_project)) 
+        // --- FIX 2: Updated Route for Username ---
+        .route("/api/project/:username/:slug", get(get_project)) 
         .route("/ws/:container_id", get(ws_handler))   
-        .layer(tower_http::cors::CorsLayer::permissive())
+        .layer(tower_http::cors::CorsLayer::new()
+            .allow_origin("http://localhost:8080".parse::<axum::http::HeaderValue>().unwrap())
+            // --- FIX 3: Add OPTIONS for Browser Preflight ---
+            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+            .allow_headers([CONTENT_TYPE, AUTHORIZATION])
+            .allow_credentials(true) 
+        )
+        .layer(session_layer) 
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -52,25 +90,55 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-// --- API HANDLERS ---
+// --- HANDLERS ---
 
-async fn spawn_handler(State(state): State<AppState>) -> Json<String> {
-    let container_name = format!("trycli-session-{}", Uuid::new_v4());
+async fn spawn_handler(
+    State(state): State<AppState>,
+    session: Session, 
+) -> Result<Json<String>, (StatusCode, String)> {
     
+    let user: Option<auth::User> = session.get("user").await.unwrap();
+    if user.is_none() {
+        return Err((StatusCode::UNAUTHORIZED, "Please login first".to_string()));
+    }
+
+    let container_name = format!("trycli-session-{}", Uuid::new_v4());
+    let image_name = "debian:bookworm-slim";
+
+    // --- FIX 4: AUTO-PULL IMAGE (Prevent 500 Error) ---
+    // If image is missing, this downloads it.
+    let pull_options = CreateImageOptions {
+        from_image: image_name,
+        ..Default::default()
+    };
+    let _ = state.docker.create_image(Some(pull_options), None, None)
+        .map_err(|e| println!("Pulling status: {:?}", e))
+        .collect::<Vec<_>>() 
+        .await;
+
+    // OPTIMIZATION: Host Config (Restored)
+    let host_config = HostConfig {
+        memory: Some(512 * 1024 * 1024), 
+        nano_cpus: Some(500_000_000), 
+        auto_remove: Some(true), 
+        ..Default::default()
+    };
+
     let config = Config {
-        image: Some("ubuntu:latest"), 
+        image: Some(image_name), 
         tty: Some(true),
+        host_config: Some(host_config),
         ..Default::default()
     };
     
-    let _ = state.docker.create_container(
+    state.docker.create_container(
         Some(CreateContainerOptions { name: container_name.clone(), platform: None }), 
         config
-    ).await.unwrap();
+    ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     
     state.docker.start_container::<String>(&container_name, None).await.unwrap();
     
-    Json(container_name) 
+    Ok(Json(container_name))
 }
 
 #[derive(Deserialize)]
@@ -80,15 +148,17 @@ struct PublishRequest {
     markdown: String,
 }
 
-// Change Return Type to Result so we can return Errors instead of crashing
 async fn publish_handler(
-    State(state): State<AppState>, 
+    State(state): State<AppState>,
+    session: Session, 
     Json(payload): Json<PublishRequest>
 ) -> Result<Json<String>, (StatusCode, String)> {
+
+    let user: Option<auth::User> = session.get("user").await.unwrap();
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
     
-    // GUARD 1: Check if container_id is empty (Prevents Panic #1)
     if payload.container_id.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "Container not ready yet. Please wait.".to_string()));
+        return Err((StatusCode::BAD_REQUEST, "Container not ready yet.".to_string()));
     }
 
     let new_image_tag = format!("trycli-project-{}", payload.slug);
@@ -99,15 +169,16 @@ async fn publish_handler(
         ..Default::default()
     };
     
-    // GUARD 2: Handle Docker errors gracefully
     state.docker.commit_container::<String, String>(commit_opts, Default::default())
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Error: {}", e)))?;
 
-    sqlx::query("INSERT INTO projects (slug, image_tag, markdown) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username) VALUES ($1, $2, $3, $4, $5)")
         .bind(&payload.slug)
         .bind(&new_image_tag)
         .bind(&payload.markdown)
+        .bind(user.id)          
+        .bind(&user.login)     
         .execute(&state.db)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
@@ -123,17 +194,20 @@ struct ProjectResponse {
     markdown: String,
 }
 
+// --- FIX 5: Updated Signature for Username ---
 async fn get_project(
-    Path(slug): Path<String>, 
+    Path((username, slug)): Path<(String, String)>, 
     State(state): State<AppState>
 ) -> Result<Json<ProjectResponse>, (StatusCode, String)> {
     
-    // GUARD 3: Use fetch_optional to handle missing projects (Prevents Panic #2)
-    let row: Option<(String, String)> = sqlx::query_as("SELECT image_tag, markdown FROM projects WHERE slug = $1")
-        .bind(slug)
-        .fetch_optional(&state.db)
-        .await
-        .unwrap_or(None);
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT image_tag, markdown FROM projects WHERE owner_username = $1 AND slug = $2"
+    )
+    .bind(username)
+    .bind(slug)
+    .fetch_optional(&state.db)
+    .await
+    .unwrap_or(None);
 
     let (image_tag, markdown) = match row {
         Some(r) => r,
@@ -169,7 +243,6 @@ async fn handle_terminal(socket: WebSocket, docker: Arc<Docker>, id: String) {
         tty: Some(true), cmd: Some(vec!["/bin/bash"]), ..Default::default()
     };
     
-    // GUARD 4: Don't crash if container doesn't exist for WS
     let exec = match docker.create_exec(&id, config).await {
         Ok(e) => e,
         Err(e) => {
