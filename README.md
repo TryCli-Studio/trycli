@@ -46,3 +46,4 @@ cargo run
 cd client
 trunk serve --open
 ```
+    

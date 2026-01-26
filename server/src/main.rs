@@ -91,7 +91,7 @@ async fn publish_handler(State(state): State<AppState>, Json(payload): Json<Publ
         ..Default::default()
     };
     
-    // FIX: Explicitly tell Rust the types for <String, String> to solve the "cannot infer type Z" error
+    // FIXME: Explicitly tell Rust the types for <String, String> to solve the "cannot infer type Z" error
     // The second argument 'Default::default()' is now understood as 'Config<String>'
     state.docker.commit_container::<String, String>(commit_opts, Default::default()).await.unwrap();
 
