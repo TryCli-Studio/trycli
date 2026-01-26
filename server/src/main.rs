@@ -2,6 +2,7 @@ use axum::{
     extract::{Path, State, ws::{Message, WebSocket, WebSocketUpgrade}},
     routing::{get, post},
     Router, Json, response::IntoResponse,
+    http::StatusCode, // Import StatusCode for error handling
 };
 use bollard::Docker;
 // BOLLARD 0.15 IMPORTS
@@ -27,7 +28,7 @@ struct AppState {
 async fn main() {
     let docker = Arc::new(Docker::connect_with_local_defaults().unwrap());
     
-    // Connect to Postgres
+    // Connect to Postgres on port 5433 (as per previous fix)
     let db = PgPoolOptions::new()
         .connect("postgres://postgres:password@localhost:5433/postgres").await.unwrap();
 
@@ -56,20 +57,17 @@ async fn main() {
 async fn spawn_handler(State(state): State<AppState>) -> Json<String> {
     let container_name = format!("trycli-session-{}", Uuid::new_v4());
     
-    // Bollard 0.15 Config
     let config = Config {
         image: Some("ubuntu:latest"), 
         tty: Some(true),
         ..Default::default()
     };
     
-    // Create Container
     let _ = state.docker.create_container(
         Some(CreateContainerOptions { name: container_name.clone(), platform: None }), 
         config
     ).await.unwrap();
     
-    // Start Container (Bollard 0.15 requires explicit generics here sometimes, but inference usually works)
     state.docker.start_container::<String>(&container_name, None).await.unwrap();
     
     Json(container_name) 
@@ -82,7 +80,17 @@ struct PublishRequest {
     markdown: String,
 }
 
-async fn publish_handler(State(state): State<AppState>, Json(payload): Json<PublishRequest>) -> Json<String> {
+// Change Return Type to Result so we can return Errors instead of crashing
+async fn publish_handler(
+    State(state): State<AppState>, 
+    Json(payload): Json<PublishRequest>
+) -> Result<Json<String>, (StatusCode, String)> {
+    
+    // GUARD 1: Check if container_id is empty (Prevents Panic #1)
+    if payload.container_id.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Container not ready yet. Please wait.".to_string()));
+    }
+
     let new_image_tag = format!("trycli-project-{}", payload.slug);
     
     let commit_opts = CommitContainerOptions {
@@ -91,19 +99,22 @@ async fn publish_handler(State(state): State<AppState>, Json(payload): Json<Publ
         ..Default::default()
     };
     
-    // FIX: Explicitly tell Rust the types for <String, String> to solve the "cannot infer type Z" error
-    // The second argument 'Default::default()' is now understood as 'Config<String>'
-    state.docker.commit_container::<String, String>(commit_opts, Default::default()).await.unwrap();
+    // GUARD 2: Handle Docker errors gracefully
+    state.docker.commit_container::<String, String>(commit_opts, Default::default())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Error: {}", e)))?;
 
     sqlx::query("INSERT INTO projects (slug, image_tag, markdown) VALUES ($1, $2, $3)")
         .bind(&payload.slug)
         .bind(&new_image_tag)
         .bind(&payload.markdown)
-        .execute(&state.db).await.unwrap();
+        .execute(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
     let _ = state.docker.stop_container(&payload.container_id, None).await;
 
-    Json("Published!".to_string())
+    Ok(Json("Published!".to_string()))
 }
 
 #[derive(Serialize)]
@@ -112,10 +123,22 @@ struct ProjectResponse {
     markdown: String,
 }
 
-async fn get_project(Path(slug): Path<String>, State(state): State<AppState>) -> Json<ProjectResponse> {
-    let (image_tag, markdown): (String, String) = sqlx::query_as("SELECT image_tag, markdown FROM projects WHERE slug = $1")
+async fn get_project(
+    Path(slug): Path<String>, 
+    State(state): State<AppState>
+) -> Result<Json<ProjectResponse>, (StatusCode, String)> {
+    
+    // GUARD 3: Use fetch_optional to handle missing projects (Prevents Panic #2)
+    let row: Option<(String, String)> = sqlx::query_as("SELECT image_tag, markdown FROM projects WHERE slug = $1")
         .bind(slug)
-        .fetch_one(&state.db).await.unwrap();
+        .fetch_optional(&state.db)
+        .await
+        .unwrap_or(None);
+
+    let (image_tag, markdown) = match row {
+        Some(r) => r,
+        None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
+    };
 
     let container_name = format!("trycli-viewer-{}", Uuid::new_v4());
     
@@ -125,14 +148,15 @@ async fn get_project(Path(slug): Path<String>, State(state): State<AppState>) ->
         ..Default::default()
     };
 
-    let _ = state.docker.create_container(
+    state.docker.create_container(
         Some(CreateContainerOptions { name: container_name.clone(), platform: None }), 
         config
-    ).await.unwrap();
+    ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     
-    state.docker.start_container::<String>(&container_name, None).await.unwrap();
+    state.docker.start_container::<String>(&container_name, None)
+        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Json(ProjectResponse { container_id: container_name, markdown })
+    Ok(Json(ProjectResponse { container_id: container_name, markdown }))
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, Path(id): Path<String>, State(state): State<AppState>) -> impl IntoResponse {
@@ -145,22 +169,25 @@ async fn handle_terminal(socket: WebSocket, docker: Arc<Docker>, id: String) {
         tty: Some(true), cmd: Some(vec!["/bin/bash"]), ..Default::default()
     };
     
-    let exec = docker.create_exec(&id, config).await.unwrap();
+    // GUARD 4: Don't crash if container doesn't exist for WS
+    let exec = match docker.create_exec(&id, config).await {
+        Ok(e) => e,
+        Err(e) => {
+            println!("Failed to create exec for {}: {}", id, e);
+            return; 
+        }
+    };
     
     if let StartExecResults::Attached { mut output, mut input } = docker.start_exec(&exec.id, None).await.unwrap() {
         let (mut sender, mut receiver) = socket.split();
         
-        // Browser -> Docker
         let _send_task = tokio::spawn(async move {
             while let Some(Ok(Message::Text(text))) = receiver.next().await {
-                // Axum 0.8: Text contains Utf8Bytes, so we convert it
                 let _ = input.write_all(text.as_bytes()).await;
             }
         });
 
-        // Docker -> Browser
         while let Some(Ok(msg)) = output.next().await {
-             // Axum 0.8: We must convert String to Utf8Bytes using .into()
              let _ = sender.send(Message::Text(msg.to_string().into())).await;
         }
     }

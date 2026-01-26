@@ -64,13 +64,13 @@ fn CreatePage() -> impl IntoView {
 
     view! {
         <div class="nav">
-            <div class="brand">"⚡ TryCLI Studio"</div>
+            <div class="brand">"TryCLI Studio"</div>
             <div class="controls">
                 <span style="color: var(--text-muted); font-size: 0.9rem;">"trycli.com /"</span>
                 <input type="text" class="input-slug" 
                        on:input=move |ev| set_slug.set(event_target_value(&ev)) 
                        prop:value=slug />
-                <button class="btn-primary" on:click=on_publish>"Publish Demo"</button>
+                <button class="btn-primary" on:click=on_publish prop:disabled=move || container_id.get().is_empty()>"Publish Demo"</button>
             </div>
         </div>
 
@@ -124,7 +124,7 @@ fn ViewPage() -> impl IntoView {
 
                 view! {
                      <div class="nav">
-                        <div class="brand">"⚡ TryCLI"</div>
+                        <div class="brand">"TryCLI"</div>
                         <div class="controls">
                             <button class="btn-primary" style="background: #27272a;">"Clone Repo"</button>
                         </div>
