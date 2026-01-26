@@ -1,0 +1,149 @@
+:root {
+    --bg-dark: #09090b;
+    --bg-panel: #18181b;
+    --border: #27272a;
+    --accent: #8b5cf6; /* Violet */
+    --accent-glow: rgba(139, 92, 246, 0.5);
+    --text-main: #e4e4e7;
+    --text-muted: #a1a1aa;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --font-sans: 'Inter', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    overflow: hidden; /* App-like feel */
+}
+
+/* --- Navigation Bar --- */
+.nav {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(9, 9, 11, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+}
+
+.brand {
+    font-weight: 800;
+    font-size: 1.2rem;
+    background: linear-gradient(to right, #c084fc, #6366f1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+}
+
+.controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+/* --- Inputs & Buttons --- */
+.input-slug {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    outline: none;
+    transition: all 0.2s;
+}
+
+.input-slug:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.btn-primary:hover {
+    box-shadow: 0 0 15px var(--accent-glow);
+    transform: translateY(-1px);
+}
+
+/* --- Workspace Layout --- */
+.workspace {
+    display: flex;
+    height: calc(100vh - 60px);
+}
+
+.pane {
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    position: relative;
+}
+
+/* --- Editor (Textarea) --- */
+.editor-textarea {
+    width: 100%;
+    height: 100%;
+    background: var(--bg-dark);
+    color: var(--text-main);
+    border: none;
+    resize: none;
+    padding: 20px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.6;
+    outline: none;
+}
+
+/* --- Terminal Decoration --- */
+.terminal-header {
+    height: 32px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+}
+
+.dot { width: 10px; height: 10px; border-radius: 50%; }
+.dot.red { background: #ef4444; }
+.dot.yellow { background: #eab308; }
+.dot.green { background: #22c55e; }
+.terminal-title { font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+
+.terminal-body {
+    flex: 1;
+    background: #000;
+    padding: 4px 0 0 4px; /* Xterm padding */
+    overflow: hidden;
+}
+
+/* --- Markdown Preview (Overrides) --- */
+.markdown-body {
+    padding: 30px;
+    overflow-y: auto;
+    background-color: var(--bg-dark) !important;
+    color: var(--text-main) !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
