@@ -147,3 +147,11 @@ body {
 ::-webkit-scrollbar-track { background: var(--bg-dark); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+.embed-container {
+    font-family: var(--font-mono);
+}
+
+.embed-overlay {
+    backdrop-filter: blur(5px);
+}

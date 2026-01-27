@@ -28,6 +28,7 @@ pub fn App() -> impl IntoView {
             <Routes>
                 <Route path="/new" view=CreatePage />
                 <Route path="/:username/:slug" view=ViewPage />
+                <Route path="/embed/:username/:slug" view=EmbedPage />
             </Routes>
         </Router>
     }
@@ -186,24 +187,95 @@ fn CreatePage() -> impl IntoView {
     }
 }
 
-// PAGE 2: VIEW (/project/:slug)
+#[component]
+fn EmbedPage() -> impl IntoView {
+    let params = use_params_map();
+    let username = move || params.get().get("username").cloned().unwrap_or_default();
+    let slug = move || params.get().get("slug").cloned().unwrap_or_default();
+    
+    // Signal to track if user clicked "Start"
+    let (started, set_started) = create_signal(false);
+
+    // Resource that only fetches when 'started' is true
+    let project_data = create_resource(
+        move || (started.get(), username(), slug()), 
+        |(is_started, u, s)| async move {
+            if !is_started { return None; } // Don't spawn yet
+            
+            let url = format!("http://localhost:3000/api/project/{}/{}", u, s);
+            let req = Request::get(&url).send().await;
+            
+            match req {
+                Ok(resp) => resp.json::<serde_json::Value>().await.ok(),
+                Err(_) => None
+            }
+        }
+    );
+
+    view! {
+        <div class="embed-container" style="width: 100vw; height: 100vh; background: #000; overflow: hidden; position: relative;">
+            {move || if !started.get() {
+                // OVERLAY: Click to Start
+                view! {
+                    <div class="embed-overlay" 
+                         style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); z-index: 10;">
+                        <div style="text-align: center; color: white;">
+                            <h3 style="margin-bottom: 1rem; font-family: var(--font-sans);">"TryCLI Demo"</h3>
+                            <button class="btn-primary" 
+                                    style="padding: 12px 24px; font-size: 1.1rem;"
+                                    on:click=move |_| set_started.set(true)>
+                                "▶ Start Terminal"
+                            </button>
+                            <p style="margin-top: 1rem; color: #666; font-size: 0.8rem;">"Powered by TryCLI"</p>
+                        </div>
+                    </div>
+                }.into_view()
+            } else {
+                view! {}.into_view()
+            }}
+
+            // TERMINAL VIEW
+            {move || match project_data.get() {
+                Some(Some(data)) => {
+                    let cid = data["container_id"].as_str().unwrap_or_default().to_string();
+                    view! { <TerminalView container_id=cid /> }.into_view()
+                },
+                Some(None) => view! { <div style="color:red; padding:20px;">"Project not found"</div> }.into_view(),
+                None => {
+                    // If started is true but data is None, it means loading
+                    if started.get() {
+                        view! { <div style="color: #666; padding: 20px;">"Booting Container..."</div> }.into_view()
+                    } else {
+                        view! {}.into_view()
+                    }
+                }
+            }}
+        </div>
+    }
+}
+
+// 3. UPDATE: ViewPage with "Share" Button
 #[component]
 fn ViewPage() -> impl IntoView {
     let params = use_params_map();
     let username = move || params.get().get("username").cloned().unwrap_or_default();
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();    
     
-    // 1. Fetch project data
+    // Copy Embed Code Logic
+    let copy_embed_code = move |u: String, s: String| {
+        let code = format!(
+            "<iframe src=\"http://localhost:8080/embed/{}/{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\"></iframe>",
+            u, s
+        );
+        let _ = window().navigator().clipboard().write_text(&code);
+        let _ = window().alert_with_message("Embed code copied to clipboard!");
+    };
+
     let project_data = create_resource(
         move || (username(), slug()), 
         |(u, s)| async move {
-            // New API URL structure
             let url = format!("http://localhost:3000/api/project/{}/{}", u, s);
-            
-            // Note: Viewers don't strictly need Credentials unless you want to show "Edit" buttons later
-            // But simple GET is fine.
             let req = Request::get(&url).send().await;
-            
             match req {
                 Ok(resp) => resp.json::<serde_json::Value>().await.ok(),
                 Err(_) => None
@@ -215,24 +287,30 @@ fn ViewPage() -> impl IntoView {
         {move || match project_data.get() {
             Some(Some(data)) => {
                 let cid = data["container_id"].as_str().unwrap_or_default().to_string();
-            let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
+                let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                 let html_output = render_markdown(&md_raw);
+                
+                // Capture these for the click handler
+                let u_clone = username();
+                let s_clone = slug();
 
                 view! {
                      <div class="nav">
                         <div class="brand">"TryCLI"</div>
                         <div class="controls">
-                            <button class="btn-primary" style="background: #27272a;">"Clone Repo"</button>
+                            // NEW SHARE BUTTON
+                            <button class="btn-primary" 
+                                    style="background: #27272a; border: 1px solid var(--border); margin-right: 10px;"
+                                    on:click=move |_| copy_embed_code(u_clone.clone(), s_clone.clone())>
+                                "Share / Embed"
+                            </button>
                         </div>
                      </div>
 
                      <div class="workspace">
-                        // Left: Markdown Read-Mode
                         <div class="pane" style="background: var(--bg-dark);">
                             <div class="markdown-body" inner_html=html_output />
                         </div>
-
-                        // Right: Terminal
                         <div class="pane">
                             <div class="terminal-header">
                                 <div class="dot red"></div>
@@ -247,16 +325,8 @@ fn ViewPage() -> impl IntoView {
                      </div>
                 }.into_view()
             },
-            // CASE 2: Resource Ready but API returned None (404)
-        Some(None) => view! { 
-            <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">
-                "Project not found." 
-            </div> 
-        }.into_view(),
-        // CASE 3: Resource Loading
-        None => view! { 
-            <div style="padding: 50px; text-align: center;">"Loading Project..."</div> 
-        }.into_view()
+            Some(None) => view! { <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">"Project not found."</div> }.into_view(),
+            None => view! { <div style="padding: 50px; text-align: center;">"Loading Project..."</div> }.into_view()
         }}
     }
 }
