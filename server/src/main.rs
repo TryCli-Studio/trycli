@@ -7,7 +7,7 @@ use axum::{
     http::{StatusCode, Method}, 
 };
 use bollard::Docker;
-use bollard::container::{CreateContainerOptions, Config}; 
+use bollard::container::{CreateContainerOptions, Config, ListContainersOptions, RemoveContainerOptions}; 
 use bollard::models::HostConfig;
 use bollard::image::{CommitContainerOptions, CreateImageOptions}; 
 use bollard::exec::{CreateExecOptions, StartExecResults};
@@ -22,7 +22,7 @@ use uuid::Uuid;
 use tower_sessions::{Expiry, MemoryStore, Session, SessionManagerLayer};
 use axum::http::header::{CONTENT_TYPE, AUTHORIZATION};
 
-// Store (ContainerID, ShellPath)
+// Store (SessionID -> (ContainerName, ShellPath))
 type SessionMap = Arc<Mutex<HashMap<String, (String, String)>>>;
 
 #[derive(Clone)]
@@ -43,10 +43,12 @@ async fn main() {
 
     let db = PgPoolOptions::new().connect(&database_url).await.unwrap();
 
+    // Ensure DB schema exists
     sqlx::query(
         r#"CREATE TABLE IF NOT EXISTS projects (
             owner_username TEXT NOT NULL, slug TEXT NOT NULL,
             image_tag TEXT NOT NULL, markdown TEXT NOT NULL,
+            shell TEXT NOT NULL DEFAULT '/bin/bash',  -- <--- NEW COLUMN
             owner_id BIGINT, PRIMARY KEY (owner_username, slug)
         )"#
     ).execute(&db).await.unwrap();
@@ -58,12 +60,19 @@ async fn main() {
         .with_expiry(Expiry::OnInactivity(time::Duration::minutes(60)));
 
     let state = AppState { 
-        docker, 
+        docker: docker.clone(), 
         db,
         github_id: std::env::var("GITHUB_CLIENT_ID").expect("Missing GITHUB_CLIENT_ID"),
         github_secret: std::env::var("GITHUB_CLIENT_SECRET").expect("Missing GITHUB_CLIENT_SECRET"),
         sessions: Arc::new(Mutex::new(HashMap::new())),
     };
+
+    // --- REAPER SPAWN ---
+    let docker_reaper = docker.clone();
+    let sessions_reaper = state.sessions.clone();
+    tokio::spawn(async move {
+        start_background_reaper(docker_reaper, sessions_reaper).await;
+    });
 
     let app = Router::new()
         .merge(auth::routes()) 
@@ -83,6 +92,58 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Server listening on port 3000...");
     axum::serve(listener, app).await.unwrap();
+}
+
+// --- BACKGROUND REAPER ---
+async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(60)); 
+
+    loop {
+        interval.tick().await;
+        
+        // --- FIX: CRITICAL SCOPING ---
+        // We use a block { ... } to ensure the MutexGuard is dropped immediately
+        // after we copy the data we need.
+        let active_container_names: Vec<String> = {
+            let guard = sessions.lock().unwrap();
+            guard.values().map(|(name, _)| name.clone()).collect()
+        }; 
+        // LOCK IS DROPPED HERE. SAFE TO AWAIT BELOW.
+
+        let filters = HashMap::from([
+            ("label".to_string(), vec!["managed_by=trycli".to_string()])
+        ]);
+        
+        let opts = ListContainersOptions {
+            all: true, 
+            filters,
+            ..Default::default()
+        };
+
+        match docker.list_containers(Some(opts)).await {
+            Ok(containers) => {
+                for container in containers {
+                    let is_active = container.names.as_ref().map_or(false, |names| {
+                        names.iter().any(|n| {
+                            let clean = n.trim_start_matches('/'); 
+                            active_container_names.contains(&clean.to_string())
+                        })
+                    });
+
+                    if !is_active {
+                        if let Some(id) = container.id {
+                            println!("Reaper: Killing Zombie Container {}", id);
+                            let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
+                                force: true, 
+                                ..Default::default()
+                            })).await;
+                        }
+                    }
+                }
+            },
+            Err(e) => println!("!! Reaper Error: {}", e),
+        }
+    }
 }
 
 // --- HANDLERS ---
@@ -113,31 +174,45 @@ async fn publish_handler(
     let user: Option<auth::User> = session.get("user").await.unwrap();
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
-    let container_id = {
+    // 1. Get Session Info
+    let (container_id, shell_path) = {
         let map = state.sessions.lock().unwrap();
-        map.get(&payload.container_id).map(|val| val.0.clone())
+        match map.get(&payload.container_id) {
+            Some((cid, sh)) => (cid.clone(), sh.clone()),
+            None => return Err((StatusCode::BAD_REQUEST, "Session expired".to_string())),
+        }
     };
-
-    let container_id = container_id.ok_or((StatusCode::BAD_REQUEST, "Session expired or container not found".to_string()))?;
 
     let new_image_tag = format!("trycli-project-{}", payload.slug);
     
+    // 2. Prepare Commit Options (Just the naming part)
     let commit_opts = CommitContainerOptions {
         container: container_id.clone(),
         repo: new_image_tag.clone(),
         ..Default::default()
     };
+
+    // 3. Prepare the Configuration (The Shell Logic)
+    // We pass the new CMD and ENV here directly.
+    let config = Config {
+        cmd: Some(vec![shell_path.clone()]),
+        env: Some(vec![format!("SHELL={}", shell_path)]),
+        ..Default::default()
+    };
     
-    state.docker.commit_container::<String, String>(commit_opts, Default::default())
+    // 4. Commit with BOTH options and config
+    state.docker.commit_container(commit_opts, config)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Error: {}", e)))?;
 
-    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username) VALUES ($1, $2, $3, $4, $5)")
+    // 5. Save to Database
+    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6)")
         .bind(&payload.slug)
         .bind(&new_image_tag)
         .bind(&payload.markdown)
         .bind(user.id)          
-        .bind(&user.login)     
+        .bind(&user.login)
+        .bind(&shell_path) 
         .execute(&state.db)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
@@ -152,23 +227,41 @@ async fn get_project(
     State(state): State<AppState>
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT image_tag, markdown FROM projects WHERE owner_username = $1 AND slug = $2"
+    // 1. UPDATE: Fetch the 'shell' column in the tuple
+    let row: Option<(String, String, String)> = sqlx::query_as(
+        "SELECT image_tag, markdown, shell FROM projects WHERE owner_username = $1 AND slug = $2"
     )
     .bind(username).bind(slug)
     .fetch_optional(&state.db).await.unwrap_or(None);
 
-    let (image_tag, markdown) = match row {
+    // 2. UPDATE: Destructure the 'shell' variable
+    let (image_tag, markdown, shell) = match row {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
     let container_name = format!("trycli-viewer-{}", Uuid::new_v4());
-    
+    let session_id = Uuid::new_v4().to_string();
+
     let config = Config {
         image: Some(image_tag),
         tty: Some(true),
-        host_config: Some(HostConfig { auto_remove: Some(true), ..Default::default() }),
+        // OPTIONAL: It's good practice to set the SHELL env var here too
+        env: Some(vec![
+            "LANG=C.UTF-8".to_string(), 
+            "LC_ALL=C.UTF-8".to_string(),
+            "TERM=xterm-256color".to_string(),
+            format!("SHELL={}", shell) // <--- Add this
+        ]),
+        labels: Some(HashMap::from([
+            ("managed_by".to_string(), "trycli".to_string()),
+            ("type".to_string(), "viewer".to_string())
+        ])),
+        host_config: Some(HostConfig { 
+            memory: Some(512 * 1024 * 1024),  
+            auto_remove: Some(true), 
+            ..Default::default() 
+        }),
         ..Default::default()
     };
 
@@ -180,10 +273,10 @@ async fn get_project(
     state.docker.start_container::<String>(&container_name, None)
         .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let session_id = Uuid::new_v4().to_string();
     {
         let mut map = state.sessions.lock().unwrap();
-        map.insert(session_id.clone(), (container_name.clone(), "/bin/bash".to_string()));
+        // 3. FIX: Use the 'shell' from DB instead of hardcoded "/bin/bash"
+        map.insert(session_id.clone(), (container_name.clone(), shell)); 
     }
 
     Ok(Json(serde_json::json!({
@@ -192,7 +285,7 @@ async fn get_project(
     })))
 }
 
-// --- WEBSOCKET WIZARD ---
+// --- WEBSOCKET HANDLERS ---
 
 async fn ws_handler(
     ws: WebSocketUpgrade, 
@@ -203,14 +296,15 @@ async fn ws_handler(
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState, session_id: String) {
+    // Scope the lock
     let existing_session = {
         let map = state.sessions.lock().unwrap();
         map.get(&session_id).cloned()
     };
 
     if let Some((container_id, shell_path)) = existing_session {
-        // Resume session: No auto-type script needed
-        attach_to_container(socket, state.docker, container_id, shell_path, None).await;
+        // Resume session
+        attach_to_container(socket, state, session_id, container_id, shell_path, None).await;
     } else {
         run_setup_wizard(socket, state, session_id).await;
     }
@@ -261,33 +355,34 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
 
     send_txt(&mut socket, &format!("\r\n\r\n{}Provisioning Container... Please wait...{}\r\n", green, reset)).await;
 
-    // --- LOGIC CHANGE 1: Define Image + Install Script ---
     let (image, install_script, final_shell) = match (distro_choice, shell_choice) {
-        // Alpine Logic (apk)
         (2, 1) => ("alpine:latest", "apk add --no-cache bash", "/bin/bash"),
         (2, 2) => ("alpine:latest", "apk add --no-cache zsh", "/bin/zsh"),
         (2, 3) => ("alpine:latest", "apk add --no-cache fish", "/usr/bin/fish"),
-        // Ubuntu/Debian Logic (apt-get)
         (1, 2) | (3, 2) => (if distro_choice == 1 { "ubuntu:22.04" } else { "debian:bookworm-slim" }, "export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y zsh", "/usr/bin/zsh"),
         (1, 3) | (3, 3) => (if distro_choice == 1 { "ubuntu:22.04" } else { "debian:bookworm-slim" }, "export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y fish", "/usr/bin/fish"),
-        // Defaults (Bash)
         (1, _) => ("ubuntu:22.04", "true", "/bin/bash"),
         (3, _) => ("debian:bookworm-slim", "true", "/bin/bash"),
         _ => ("debian:bookworm-slim", "true", "/bin/bash"),
     };
 
-    // Auto-pull image
     let _ = state.docker.create_image(Some(CreateImageOptions { from_image: image, ..Default::default() }), None, None).collect::<Vec<_>>().await;
 
     let container_name = format!("trycli-session-{}", Uuid::new_v4());
     
-    // --- LOGIC CHANGE 2: Start a SLEEPER Container ---
-    // We do NOT run the install here. We just keep it alive.
     let config = Config {
         image: Some(image.to_string()),
         tty: Some(true),
         open_stdin: Some(true), 
-        cmd: Some(vec!["tail".to_string(), "-f".to_string(), "/dev/null".to_string()]), // Keep alive
+        cmd: Some(vec!["tail".to_string(), "-f".to_string(), "/dev/null".to_string()]),
+        env: Some(vec![
+            "LANG=C.UTF-8".to_string(), 
+            "LC_ALL=C.UTF-8".to_string(),
+            "TERM=xterm-256color".to_string() // Helps with colors too
+        ]),
+        labels: Some(HashMap::from([
+            ("managed_by".to_string(), "trycli".to_string())
+        ])),
         host_config: Some(HostConfig { 
             memory: Some(512 * 1024 * 1024), 
             auto_remove: Some(true), 
@@ -304,15 +399,11 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             
             {
                 let mut map = state.sessions.lock().unwrap();
-                map.insert(session_id, (container_name.clone(), final_shell.to_string()));
+                map.insert(session_id.clone(), (container_name.clone(), final_shell.to_string()));
             }
 
-            // --- LOGIC CHANGE 3: Construct the Auto-Type Command ---
-            // We tell the shell to: Install -> Echo Done -> Switch to Final Shell
             let auto_type_cmd = format!("{} && echo '\r\n\r\n--- READY ---' && exec {}\n", install_script, final_shell);
-
-            // Connect using /bin/sh (safe), but inject the script!
-            attach_to_container(socket, state.docker, container_name, "/bin/sh".to_string(), Some(auto_type_cmd)).await;
+            attach_to_container(socket, state, session_id, container_name, "/bin/sh".to_string(), Some(auto_type_cmd)).await;
         },
         Err(e) => {
             send_txt(&mut socket, &format!("Error creating container: {}", e)).await;
@@ -320,10 +411,10 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
     }
 }
 
-// --- LOGIC CHANGE 4: Add `initial_input` argument ---
 async fn attach_to_container(
     socket: WebSocket, 
-    docker: Arc<Docker>, 
+    state: AppState,
+    session_id: String,
     container_name: String, 
     shell_path: String,
     initial_input: Option<String>
@@ -335,15 +426,17 @@ async fn attach_to_container(
         ..Default::default()
     };
     
-    let exec = match docker.create_exec(&container_name, config).await {
+    let exec = match state.docker.create_exec(&container_name, config).await {
         Ok(e) => e,
-        Err(_) => return,
+        Err(e) => {
+            println!("Exec Create Error: {}", e);
+            return;
+        }
     };
     
-    if let StartExecResults::Attached { mut output, mut input } = docker.start_exec(&exec.id, None).await.unwrap() {
+    if let Ok(StartExecResults::Attached { mut output, mut input }) = state.docker.start_exec(&exec.id, None).await {
         let (mut sender, mut receiver) = socket.split();
 
-        // --- LOGIC CHANGE 5: Inject the Install Script ---
         if let Some(script) = initial_input {
             let _ = input.write_all(script.as_bytes()).await;
         }
@@ -364,5 +457,14 @@ async fn attach_to_container(
             _ = &mut send_task => {},
             _ = &mut recv_task => {},
         };
+
+        println!("Cleaning up session: {}", session_id);
+        
+        {
+            let mut map = state.sessions.lock().unwrap();
+            map.remove(&session_id);
+        }
+
+        let _ = state.docker.stop_container(&container_name, None).await;
     }
 }
