@@ -1,24 +1,46 @@
 use leptos::*;
 use leptos_router::*;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::JsCast; // Required for unchecked_into
 use web_sys::{WebSocket, MessageEvent};
 use pulldown_cmark::{Parser, Options, html};
 use gloo_net::http::Request;
 use web_sys::RequestCredentials;
 
-// Bindings to the JS Xterm library
+// --- BINDING 1: FitAddon ---
+// We define this in its own block to avoid macro conflicts.
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = FitAddon)]
+    type XtermFitAddon;
+
+    #[wasm_bindgen(constructor, js_namespace = FitAddon, js_class = "FitAddon")]
+    fn new() -> XtermFitAddon;
+
+    #[wasm_bindgen(method)]
+    fn fit(this: &XtermFitAddon);
+}
+
+// --- BINDING 2: Terminal ---
 #[wasm_bindgen]
 extern "C" {
     type Terminal;
+
     #[wasm_bindgen(constructor, js_namespace = window)]
     fn new() -> Terminal;
+
     #[wasm_bindgen(method)]
     fn open(this: &Terminal, parent: &web_sys::HtmlDivElement);
+
     #[wasm_bindgen(method)]
     fn write(this: &Terminal, data: &str);
+
     #[wasm_bindgen(method, js_name = onData)]
     fn on_data(this: &Terminal, callback: &Closure<dyn FnMut(String)>);
+
+    // UPDATE: Use the renamed type here
+    #[wasm_bindgen(method, js_name = loadAddon)]
+    fn load_addon(this: &Terminal, addon: &XtermFitAddon);
 }
 
 #[component]
@@ -41,7 +63,6 @@ struct User {
 }
 
 #[component]
-#[component]
 fn CreatePage() -> impl IntoView {
     let (container_id, set_container_id) = create_signal("".to_string());
     let (markdown, set_markdown) = create_signal("# My Awesome Tool\n\nRun the install command...".to_string());
@@ -60,7 +81,6 @@ fn CreatePage() -> impl IntoView {
                     if let Ok(u) = resp.json::<User>().await {
                         set_user.set(Some(u));
 
-                        // --- DEBUGGING START ---
                         let spawn_req = Request::post("http://localhost:3000/api/spawn")
                             .credentials(RequestCredentials::Include)
                             .send()
@@ -73,18 +93,15 @@ fn CreatePage() -> impl IntoView {
                                         set_container_id.set(id);
                                     }
                                 } else {
-                                    // If Server returns 500/401, show it in the UI
                                     let status = spawn_resp.status();
                                     let text = spawn_resp.text().await.unwrap_or_default();
                                     set_container_id.set(format!("ERROR {}: {}", status, text));
                                 }
                             }
                             Err(e) => {
-                                // If Network/CORS fails, show it in the UI
                                 set_container_id.set(format!("NETWORK_FAIL: {}", e));
                             }
                         }
-                        // --- DEBUGGING END ---
                     }
                 }
             }
@@ -100,12 +117,10 @@ fn CreatePage() -> impl IntoView {
                 "markdown": markdown.get()
             });
 
-            // STEP C: Publish
-            // Fix: Unwrap .body() because it returns a Result
             let _ = Request::post("http://localhost:3000/api/publish")
                 .header("Content-Type", "application/json")
                 .credentials(RequestCredentials::Include)
-                .body(body.to_string()).unwrap() // <--- Added .unwrap() here
+                .body(body.to_string()).unwrap()
                 .send()
                 .await;
 
@@ -119,7 +134,6 @@ fn CreatePage() -> impl IntoView {
         <div class="controls">
             {move || match user.get() {
                 Some(u) => view! {
-                     // UPDATED: User Profile Area with Avatar
                      <div style="display: flex; align-items: center; margin-right: 20px;">
                         <img src=u.avatar_url 
                              style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid var(--border);" />
@@ -128,7 +142,6 @@ fn CreatePage() -> impl IntoView {
                         </span>
                      </div>
 
-                     // LOGOUT BUTTON
                      <a href="http://localhost:3000/auth/logout" 
                         class="btn-primary" 
                         style="background: #27272a; margin-right: 12px; text-decoration: none; font-size: 0.8rem; border: 1px solid var(--border);">
@@ -193,14 +206,12 @@ fn EmbedPage() -> impl IntoView {
     let username = move || params.get().get("username").cloned().unwrap_or_default();
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();
     
-    // Signal to track if user clicked "Start"
     let (started, set_started) = create_signal(false);
 
-    // Resource that only fetches when 'started' is true
     let project_data = create_resource(
         move || (started.get(), username(), slug()), 
         |(is_started, u, s)| async move {
-            if !is_started { return None; } // Don't spawn yet
+            if !is_started { return None; } 
             
             let url = format!("http://localhost:3000/api/project/{}/{}", u, s);
             let req = Request::get(&url).send().await;
@@ -215,7 +226,6 @@ fn EmbedPage() -> impl IntoView {
     view! {
         <div class="embed-container" style="width: 100vw; height: 100vh; background: #000; overflow: hidden; position: relative;">
             {move || if !started.get() {
-                // OVERLAY: Click to Start
                 view! {
                     <div class="embed-overlay" 
                          style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); z-index: 10;">
@@ -234,7 +244,6 @@ fn EmbedPage() -> impl IntoView {
                 view! {}.into_view()
             }}
 
-            // TERMINAL VIEW
             {move || match project_data.get() {
                 Some(Some(data)) => {
                     let cid = data["container_id"].as_str().unwrap_or_default().to_string();
@@ -242,7 +251,6 @@ fn EmbedPage() -> impl IntoView {
                 },
                 Some(None) => view! { <div style="color:red; padding:20px;">"Project not found"</div> }.into_view(),
                 None => {
-                    // If started is true but data is None, it means loading
                     if started.get() {
                         view! { <div style="color: #666; padding: 20px;">"Booting Container..."</div> }.into_view()
                     } else {
@@ -254,14 +262,12 @@ fn EmbedPage() -> impl IntoView {
     }
 }
 
-// 3. UPDATE: ViewPage with "Share" Button
 #[component]
 fn ViewPage() -> impl IntoView {
     let params = use_params_map();
     let username = move || params.get().get("username").cloned().unwrap_or_default();
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();    
     
-    // Copy Embed Code Logic
     let copy_embed_code = move |u: String, s: String| {
         let code = format!(
             "<iframe src=\"http://localhost:8080/embed/{}/{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\"></iframe>",
@@ -290,7 +296,6 @@ fn ViewPage() -> impl IntoView {
                 let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                 let html_output = render_markdown(&md_raw);
                 
-                // Capture these for the click handler
                 let u_clone = username();
                 let s_clone = slug();
 
@@ -298,7 +303,6 @@ fn ViewPage() -> impl IntoView {
                      <div class="nav">
                         <div class="brand">"TryCLI"</div>
                         <div class="controls">
-                            // NEW SHARE BUTTON
                             <button class="btn-primary" 
                                     style="background: #27272a; border: 1px solid var(--border); margin-right: 10px;"
                                     on:click=move |_| copy_embed_code(u_clone.clone(), s_clone.clone())>
@@ -331,7 +335,6 @@ fn ViewPage() -> impl IntoView {
     }
 }
 
-// HELPER: Markdown Parser
 fn render_markdown(text: &str) -> String {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -344,10 +347,8 @@ fn render_markdown(text: &str) -> String {
     html_output
 }
 
-// SHARED COMPONENT: TERMINAL
 #[component]
 fn TerminalView(container_id: String) -> impl IntoView {
-    // Avoid name collision with pulldown_cmark::html
     let terminal_div_ref = create_node_ref::<leptos::html::Div>();
     
     let id_for_effect = container_id.clone();
@@ -355,7 +356,24 @@ fn TerminalView(container_id: String) -> impl IntoView {
     create_effect(move |_| {
         if let Some(div) = terminal_div_ref.get() {
             let term = Terminal::new();
+            
+            // --- FitAddon Logic ---
+            let fit_addon = XtermFitAddon::new();
+            term.load_addon(&fit_addon);
+            
             term.open(&div);
+            
+            // Initial fit
+            fit_addon.fit(); 
+            
+            let fit_addon_clone = fit_addon.clone().unchecked_into::<XtermFitAddon>();
+            
+            let on_resize = Closure::<dyn FnMut()>::new(move || {
+                fit_addon_clone.fit();
+            });
+            window().set_onresize(Some(on_resize.as_ref().unchecked_ref()));
+            on_resize.forget();
+
             term.write(&format!("Connecting to session {}...\r\n", id_for_effect));
 
             let term_clone: Terminal = term.clone().unchecked_into();
@@ -380,7 +398,7 @@ fn TerminalView(container_id: String) -> impl IntoView {
         }
     });
 
-    view! { <div _ref=terminal_div_ref class="terminal" style="height: 100%; width: 100%;"></div> }
+    view! { <div _ref=terminal_div_ref class="terminal" style="height: 100%; width: 100%; padding: 8px"></div> }
 }
 
 #[wasm_bindgen(start)] 
