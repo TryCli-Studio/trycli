@@ -9,13 +9,11 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
     loop {
         interval.tick().await;
         
-        // FIX: Manual lock handling to avoid poisoning panic
+        // Map the struct to the name string
         let active_container_names: Vec<String> = match sessions.lock() {
-            Ok(guard) => guard.values().map(|(name, _)| name.clone()).collect(),
+            Ok(guard) => guard.values().map(|ctx| ctx.container_name.clone()).collect(),
             Err(e) => {
                 eprintln!("!! Reaper Mutex Poisoned: {}", e);
-                // In production, you might want to clear the poison.
-                // For now, skipping the cycle is safer than crashing.
                 continue; 
             }
         };

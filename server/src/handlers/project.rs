@@ -10,7 +10,7 @@ use bollard::image::CommitContainerOptions;
 use tower_sessions::Session;
 use uuid::Uuid;
 use std::collections::HashMap;
-use crate::state::AppState;
+use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest};
 
 pub fn routes() -> Router<AppState> {
@@ -57,11 +57,18 @@ pub async fn publish_handler(
         
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
-    // 1. Get Session Info (Using Safe Lock)
-    let (container_id, shell_path) = {
+    // 1. Get Session Info & Verify Ownership
+    let (container_name, shell_path) = {
         let map = state.lock_sessions();
         match map.get(&payload.container_id) {
-            Some((cid, sh)) => (cid.clone(), sh.clone()),
+            Some(ctx) => {
+                // STRICT CHECK: Does the user publishing own the container?
+                if ctx.owner_id != Some(user.id) {
+                     return Err((StatusCode::FORBIDDEN, "You do not own this session".to_string()));
+                }
+                // Minimize clone: only clone the strings needed for the commit options
+                (ctx.container_name.clone(), ctx.shell.clone())
+            },
             None => return Err((StatusCode::BAD_REQUEST, "Session expired".to_string())),
         }
     };
@@ -70,7 +77,7 @@ pub async fn publish_handler(
 
     // 2. Prepare Commit Options
     let commit_opts = CommitContainerOptions {
-        container: container_id.clone(),
+        container: container_name.clone(),
         repo: new_image_tag.clone(),
         ..Default::default()
     };
@@ -99,7 +106,7 @@ pub async fn publish_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
-    let _ = state.docker.stop_container(&container_id, None).await;
+    let _ = state.docker.stop_container(&container_name, None).await;
 
     Ok(Json("Published!".to_string()))
 }
@@ -156,11 +163,15 @@ pub async fn get_project(
         .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Start Error: {}", e)))?;
 
     {
-        // FIX: Safe lock helper
         let mut map = state.lock_sessions();
-        map.insert(session_id.clone(), (container_name.clone(), shell)); 
+        // Viewers are public (owner_id: None)
+        map.insert(session_id.clone(), SessionContext {
+            container_name: container_name.clone(), 
+            shell,
+            owner_id: None 
+        }); 
     }
-
+    
     Ok(Json(serde_json::json!({
         "container_id": session_id,
         "markdown": markdown

@@ -1,6 +1,7 @@
 use axum::{
     extract::{Path, State, ws::{Message, WebSocket, WebSocketUpgrade}},
-    response::IntoResponse,
+    response::Response,
+    http::StatusCode,
 };
 use bollard::container::{CreateContainerOptions, Config};
 use bollard::models::HostConfig;
@@ -10,31 +11,65 @@ use futures::{stream::StreamExt, SinkExt};
 use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
-use crate::state::AppState;
+use tower_sessions::Session; // Added
+use crate::state::{AppState, SessionContext}; // Added SessionContext
+use crate::models::User; // Added User
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade, 
     Path(session_id): Path<String>, 
-    State(state): State<AppState>
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state, session_id))
+    State(state): State<AppState>,
+    session: Session, 
+) -> Result<Response, StatusCode> {
+    // 1. Extract User ID (No unwrap)
+    let user: Option<User> = session.get("user").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user_id = user.map(|u| u.id);
+
+    // 2. Validate Permissions BEFORE Upgrade
+    {
+        let map = state.lock_sessions();
+        
+        match map.get(&session_id) {
+            Some(ctx) => {
+                // Scenario A: Connecting to existing session
+                if let Some(owner) = ctx.owner_id {
+                    // If session has an owner, user MUST match
+                    if Some(owner) != user_id {
+                        return Err(StatusCode::FORBIDDEN);
+                    }
+                }
+                // If owner_id is None, it's a public viewer; allow access.
+            },
+            None => {
+                // Scenario B: Spawning a new session
+                // User MUST be logged in to spawn resources
+                if user_id.is_none() {
+                    return Err(StatusCode::UNAUTHORIZED);
+                }
+            }
+        }
+    }
+
+    // 3. Upgrade Connection
+    Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, session_id, user_id)))
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState, session_id: String) {
-    // FIX: Safe lock helper
+async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
+    // Re-acquire lock to get details (prevents race conditions if session died between check and upgrade)
     let existing_session = {
         let map = state.lock_sessions();
         map.get(&session_id).cloned()
     };
 
-    if let Some((container_id, shell_path)) = existing_session {
-        attach_to_container(socket, state, session_id, container_id, shell_path, None).await;
+    if let Some(ctx) = existing_session {
+        attach_to_container(socket, state, session_id, ctx.container_name, ctx.shell, None).await;
     } else {
-        run_setup_wizard(socket, state, session_id).await;
+        // Pass user_id to wizard so it can claim ownership of the new container
+        run_setup_wizard(socket, state, session_id, user_id).await;
     }
 }
 
-async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: String) {
+async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
     async fn send_txt(ws: &mut WebSocket, txt: &str) {
         let _ = ws.send(Message::Text(txt.to_string())).await;
     }
@@ -125,9 +160,12 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             }
 
             {
-                // FIX: Safe lock helper
                 let mut map = state.lock_sessions();
-                map.insert(session_id.clone(), (container_name.clone(), final_shell.to_string()));
+                map.insert(session_id.clone(), SessionContext {
+                    container_name: container_name.clone(),
+                    shell: final_shell.to_string(),
+                    owner_id: user_id // Assign ownership here
+                });
             }
 
             let auto_type_cmd = format!("{} && echo '\r\n\r\n READY ' && exec {}\n", install_script, final_shell);
