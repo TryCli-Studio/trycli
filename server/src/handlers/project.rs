@@ -1,9 +1,10 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query},
+    http::{StatusCode, HeaderMap, header},
     routing::{get, post},
     Router, Json,
-    http::StatusCode,
 };
+
 use bollard::container::{CreateContainerOptions, Config};
 use bollard::models::HostConfig;
 use bollard::image::CommitContainerOptions;
@@ -12,6 +13,13 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest};
+
+
+#[derive(serde::Deserialize)]
+pub struct EmbedQuery {
+    key: Option<String>,
+}
+
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -50,7 +58,6 @@ pub async fn publish_handler(
     session: Session, 
     Json(payload): Json<PublishRequest>
 ) -> Result<Json<String>, (StatusCode, String)> {
-    // FIX: Map error instead of unwrap
     let user: Option<User> = session.get("user")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
@@ -94,41 +101,95 @@ pub async fn publish_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Commit Error: {}", e)))?;
 
-    // 5. Save to Database
-    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6)")
+    // NEW: Generate Token and Process Origins
+    let embed_token = Uuid::new_v4().to_string();
+    let origins_str = payload.allowed_origins.unwrap_or_default(); // Store as provided
+
+    // NEW: Insert with Security Fields
+    sqlx::query(
+        "INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell, embed_token, allowed_origins) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (owner_username, slug) 
+         DO UPDATE SET image_tag = $2, markdown = $3, shell = $6, embed_token = $7, allowed_origins = $8"
+    )
         .bind(&payload.slug)
         .bind(&new_image_tag)
         .bind(&payload.markdown)
         .bind(user.id)          
         .bind(&user.login)
-        .bind(&shell_path) 
+        .bind(&shell_path)
+        .bind(&embed_token)
+        .bind(&origins_str)
         .execute(&state.db)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
     let _ = state.docker.stop_container(&container_name, None).await;
 
-    Ok(Json("Published!".to_string()))
+    // Return the token to the user for immediate use
+    Ok(Json(format!("Published! Embed Token: {}", embed_token)))
 }
 
 pub async fn get_project(
     Path((username, slug)): Path<(String, String)>, 
+    headers: HeaderMap,           // NEW: Capture Headers
+    Query(query): Query<EmbedQuery>, // NEW: Capture Query Params
     State(state): State<AppState>
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
-    // FIX: Handle DB errors properly
-    let row_result = sqlx::query_as::<_, (String, String, String)>(
-        "SELECT image_tag, markdown, shell FROM projects WHERE owner_username = $1 AND slug = $2"
+    // 1. Fetch Project Data + Security Fields
+    let row_result = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>)>(
+        "SELECT image_tag, markdown, shell, embed_token, allowed_origins FROM projects WHERE owner_username = $1 AND slug = $2"
     )
-    .bind(username).bind(slug)
+    .bind(&username).bind(&slug)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    let (image_tag, markdown, shell) = match row_result {
+    let (image_tag, markdown, shell, token, origins_raw) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
+
+    // 2. === AUTHORIZATION LOGIC ===
+    let referer = headers.get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    
+    // Parse the allowed list
+    let allowed_list: Vec<&str> = origins_raw.as_deref().unwrap_or("")
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    // Check 1: Is it our own frontend? (Always allow)
+    // In production, change "localhost" to your actual domain
+    let is_self = referer.contains("localhost") || referer.contains("127.0.0.1") || referer.contains("trycli.com");
+
+    // Check 2: Is the Referer in the whitelist?
+    // We check if the referer *starts with* the allowed origin to handle paths
+    let is_whitelisted = allowed_list.iter().any(|&origin| {
+        // Handle cases where user might enter "example.com" or "https://example.com"
+        let clean_origin = origin.trim_start_matches("https://").trim_start_matches("http://");
+        referer.contains(clean_origin)
+    });
+
+    // Check 3: Is the provided token correct?
+    let is_valid_token = token.as_deref() == query.key.as_deref();
+
+    // DECISION MATRIX
+    if !is_self {
+        // If we have security rules set up (either a whitelist or a token exists)
+        if !allowed_list.is_empty() || token.is_some() {
+            // We need EITHER a whitelist match OR a valid token
+            if !is_whitelisted && !is_valid_token {
+                tracing::warn!("Blocked Unauthorized Embed: Referer='{}', Slug='{}'", referer, slug);
+                return Err((StatusCode::FORBIDDEN, "Access Denied: Domain not authorized.".to_string()));
+            }
+        }
+    }
+    
 
     let container_name = format!("trycli-viewer-{}", Uuid::new_v4());
     let session_id = Uuid::new_v4().to_string();
@@ -164,7 +225,6 @@ pub async fn get_project(
 
     {
         let mut map = state.lock_sessions();
-        // Viewers are public (owner_id: None)
         map.insert(session_id.clone(), SessionContext {
             container_name: container_name.clone(), 
             shell,

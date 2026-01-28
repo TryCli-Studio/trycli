@@ -19,4 +19,5 @@ pub struct PublishRequest {
     pub container_id: String,
     pub slug: String,
     pub markdown: String,
+    pub allowed_origins: Option<String>,
 }

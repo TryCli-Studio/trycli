@@ -15,10 +15,18 @@ pub async fn setup_database_and_docker() -> Result<AppState, Box<dyn std::error:
     // 3. Schema (Propagate error)
     sqlx::query(
         r#"CREATE TABLE IF NOT EXISTS projects (
-            owner_username TEXT NOT NULL, slug TEXT NOT NULL,
-            image_tag TEXT NOT NULL, markdown TEXT NOT NULL,
+            owner_username TEXT NOT NULL, 
+            slug TEXT NOT NULL,
+            image_tag TEXT NOT NULL, 
+            markdown TEXT NOT NULL,
             shell TEXT NOT NULL DEFAULT '/bin/bash', 
-            owner_id BIGINT, PRIMARY KEY (owner_username, slug)
+            owner_id BIGINT, 
+            
+            -- NEW: Security Fields
+            embed_token TEXT,
+            allowed_origins TEXT, -- Stored as comma-separated values
+            
+            PRIMARY KEY (owner_username, slug)
         )"#
     ).execute(&db).await?;
 
