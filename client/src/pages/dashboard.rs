@@ -3,6 +3,7 @@ use leptos_router::*;
 use gloo_net::http::Request;
 use web_sys::RequestCredentials;
 use wasm_bindgen::JsValue;
+use std::rc::Rc;
 use crate::types::{User, ProjectSummary};
 
 #[component]
@@ -92,7 +93,7 @@ pub fn DashboardPage() -> impl IntoView {
         </div>
 
         {move || match (user.get(), loading.get()) {
-            (Some(_), false) => view! {
+            (Some(u), false) => view! {
                 <div class="dashboard-container">
                     <div class="dashboard-hero">
                         <div class="hero-content">
@@ -114,59 +115,64 @@ pub fn DashboardPage() -> impl IntoView {
                             </A>
                         </div>
 
-                        {move || match error.get() {
-                            Some(err) => view! {
-                                <div class="error-state">
-                                    <p class="error-message">{err}</p>
-                                    <button class="btn-primary" on:click=move |_| {
-                                        set_error.set(None);
-                                        set_loading.set(true);
-                                    }>
-                                        "Retry"
-                                    </button>
-                                </div>
-                            }.into_view(),
-                            None => {
-                                let proj_list = projects.get();
-                                if proj_list.is_empty() {
-                                    view! {
-                                        <div class="empty-state">
-                                            <p class="empty-message">"No projects yet. Create your first one!"</p>
-                                            <A href="/new" class="btn-primary">
-                                                "Create Project"
-                                            </A>
-                                        </div>
-                                    }.into_view()
-                                } else {
-                                    view! {
-                                        <div class="dashboard-grid">
-                                            <For
-                                                each=move || projects.get()
-                                                key=|p| p.slug.clone()
-                                                children=move |proj| {
-                                                    view! {
-                                                        <div class="project-card">
-                                                            <div class="card-header">
-                                                                <h3 class="card-title">{proj.slug.clone()}</h3>
+                        {
+                            let user_login = Rc::new(u.login.clone());
+                            move || match error.get() {
+                                Some(err) => view! {
+                                    <div class="error-state">
+                                        <p class="error-message">{err}</p>
+                                        <button class="btn-primary" on:click=move |_| {
+                                            set_error.set(None);
+                                            set_loading.set(true);
+                                        }>
+                                            "Retry"
+                                        </button>
+                                    </div>
+                                }.into_view(),
+                                None => {
+                                    let proj_list = projects.get();
+                                    if proj_list.is_empty() {
+                                        view! {
+                                            <div class="empty-state">
+                                                <p class="empty-message">"No projects yet. Create your first one!"</p>
+                                                <A href="/new" class="btn-primary">
+                                                    "Create Project"
+                                                </A>
+                                            </div>
+                                        }.into_view()
+                                    } else {
+                                        let user_login_clone = user_login.clone();
+                                        view! {
+                                            <div class="dashboard-grid">
+                                                <For
+                                                    each=move || projects.get()
+                                                    key=|p| p.slug.clone()
+                                                    children=move |proj| {
+                                                        let login = user_login_clone.as_ref().clone();
+                                                        view! {
+                                                            <div class="project-card">
+                                                                <div class="card-header">
+                                                                    <h3 class="card-title">{proj.slug.clone()}</h3>
+                                                                </div>
+                                                                <div class="card-body">
+                                                                    <p class="card-meta">"Image: "<code>{proj.image_tag.clone()}</code></p>
+                                                                </div>
+                                                                <div class="card-footer">
+                                                                    <A href=format!("/{}/{}", login, proj.slug)
+                                                                       class="btn-card">
+                                                                        "View"
+                                                                    </A>
+                                                                </div>
                                                             </div>
-                                                            <div class="card-body">
-                                                                <p class="card-meta">"Image: "<code>{proj.image_tag.clone()}</code></p>
-                                                            </div>
-                                                            <div class="card-footer">
-                                                                <A href=format!("/viewer/{}", proj.slug)
-                                                                   class="btn-card">
-                                                                    "View"
-                                                                </A>
-                                                            </div>
-                                                        </div>
+                                                        }
                                                     }
-                                                }
-                                            />
-                                        </div>
-                                    }.into_view()
+                                                />
+                                            </div>
+                                        }.into_view()
+                                    }
                                 }
                             }
-                        }}
+                        }
                     </div>
                 </div>
             }.into_view(),
