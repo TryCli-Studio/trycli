@@ -11,7 +11,7 @@ use bollard::models::HostConfig;
 use bollard::image::{CommitContainerOptions, CreateImageOptions}; 
 use bollard::exec::{CreateExecOptions, StartExecResults};
 use futures::{stream::StreamExt, SinkExt}; 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
 use sqlx::postgres::PgPoolOptions;
@@ -32,15 +32,31 @@ pub struct AppState {
     sessions: SessionMap,
 }
 
-#[tokio::main]
-async fn main() {
-    dotenvy::dotenv().ok(); 
-    let docker = Arc::new(Docker::connect_with_local_defaults().unwrap());
-    
-    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let db = PgPoolOptions::new().connect(&database_url).await.unwrap();
+// Helper to handle Mutex Poisoning gracefully without unwrap()
+impl AppState {
+    fn lock_sessions(&self) -> MutexGuard<'_, HashMap<String, (String, String)>> {
+        match self.sessions.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Session mutex poisoned. Recovering state.");
+                poisoned.into_inner()
+            }
+        }
+    }
+}
 
-    // Ensure DB schema exists
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok(); 
+    
+    // 1. Docker (Propagate error instead of unwrap)
+    let docker = Arc::new(Docker::connect_with_local_defaults()?);
+    
+    // 2. DB (Propagate error instead of unwrap)
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let db = PgPoolOptions::new().connect(&database_url).await?;
+
+    // 3. Schema (Propagate error)
     sqlx::query(
         r#"CREATE TABLE IF NOT EXISTS projects (
             owner_username TEXT NOT NULL, slug TEXT NOT NULL,
@@ -48,7 +64,7 @@ async fn main() {
             shell TEXT NOT NULL DEFAULT '/bin/bash', 
             owner_id BIGINT, PRIMARY KEY (owner_username, slug)
         )"#
-    ).execute(&db).await.unwrap();
+    ).execute(&db).await?;
 
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
@@ -64,7 +80,7 @@ async fn main() {
         sessions: Arc::new(Mutex::new(HashMap::new())),
     };
 
-    // --- REAPER SPAWN ---
+    //  REAPER SPAWN 
     let docker_reaper = docker.clone();
     let sessions_reaper = state.sessions.clone();
     tokio::spawn(async move {
@@ -78,7 +94,7 @@ async fn main() {
         .route("/api/project/:username/:slug", get(get_project)) 
         .route("/ws/:session_id", get(ws_handler))   
         .layer(tower_http::cors::CorsLayer::new()
-            .allow_origin("http://localhost:8080".parse::<axum::http::HeaderValue>().unwrap())
+            .allow_origin("http://localhost:8080".parse::<axum::http::HeaderValue>()?) // Propagate parse error
             .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
             .allow_headers([CONTENT_TYPE, AUTHORIZATION])
             .allow_credentials(true) 
@@ -86,24 +102,26 @@ async fn main() {
         .layer(session_layer) 
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
     println!("Server listening on port 3000...");
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).await?;
+    
+    Ok(())
 }
 
-// --- BACKGROUND REAPER ---
+//  BACKGROUND REAPER 
 async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60)); 
     loop {
         interval.tick().await;
         
-        // Scope the lock heavily to drop it ASAP
-        // We use 'match' instead of 'unwrap' to prevent the background thread from dying 
-        // if the mutex is poisoned (though poisoning usually implies a deeper issue).
+        // FIX: Manual lock handling to avoid poisoning panic
         let active_container_names: Vec<String> = match sessions.lock() {
             Ok(guard) => guard.values().map(|(name, _)| name.clone()).collect(),
             Err(e) => {
                 eprintln!("!! Reaper Mutex Poisoned: {}", e);
+                // In production, you might want to clear the poison.
+                // For now, skipping the cycle is safer than crashing.
                 continue; 
             }
         };
@@ -118,34 +136,30 @@ async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
             ..Default::default()
         };
 
-        match docker.list_containers(Some(opts)).await {
-            Ok(containers) => {
-                for container in containers {
-                    let is_active = container.names.as_ref().map_or(false, |names| {
-                        names.iter().any(|n| {
-                            let clean = n.trim_start_matches('/'); 
-                            active_container_names.contains(&clean.to_string())
-                        })
-                    });
+        if let Ok(containers) = docker.list_containers(Some(opts)).await {
+            for container in containers {
+                let is_active = container.names.as_ref().map_or(false, |names| {
+                    names.iter().any(|n| {
+                        let clean = n.trim_start_matches('/'); 
+                        active_container_names.contains(&clean.to_string())
+                    })
+                });
 
-                    if !is_active {
-                        if let Some(id) = container.id {
-                            println!("Reaper: Killing Zombie Container {}", id);
-                            // We ignore errors here (e.g., container already gone)
-                            let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
-                                force: true, 
-                                ..Default::default()
-                            })).await;
-                        }
+                if !is_active {
+                    if let Some(id) = container.id {
+                        println!("Reaper: Killing Zombie Container {}", id);
+                        let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
+                            force: true, 
+                            ..Default::default()
+                        })).await;
                     }
                 }
-            },
-            Err(e) => println!("!! Reaper Error: {}", e),
+            }
         }
     }
 }
 
-// --- HANDLERS ---
+//  HANDLERS 
 async fn spawn_handler(
     session: Session, 
 ) -> Result<Json<String>, (StatusCode, String)> {
@@ -179,9 +193,9 @@ async fn publish_handler(
         
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
-    // 1. Get Session Info
+    // 1. Get Session Info (Using Safe Lock)
     let (container_id, shell_path) = {
-        let map = state.sessions.lock().unwrap();
+        let map = state.lock_sessions();
         match map.get(&payload.container_id) {
             Some((cid, sh)) => (cid.clone(), sh.clone()),
             None => return Err((StatusCode::BAD_REQUEST, "Session expired".to_string())),
@@ -231,7 +245,7 @@ async fn get_project(
     State(state): State<AppState>
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
-    // FIX: Handle DB errors properly (not just unwrap_or(None) which hides DB failure)
+    // FIX: Handle DB errors properly
     let row_result = sqlx::query_as::<_, (String, String, String)>(
         "SELECT image_tag, markdown, shell FROM projects WHERE owner_username = $1 AND slug = $2"
     )
@@ -278,7 +292,8 @@ async fn get_project(
         .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Start Error: {}", e)))?;
 
     {
-        let mut map = state.sessions.lock().unwrap();
+        // FIX: Safe lock helper
+        let mut map = state.lock_sessions();
         map.insert(session_id.clone(), (container_name.clone(), shell)); 
     }
 
@@ -288,7 +303,7 @@ async fn get_project(
     })))
 }
 
-// --- WEBSOCKET HANDLERS ---
+//  WEBSOCKET HANDLERS 
 async fn ws_handler(
     ws: WebSocketUpgrade, 
     Path(session_id): Path<String>, 
@@ -298,8 +313,9 @@ async fn ws_handler(
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState, session_id: String) {
+    // FIX: Safe lock helper
     let existing_session = {
-        let map = state.sessions.lock().unwrap();
+        let map = state.lock_sessions();
         map.get(&session_id).cloned()
     };
 
@@ -324,7 +340,6 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
     send_txt(&mut socket, clear).await;
     send_txt(&mut socket, &format!("{}Welcome to TryCLI Setup!{}\r\n\r\n", green, reset)).await;
     
-    // ... [Wizard Text Interactions Omitted for brevity, logic remains identical] ...
     send_txt(&mut socket, &format!("{}Select Base Image:{}\r\n", cyan, reset)).await;
     send_txt(&mut socket, "1. Ubuntu 22.04 (Heavy, Full-featured)\r\n").await;
     send_txt(&mut socket, "2. Alpine Linux (Lightweight, Fast)\r\n").await;
@@ -402,11 +417,12 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             }
 
             {
-                let mut map = state.sessions.lock().unwrap();
+                // FIX: Safe lock helper
+                let mut map = state.lock_sessions();
                 map.insert(session_id.clone(), (container_name.clone(), final_shell.to_string()));
             }
 
-            let auto_type_cmd = format!("{} && echo '\r\n\r\n--- READY ---' && exec {}\n", install_script, final_shell);
+            let auto_type_cmd = format!("{} && echo '\r\n\r\n READY ' && exec {}\n", install_script, final_shell);
             attach_to_container(socket, state, session_id, container_name, "/bin/sh".to_string(), Some(auto_type_cmd)).await;
         },
         Err(e) => {
@@ -464,7 +480,8 @@ async fn attach_to_container(
 
         println!("Cleaning up session: {}", session_id);
         {
-            let mut map = state.sessions.lock().unwrap();
+            // FIX: Safe lock helper
+            let mut map = state.lock_sessions();
             map.remove(&session_id);
         }
         let _ = state.docker.stop_container(&container_name, None).await;

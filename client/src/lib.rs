@@ -2,14 +2,12 @@ use leptos::*;
 use leptos_router::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast; // Required for unchecked_into
-use web_sys::{WebSocket, MessageEvent, ErrorEvent}; // Added ErrorEvent
+use web_sys::{WebSocket, MessageEvent, ErrorEvent};
 use pulldown_cmark::{Parser, Options, html};
 use gloo_net::http::Request;
 use web_sys::RequestCredentials;
 
-// --- CONFIGURATION HELPER ---
-// Uses compile-time env vars if available, otherwise defaults to localhost.
-// To build for prod: API_URL="https://api.yourdomain.com" trunk build --release
+//  CONFIGURATION HELPER 
 fn api_base() -> &'static str {
     option_env!("API_URL").unwrap_or("http://localhost:3000")
 }
@@ -18,7 +16,7 @@ fn ws_base() -> &'static str {
     option_env!("WS_URL").unwrap_or("ws://localhost:3000")
 }
 
-// --- BINDING 1: FitAddon ---
+//  BINDING 1: FitAddon 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_name = FitAddon)]
@@ -29,7 +27,7 @@ extern "C" {
     fn fit(this: &XtermFitAddon);
 }
 
-// --- BINDING 2: Terminal ---
+//  BINDING 2: Terminal 
 #[wasm_bindgen]
 extern "C" {
     type Terminal;
@@ -72,7 +70,6 @@ fn CreatePage() -> impl IntoView {
     let (user, set_user) = create_signal(None::<User>);
 
     create_resource(|| (), move |_| async move {
-        // FIX: Use dynamic API URL
         let url = format!("{}/api/me", api_base());
         let auth_req = Request::get(&url)
             .credentials(RequestCredentials::Include)
@@ -85,7 +82,6 @@ fn CreatePage() -> impl IntoView {
                     if let Ok(u) = resp.json::<User>().await {
                         set_user.set(Some(u));
                         
-                        // FIX: Use dynamic API URL
                         let spawn_url = format!("{}/api/spawn", api_base());
                         let spawn_req = Request::post(&spawn_url)
                             .credentials(RequestCredentials::Include)
@@ -117,32 +113,44 @@ fn CreatePage() -> impl IntoView {
 
     let on_publish = move |_| {
         spawn_local(async move {
-            let body = serde_json::json!({
+            let body_data = serde_json::json!({
                 "container_id": container_id.get(),
                 "slug": slug.get(),
                 "markdown": markdown.get()
             });
 
-            // FIX: Use dynamic URL & Remove unwrap() on Request builder
+            // FIX: Safe serialization instead of unwrap()
+            let body_str = match serde_json::to_string(&body_data) {
+                Ok(s) => s,
+                Err(_) => {
+                    let _ = window().alert_with_message("Failed to serialize request");
+                    return;
+                }
+            };
+
             let url = format!("{}/api/publish", api_base());
             
-            match Request::post(&url)
+            // FIX: Safe Request building
+            let req = Request::post(&url)
                 .header("Content-Type", "application/json")
                 .credentials(RequestCredentials::Include)
-                .body(body.to_string()).unwrap() // Body serialization unwrap is generally safe
-                .send()
-                .await 
-            {
-                Ok(resp) => {
-                    if resp.ok() {
-                        let _ = window().alert_with_message("Published!");
-                    } else {
-                        let _ = window().alert_with_message("Publish Failed: Server rejected request");
+                .body(body_str);
+
+            if let Ok(r) = req {
+                match r.send().await {
+                    Ok(resp) => {
+                        if resp.ok() {
+                            let _ = window().alert_with_message("Published!");
+                        } else {
+                            let _ = window().alert_with_message("Publish Failed: Server rejected request");
+                        }
+                    },
+                    Err(_) => {
+                        let _ = window().alert_with_message("Publish Failed: Network Error");
                     }
-                },
-                Err(_) => {
-                    let _ = window().alert_with_message("Publish Failed: Network Error");
                 }
+            } else {
+                let _ = window().alert_with_message("Failed to build request");
             }
         });
     };
@@ -279,7 +287,7 @@ fn ViewPage() -> impl IntoView {
     let username = move || params.get().get("username").cloned().unwrap_or_default();
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();    
     
-    // FIX: Using window.location.origin for the embed code is safer than hardcoded localhost
+    // FIX: Using window.location.origin for the embed code
     let copy_embed_code = move |u: String, s: String| {
         let origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
         let code = format!(
@@ -365,7 +373,6 @@ fn TerminalView(container_id: String) -> impl IntoView {
         if let Some(div) = terminal_div_ref.get() {
             let term = Terminal::new();
             
-            // --- FitAddon Logic ---
             let fit_addon = XtermFitAddon::new();
             term.load_addon(&fit_addon);
             term.open(&div);
@@ -383,10 +390,9 @@ fn TerminalView(container_id: String) -> impl IntoView {
             let term_clone: Terminal = term.clone().unchecked_into();
             let ws_url = format!("{}/ws/{}", ws_base(), id_for_effect);
             
-            // FIX: Removed unwrap() on WebSocket::new to prevent App Panic
+            // FIX: Removed unwrap() on WebSocket::new
             match WebSocket::new(&ws_url) {
                 Ok(ws) => {
-                    // 1. On Message
                     let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
                         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
                             term_clone.write(&String::from(text));
@@ -395,10 +401,8 @@ fn TerminalView(container_id: String) -> impl IntoView {
                     ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
                     onmessage.forget();
 
-                    // 2. On Data (Input)
                     let ws_clone = ws.clone();
                     let on_data_callback = Closure::<dyn FnMut(String)>::new(move |data: String| {
-                        // Check state before sending
                         if ws_clone.ready_state() == WebSocket::OPEN {
                             let _ = ws_clone.send_with_str(&data);
                         }
@@ -406,7 +410,6 @@ fn TerminalView(container_id: String) -> impl IntoView {
                     term.on_data(&on_data_callback);
                     on_data_callback.forget();
 
-                    // 3. On Error (UX improvement)
                     let term_err = term.clone().unchecked_into::<Terminal>();
                     let onerror = Closure::<dyn FnMut(ErrorEvent)>::new(move |_| {
                          term_err.write("\r\n\x1b[31m[!] Connection Error.\x1b[0m\r\n");
@@ -414,7 +417,6 @@ fn TerminalView(container_id: String) -> impl IntoView {
                     ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
                     onerror.forget();
 
-                    // 4. On Close (UX improvement)
                     let term_close = term.clone().unchecked_into::<Terminal>();
                     let onclose = Closure::<dyn FnMut()>::new(move || {
                          term_close.write("\r\n\x1b[33m[!] Connection Closed.\x1b[0m\r\n");

@@ -20,7 +20,7 @@ body {
     overflow: hidden; /* App-like feel */
 }
 
-/* --- Navigation Bar --- */
+/*  Navigation Bar  */
 .nav {
     height: 60px;
     display: flex;
@@ -48,7 +48,7 @@ body {
     align-items: center;
 }
 
-/* --- Inputs & Buttons --- */
+/*  Inputs & Buttons  */
 .input-slug {
     background: var(--bg-panel);
     border: 1px solid var(--border);
@@ -81,7 +81,7 @@ body {
     transform: translateY(-1px);
 }
 
-/* --- Workspace Layout --- */
+/*  Workspace Layout  */
 .workspace {
     display: flex;
     height: calc(100vh - 60px);
@@ -95,7 +95,7 @@ body {
     position: relative;
 }
 
-/* --- Editor (Textarea) --- */
+/*  Editor (Textarea)  */
 .editor-textarea {
     width: 100%;
     height: 100%;
@@ -110,7 +110,7 @@ body {
     outline: none;
 }
 
-/* --- Terminal Decoration --- */
+/*  Terminal Decoration  */
 .terminal-header {
     height: 32px;
     background: var(--bg-panel);
@@ -134,7 +134,7 @@ body {
     overflow: hidden;
 }
 
-/* --- Markdown Preview (Overrides) --- */
+/*  Markdown Preview (Overrides)  */
 .markdown-body {
     padding: 30px;
     overflow-y: auto;
