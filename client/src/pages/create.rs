@@ -11,6 +11,7 @@ pub fn CreatePage() -> impl IntoView {
     let (container_id, set_container_id) = create_signal("".to_string());
     let (markdown, set_markdown) = create_signal("# My Awesome Tool\n\nRun the install command...".to_string());
     let (slug, set_slug) = create_signal("demo-project".to_string());
+    let (slug_error, set_slug_error) = create_signal(None::<String>);
     let (user, set_user) = create_signal(None::<User>);
 
     create_resource(|| (), move |_| async move {
@@ -119,10 +120,22 @@ pub fn CreatePage() -> impl IntoView {
                      </a>
                      <span style="color: var(--text-muted); font-size: 0.9rem; margin-right: 8px;">"Project Slug:"</span>
                      <input type="text" class="input-slug" 
-                            on:input=move |ev| set_slug.set(event_target_value(&ev)) 
+                            on:input=move |ev| {
+                                let value = event_target_value(&ev);
+                                // Only allow alphanumeric characters and hyphens (Docker-safe)
+                                if value.is_empty() || value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                                    set_slug.set(value);
+                                    set_slug_error.set(None);
+                                } else {
+                                    set_slug_error.set(Some("Only letters, numbers, and hyphens allowed".to_string()));
+                                }
+                            }
                             prop:value=slug />
+                     {move || slug_error.get().map(|err| view! {
+                         <span style="color: #ef4444; font-size: 0.75rem; margin-left: 8px;">{err}</span>
+                     })}
                      <button class="btn-primary" on:click=on_publish 
-                             prop:disabled=move || container_id.get().is_empty()>"Publish"</button>
+                             prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some()>"Publish"</button>
                 }.into_view(),
                 None => view! {
                     <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">
