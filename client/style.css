@@ -80,6 +80,15 @@ body {
     box-shadow: 0 0 15px var(--accent-glow);
     transform: translateY(-1px);
 }
+.btn-primary,
+.btn-card {
+    text-decoration: none;
+}
+
+.btn-primary:hover,
+.btn-card:hover {
+    text-decoration: none;
+}
 
 /* --- Workspace Layout --- */
 .workspace {
@@ -154,4 +163,222 @@ body {
 
 .embed-overlay {
     backdrop-filter: blur(5px);
+}
+
+/* --- Dashboard Styles --- */
+.glass-header {
+    position: sticky;
+    top: 0;
+    backdrop-filter: blur(12px);
+    background: rgba(9, 9, 11, 0.8);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+}
+
+.dashboard-container {
+    min-height: calc(100vh - 60px);
+    background: var(--bg-dark);
+    overflow-y: auto;
+}
+
+.dashboard-hero {
+    padding: 60px 40px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(99, 102, 241, 0.03) 100%);
+    border-bottom: 1px solid var(--border);
+}
+
+.hero-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.hero-title {
+    font-size: 3rem;
+    font-weight: 800;
+    margin: 0 0 16px 0;
+    color: var(--text-main);
+    letter-spacing: -1px;
+}
+
+.hero-subtitle {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin: 0 0 32px 0;
+    line-height: 1.6;
+}
+
+.input-hero-wrapper {
+    position: relative;
+}
+
+.input-hero {
+    width: 100%;
+    padding: 16px 20px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    border-radius: 8px;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    outline: none;
+    transition: all 0.3s;
+    box-shadow: 0 4px 16px rgba(139, 92, 246, 0);
+}
+
+.input-hero:focus {
+    border-color: var(--accent);
+    box-shadow: 0 8px 32px var(--accent-glow);
+    transform: translateY(-2px);
+}
+
+.input-hero::placeholder {
+    color: var(--text-muted);
+}
+
+.dashboard-section {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 60px 40px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.section-header h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-main);
+}
+
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+}
+
+.project-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.project-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.15);
+    transform: translateY(-4px);
+}
+
+.card-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.card-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-main);
+    word-break: break-word;
+}
+
+.card-body {
+    flex: 1;
+    padding: 16px 20px;
+}
+
+.card-meta {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-meta code {
+    background: rgba(139, 92, 246, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+.card-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+}
+
+.btn-card {
+    flex: 1;
+    padding: 8px 16px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-block;
+    text-align: center;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.btn-card:hover {
+    box-shadow: 0 4px 12px var(--accent-glow);
+    transform: translateY(-1px);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 80px 40px;
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+}
+
+.empty-message {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin: 0 0 24px 0;
+}
+
+.error-state {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+}
+
+.error-message {
+    color: #fca5a5;
+    font-size: 1rem;
+    margin: 0 0 16px 0;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
