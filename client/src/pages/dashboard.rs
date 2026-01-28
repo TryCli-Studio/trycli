@@ -66,9 +66,19 @@ pub fn DashboardPage() -> impl IntoView {
         }
     });
 
+    let navigate = leptos_router::use_navigate();
+
     view! {
         <div class="nav">
-            <div class="brand">"TryCLI Studio"</div>
+            <div class="brand" style="cursor: pointer;" on:click=move |_| {
+                if user.get().is_some() {
+                    navigate("/dashboard", Default::default());
+                } else {
+                    navigate("/", Default::default());
+                }
+            }>
+                "TryCLI Studio"
+            </div>
             <div class="controls">
                 {move || match user.get() {
                     Some(u) => view! {
