@@ -1,9 +1,11 @@
 use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
+use web_sys::RequestCredentials;
 use pulldown_cmark::{Parser, Options, html};
 use crate::api::api_base;
 use crate::components::terminal::TerminalView;
+use crate::types::User;
 
 pub fn render_markdown(text: &str) -> String {
     let mut options = Options::empty();
@@ -19,7 +21,26 @@ pub fn render_markdown(text: &str) -> String {
 pub fn ViewPage() -> impl IntoView {
     let params = use_params_map();
     let username = move || params.get().get("username").cloned().unwrap_or_default();
-    let slug = move || params.get().get("slug").cloned().unwrap_or_default();    
+    let slug = move || params.get().get("slug").cloned().unwrap_or_default();
+    let (user, set_user) = create_signal(None::<User>);
+    
+    create_resource(|| (), move |_| async move {
+        let auth_req = Request::get("http://localhost:3000/api/me")
+            .credentials(RequestCredentials::Include)
+            .send()
+            .await;
+
+        match auth_req {
+            Ok(resp) => {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        set_user.set(Some(u));
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+    });
     
     // FIX: Using window.location.origin for the embed code
     let copy_embed_code = move |u: String, s: String| {
@@ -45,45 +66,74 @@ pub fn ViewPage() -> impl IntoView {
     );
 
     view! {
-        {move || match project_data.get() {
-            Some(Some(data)) => {
-                let cid = data["container_id"].as_str().unwrap_or_default().to_string();
-                let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
-                let html_output = render_markdown(&md_raw);
-                let u_clone = username();
-                let s_clone = slug();
-                
-                view! {
-                     <div class="nav">
-                        <div class="brand">"TryCLI"</div>
-                        <div class="controls">
+        <>
+            <div class="nav">
+                <div class="brand">"TryCLI Studio"</div>
+                <div class="controls">
+                    {move || match user.get() {
+                        Some(u) => view! {
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <img src=u.avatar_url 
+                                     style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                                <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
+                            </div>
                             <button class="btn-primary" 
                                     style="background: #27272a; border: 1px solid var(--border); margin-right: 10px;"
-                                    on:click=move |_| copy_embed_code(u_clone.clone(), s_clone.clone())>
+                                    on:click=move |_| {
+                                        let u_val = username();
+                                        let s_val = slug();
+                                        copy_embed_code(u_val, s_val);
+                                    }>
                                 "Share / Embed"
                             </button>
-                        </div>
-                     </div>
-                     <div class="workspace">
-                        <div class="pane" style="background: var(--bg-dark);">
-                            <div class="markdown-body" inner_html=html_output />
-                        </div>
-                        <div class="pane">
-                            <div class="terminal-header">
-                                <div class="dot red"></div>
-                                <div class="dot yellow"></div>
-                                <div class="dot green"></div>
-                                <span class="terminal-title">"Live Demo"</span>
+                            <a href="http://localhost:3000/auth/logout" 
+                               class="btn-primary" 
+                               style="background: #27272a; text-decoration: none; font-size: 0.9rem; border: 1px solid var(--border);">
+                                "Logout"
+                            </a>
+                        }.into_view(),
+                        None => view! {
+                            <button class="btn-primary" 
+                                    style="background: #27272a; border: 1px solid var(--border); margin-right: 10px;"
+                                    on:click=move |_| {
+                                        let u_val = username();
+                                        let s_val = slug();
+                                        copy_embed_code(u_val, s_val);
+                                    }>
+                                "Share / Embed"
+                            </button>
+                        }.into_view()
+                    }}
+                </div>
+            </div>
+            {move || match project_data.get() {
+                Some(Some(data)) => {
+                    let cid = data["container_id"].as_str().unwrap_or_default().to_string();
+                    let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
+                    let html_output = render_markdown(&md_raw);
+                    
+                    view! {
+                        <div class="workspace">
+                            <div class="pane" style="background: var(--bg-dark);">
+                                <div class="markdown-body" inner_html=html_output />
                             </div>
-                            <div class="terminal-body">
-                                <TerminalView container_id=cid />
+                            <div class="pane">
+                                <div class="terminal-header">
+                                    <div class="dot red"></div>
+                                    <div class="dot yellow"></div>
+                                    <div class="dot green"></div>
+                                    <span class="terminal-title">"Live Demo"</span>
+                                </div>
+                                <div class="terminal-body">
+                                    <TerminalView container_id=cid />
+                                </div>
                             </div>
                         </div>
-                     </div>
-                }.into_view()
-            },
-            Some(None) => view! { <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">"Project not found."</div> }.into_view(),
-            None => view! { <div style="padding: 50px; text-align: center;">"Loading Project..."</div> }.into_view()
-        }}
+                    }.into_view()
+                },
+                Some(None) => view! { <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">"Project not found."</div> }.into_view(),
+                None => view! { <div style="padding: 50px; text-align: center;">"Loading Project..."</div> }.into_view()
+            }}
+        </>
     }
 }
