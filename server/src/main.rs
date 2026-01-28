@@ -17,10 +17,17 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
 use sqlx::postgres::PgPoolOptions;
-use serde::Deserialize; 
+use serde::{Deserialize, Serialize}; 
+use sqlx::FromRow; 
 use uuid::Uuid;
 use tower_sessions::{Expiry, MemoryStore, Session, SessionManagerLayer};
 use axum::http::header::{CONTENT_TYPE, AUTHORIZATION};
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ProjectSummary {
+    pub slug: String,
+    pub image_tag: String,
+}
 
 // Store (SessionID -> (ContainerName, ShellPath))
 type SessionMap = Arc<Mutex<HashMap<String, (String, String)>>>;
@@ -78,7 +85,8 @@ async fn main() {
         .merge(auth::routes()) 
         .route("/api/spawn", post(spawn_handler))      
         .route("/api/publish", post(publish_handler))  
-        .route("/api/project/:username/:slug", get(get_project)) 
+        .route("/api/project/:username/:slug", get(get_project))
+        .route("/api/my-projects", get(list_user_projects))
         .route("/ws/:session_id", get(ws_handler))   
         .layer(tower_http::cors::CorsLayer::new()
             .allow_origin("http://localhost:8080".parse::<axum::http::HeaderValue>().unwrap())
@@ -147,6 +155,27 @@ async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
 }
 
 // --- HANDLERS ---
+
+async fn list_user_projects(
+    State(state): State<AppState>,
+    session: Session,
+) -> Result<Json<Vec<ProjectSummary>>, (StatusCode, String)> {
+    let user: Option<auth::User> = session.get("user").await.unwrap();
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    let projects = sqlx::query_as::<_, ProjectSummary>(
+        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
+    )
+    .bind(user.id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error fetching projects: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch projects".to_string())
+    })?;
+
+    Ok(Json(projects))
+}
 
 async fn spawn_handler(
     session: Session, 

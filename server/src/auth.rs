@@ -93,7 +93,7 @@ async fn github_callback(
     println!(">> Redirecting to Frontend..."); // DEBUG LOG
 
     // 4. Redirect
-    Ok(Redirect::to("http://localhost:8080/new"))
+    Ok(Redirect::to("http://localhost:8080/dashboard"))
 }
 
 // 3. Helper to check session
