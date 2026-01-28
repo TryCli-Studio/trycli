@@ -33,14 +33,15 @@ pub fn routes() -> Router<AppState> {
 }
 
 // 1. Redirect user to GitHub
-async fn github_login(State(state): State<AppState>) -> impl IntoResponse {
-    let client = make_client(&state);
+async fn github_login(State(state): State<AppState>) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // FIX: Handle config errors gracefully
+    let client = make_client(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
     let (auth_url, _csrf_token) = client
         .authorize_url(CsrfToken::new_random)
         .add_scope(Scope::new("read:user".to_string()))
         .url();
-
-    Redirect::to(auth_url.as_str())
+    Ok(Redirect::to(auth_url.as_str()))
 }
 
 // 2. Handle callback from GitHub
@@ -51,25 +52,20 @@ async fn github_callback(
     Query(query): Query<AuthRequest>,
     State(state): State<AppState>,
     session: Session,
-) -> Result<Redirect, (StatusCode, String)> { // Change return type to Result
-    
-    println!(">> Callback hit! Code: {}", query.code); // DEBUG LOG
+) -> Result<Redirect, (StatusCode, String)> { 
+    // FIX: Handle config errors gracefully
+    let client = make_client(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-    let client = make_client(&state);
-    
-    // 1. Exchange Code (Handle error)
+    // 1. Exchange Code
     let token = client
         .exchange_code(oauth2::AuthorizationCode::new(query.code))
         .request_async(oauth2::reqwest::async_http_client)
         .await
         .map_err(|e| {
-            println!("!! Token Exchange Failed: {:?}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Token Error: {}", e))
         })?;
 
-    println!(">> Token received. Fetching User Profile..."); // DEBUG LOG
-
-    // 2. Fetch Profile (Handle error)
+    // 2. Fetch Profile
     let http_client = reqwest::Client::new();
     let user_data: User = http_client
         .get("https://api.github.com/user")
@@ -82,37 +78,45 @@ async fn github_callback(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "JSON Error".into()))?;
 
-    println!(">> User fetched: {}", user_data.login); // DEBUG LOG
-
     // 3. Save Session
-    if let Err(e) = session.insert("user", &user_data).await {
-         println!("!! Session Insert Failed: {:?}", e);
-         return Err((StatusCode::INTERNAL_SERVER_ERROR, "Session Error".into()));
-    }
-
-    println!(">> Redirecting to Frontend..."); // DEBUG LOG
-
+    session.insert("user", &user_data)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Session Insert Error".into()))?;
+    
     // 4. Redirect
     Ok(Redirect::to("http://localhost:8080/dashboard"))
 }
 
 // 3. Helper to check session
-async fn get_me(session: Session) -> impl IntoResponse {
-    let user: Option<User> = session.get("user").await.unwrap();
-    axum::Json(user)
+async fn get_me(session: Session) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Read Error: {}", e)))?;
+    
+    Ok(axum::Json(user))
 }
 
-fn make_client(state: &AppState) -> BasicClient {
-    BasicClient::new(
+// 4. Helper to create OAuth client (Now returns Result)
+fn make_client(state: &AppState) -> Result<BasicClient, String> {
+    let auth_url = AuthUrl::new(AUTH_URL.to_string())
+        .map_err(|e| format!("Invalid Auth URL: {}", e))?;
+    
+    let token_url = TokenUrl::new(TOKEN_URL.to_string())
+        .map_err(|e| format!("Invalid Token URL: {}", e))?;
+        
+    let redirect_url = RedirectUrl::new("http://localhost:3000/auth/callback".to_string())
+        .map_err(|e| format!("Invalid Redirect URL: {}", e))?;
+
+    Ok(BasicClient::new(
         ClientId::new(state.github_id.clone()),
         Some(ClientSecret::new(state.github_secret.clone())),
-        AuthUrl::new(AUTH_URL.to_string()).unwrap(),
-        Some(TokenUrl::new(TOKEN_URL.to_string()).unwrap()),
+        auth_url,
+        Some(token_url),
     )
-    .set_redirect_uri(RedirectUrl::new("http://localhost:3000/auth/callback".to_string()).unwrap())
+    .set_redirect_uri(redirect_url))
 }
 
-async fn logout(session: Session) -> impl IntoResponse {
-    session.delete().await.unwrap();
-    Redirect::to("http://localhost:8080/") // Redirect to home
+async fn logout(session: Session) -> Result<impl IntoResponse, (StatusCode, String)> {
+    session.delete().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Redirect::to("http://localhost:8080/")) 
 }

@@ -1,5 +1,4 @@
 mod auth;
-
 use axum::{
     extract::{Path, State, ws::{Message, WebSocket, WebSocketUpgrade}},
     routing::{get, post},
@@ -11,9 +10,8 @@ use bollard::container::{CreateContainerOptions, Config, ListContainersOptions, 
 use bollard::models::HostConfig;
 use bollard::image::{CommitContainerOptions, CreateImageOptions}; 
 use bollard::exec::{CreateExecOptions, StartExecResults};
-
 use futures::{stream::StreamExt, SinkExt}; 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
 use sqlx::postgres::PgPoolOptions;
@@ -41,24 +39,39 @@ pub struct AppState {
     sessions: SessionMap,
 }
 
+// Helper to handle Mutex Poisoning gracefully without unwrap()
+impl AppState {
+    fn lock_sessions(&self) -> MutexGuard<'_, HashMap<String, (String, String)>> {
+        match self.sessions.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Session mutex poisoned. Recovering state.");
+                poisoned.into_inner()
+            }
+        }
+    }
+}
+
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok(); 
-
-    let docker = Arc::new(Docker::connect_with_local_defaults().unwrap());
+    
+    // 1. Docker (Propagate error instead of unwrap)
+    let docker = Arc::new(Docker::connect_with_local_defaults()?);
+    
+    // 2. DB (Propagate error instead of unwrap)
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let db = PgPoolOptions::new().connect(&database_url).await?;
 
-    let db = PgPoolOptions::new().connect(&database_url).await.unwrap();
-
-    // Ensure DB schema exists
+    // 3. Schema (Propagate error)
     sqlx::query(
         r#"CREATE TABLE IF NOT EXISTS projects (
             owner_username TEXT NOT NULL, slug TEXT NOT NULL,
             image_tag TEXT NOT NULL, markdown TEXT NOT NULL,
-            shell TEXT NOT NULL DEFAULT '/bin/bash',  -- <--- NEW COLUMN
+            shell TEXT NOT NULL DEFAULT '/bin/bash', 
             owner_id BIGINT, PRIMARY KEY (owner_username, slug)
         )"#
-    ).execute(&db).await.unwrap();
+    ).execute(&db).await?;
 
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
@@ -74,7 +87,7 @@ async fn main() {
         sessions: Arc::new(Mutex::new(HashMap::new())),
     };
 
-    // --- REAPER SPAWN ---
+    //  REAPER SPAWN 
     let docker_reaper = docker.clone();
     let sessions_reaper = state.sessions.clone();
     tokio::spawn(async move {
@@ -89,7 +102,7 @@ async fn main() {
         .route("/api/my-projects", get(list_user_projects))
         .route("/ws/:session_id", get(ws_handler))   
         .layer(tower_http::cors::CorsLayer::new()
-            .allow_origin("http://localhost:8080".parse::<axum::http::HeaderValue>().unwrap())
+            .allow_origin("http://localhost:8080".parse::<axum::http::HeaderValue>()?) // Propagate parse error
             .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
             .allow_headers([CONTENT_TYPE, AUTHORIZATION])
             .allow_credentials(true) 
@@ -97,27 +110,30 @@ async fn main() {
         .layer(session_layer) 
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
     println!("Server listening on port 3000...");
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).await?;
+    
+    Ok(())
 }
 
-// --- BACKGROUND REAPER ---
+//  BACKGROUND REAPER 
 async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(60)); 
-
     loop {
         interval.tick().await;
         
-        // --- FIX: CRITICAL SCOPING ---
-        // We use a block { ... } to ensure the MutexGuard is dropped immediately
-        // after we copy the data we need.
-        let active_container_names: Vec<String> = {
-            let guard = sessions.lock().unwrap();
-            guard.values().map(|(name, _)| name.clone()).collect()
-        }; 
-        // LOCK IS DROPPED HERE. SAFE TO AWAIT BELOW.
-
+        // FIX: Manual lock handling to avoid poisoning panic
+        let active_container_names: Vec<String> = match sessions.lock() {
+            Ok(guard) => guard.values().map(|(name, _)| name.clone()).collect(),
+            Err(e) => {
+                eprintln!("!! Reaper Mutex Poisoned: {}", e);
+                // In production, you might want to clear the poison.
+                // For now, skipping the cycle is safer than crashing.
+                continue; 
+            }
+        };
+        
         let filters = HashMap::from([
             ("label".to_string(), vec!["managed_by=trycli".to_string()])
         ]);
@@ -128,28 +144,25 @@ async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
             ..Default::default()
         };
 
-        match docker.list_containers(Some(opts)).await {
-            Ok(containers) => {
-                for container in containers {
-                    let is_active = container.names.as_ref().map_or(false, |names| {
-                        names.iter().any(|n| {
-                            let clean = n.trim_start_matches('/'); 
-                            active_container_names.contains(&clean.to_string())
-                        })
-                    });
+        if let Ok(containers) = docker.list_containers(Some(opts)).await {
+            for container in containers {
+                let is_active = container.names.as_ref().map_or(false, |names| {
+                    names.iter().any(|n| {
+                        let clean = n.trim_start_matches('/'); 
+                        active_container_names.contains(&clean.to_string())
+                    })
+                });
 
-                    if !is_active {
-                        if let Some(id) = container.id {
-                            println!("Reaper: Killing Zombie Container {}", id);
-                            let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
-                                force: true, 
-                                ..Default::default()
-                            })).await;
-                        }
+                if !is_active {
+                    if let Some(id) = container.id {
+                        println!("Reaper: Killing Zombie Container {}", id);
+                        let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
+                            force: true, 
+                            ..Default::default()
+                        })).await;
                     }
                 }
-            },
-            Err(e) => println!("!! Reaper Error: {}", e),
+            }
         }
     }
 }
@@ -160,7 +173,11 @@ async fn list_user_projects(
     State(state): State<AppState>,
     session: Session,
 ) -> Result<Json<Vec<ProjectSummary>>, (StatusCode, String)> {
-    let user: Option<auth::User> = session.get("user").await.unwrap();
+    // FIX: Safely handle session retrieval instead of unwrap()
+    let user: Option<auth::User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
@@ -180,7 +197,11 @@ async fn list_user_projects(
 async fn spawn_handler(
     session: Session, 
 ) -> Result<Json<String>, (StatusCode, String)> {
-    let user: Option<auth::User> = session.get("user").await.unwrap();
+    // FIX: Map error instead of unwrap
+    let user: Option<auth::User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
     if user.is_none() {
         return Err((StatusCode::UNAUTHORIZED, "Please login first".to_string()));
     }
@@ -199,13 +220,16 @@ async fn publish_handler(
     session: Session, 
     Json(payload): Json<PublishRequest>
 ) -> Result<Json<String>, (StatusCode, String)> {
-
-    let user: Option<auth::User> = session.get("user").await.unwrap();
+    // FIX: Map error instead of unwrap
+    let user: Option<auth::User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
-    // 1. Get Session Info
+    // 1. Get Session Info (Using Safe Lock)
     let (container_id, shell_path) = {
-        let map = state.sessions.lock().unwrap();
+        let map = state.lock_sessions();
         match map.get(&payload.container_id) {
             Some((cid, sh)) => (cid.clone(), sh.clone()),
             None => return Err((StatusCode::BAD_REQUEST, "Session expired".to_string())),
@@ -213,26 +237,25 @@ async fn publish_handler(
     };
 
     let new_image_tag = format!("trycli-project-{}", payload.slug);
-    
-    // 2. Prepare Commit Options (Just the naming part)
+
+    // 2. Prepare Commit Options
     let commit_opts = CommitContainerOptions {
         container: container_id.clone(),
         repo: new_image_tag.clone(),
         ..Default::default()
     };
 
-    // 3. Prepare the Configuration (The Shell Logic)
-    // We pass the new CMD and ENV here directly.
+    // 3. Prepare Config
     let config = Config {
         cmd: Some(vec![shell_path.clone()]),
         env: Some(vec![format!("SHELL={}", shell_path)]),
         ..Default::default()
     };
-    
-    // 4. Commit with BOTH options and config
+
+    // 4. Commit
     state.docker.commit_container(commit_opts, config)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Error: {}", e)))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Commit Error: {}", e)))?;
 
     // 5. Save to Database
     sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6)")
@@ -256,15 +279,16 @@ async fn get_project(
     State(state): State<AppState>
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
-    // 1. UPDATE: Fetch the 'shell' column in the tuple
-    let row: Option<(String, String, String)> = sqlx::query_as(
+    // FIX: Handle DB errors properly
+    let row_result = sqlx::query_as::<_, (String, String, String)>(
         "SELECT image_tag, markdown, shell FROM projects WHERE owner_username = $1 AND slug = $2"
     )
     .bind(username).bind(slug)
-    .fetch_optional(&state.db).await.unwrap_or(None);
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    // 2. UPDATE: Destructure the 'shell' variable
-    let (image_tag, markdown, shell) = match row {
+    let (image_tag, markdown, shell) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
@@ -275,12 +299,11 @@ async fn get_project(
     let config = Config {
         image: Some(image_tag),
         tty: Some(true),
-        // OPTIONAL: It's good practice to set the SHELL env var here too
         env: Some(vec![
             "LANG=C.UTF-8".to_string(), 
             "LC_ALL=C.UTF-8".to_string(),
             "TERM=xterm-256color".to_string(),
-            format!("SHELL={}", shell) // <--- Add this
+            format!("SHELL={}", shell) 
         ]),
         labels: Some(HashMap::from([
             ("managed_by".to_string(), "trycli".to_string()),
@@ -297,14 +320,14 @@ async fn get_project(
     state.docker.create_container(
         Some(CreateContainerOptions { name: container_name.clone(), platform: None }), 
         config
-    ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    
+    ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Create Error: {}", e)))?;
+
     state.docker.start_container::<String>(&container_name, None)
-        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Start Error: {}", e)))?;
 
     {
-        let mut map = state.sessions.lock().unwrap();
-        // 3. FIX: Use the 'shell' from DB instead of hardcoded "/bin/bash"
+        // FIX: Safe lock helper
+        let mut map = state.lock_sessions();
         map.insert(session_id.clone(), (container_name.clone(), shell)); 
     }
 
@@ -314,8 +337,7 @@ async fn get_project(
     })))
 }
 
-// --- WEBSOCKET HANDLERS ---
-
+//  WEBSOCKET HANDLERS 
 async fn ws_handler(
     ws: WebSocketUpgrade, 
     Path(session_id): Path<String>, 
@@ -325,14 +347,13 @@ async fn ws_handler(
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState, session_id: String) {
-    // Scope the lock
+    // FIX: Safe lock helper
     let existing_session = {
-        let map = state.sessions.lock().unwrap();
+        let map = state.lock_sessions();
         map.get(&session_id).cloned()
     };
 
     if let Some((container_id, shell_path)) = existing_session {
-        // Resume session
         attach_to_container(socket, state, session_id, container_id, shell_path, None).await;
     } else {
         run_setup_wizard(socket, state, session_id).await;
@@ -343,10 +364,11 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
     async fn send_txt(ws: &mut WebSocket, txt: &str) {
         let _ = ws.send(Message::Text(txt.to_string())).await;
     }
-
+    
     let green = "\x1b[32m";
     let cyan = "\x1b[36m";
     let reset = "\x1b[0m";
+    let red = "\x1b[31m";
     let clear = "\x1b[2J\x1b[1;1H";
 
     send_txt(&mut socket, clear).await;
@@ -367,7 +389,6 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
     }
 
     send_txt(&mut socket, "\r\n\r\n").await;
-
     send_txt(&mut socket, &format!("{}Select Shell (will be installed):{}\r\n", cyan, reset)).await;
     send_txt(&mut socket, "1. Bash (Default)\r\n").await;
     send_txt(&mut socket, "2. Zsh (Oh-My-Zsh ready)\r\n").await;
@@ -381,7 +402,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
         if input == "2" { shell_choice = 2; break; }
         if input == "3" { shell_choice = 3; break; }
     }
-
+    
     send_txt(&mut socket, &format!("\r\n\r\n{}Provisioning Container... Please wait...{}\r\n", green, reset)).await;
 
     let (image, install_script, final_shell) = match (distro_choice, shell_choice) {
@@ -398,7 +419,6 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
     let _ = state.docker.create_image(Some(CreateImageOptions { from_image: image, ..Default::default() }), None, None).collect::<Vec<_>>().await;
 
     let container_name = format!("trycli-session-{}", Uuid::new_v4());
-    
     let config = Config {
         image: Some(image.to_string()),
         tty: Some(true),
@@ -407,7 +427,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
         env: Some(vec![
             "LANG=C.UTF-8".to_string(), 
             "LC_ALL=C.UTF-8".to_string(),
-            "TERM=xterm-256color".to_string() // Helps with colors too
+            "TERM=xterm-256color".to_string() 
         ]),
         labels: Some(HashMap::from([
             ("managed_by".to_string(), "trycli".to_string())
@@ -424,14 +444,19 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
         Some(CreateContainerOptions { name: container_name.clone(), platform: None }), config
     ).await {
         Ok(_) => {
-            state.docker.start_container::<String>(&container_name, None).await.unwrap();
-            
+            // FIX: Removed dangerous unwrap() on start_container
+            if let Err(e) = state.docker.start_container::<String>(&container_name, None).await {
+                send_txt(&mut socket, &format!("{}Fatal Error: Could not start container: {}{}", red, e, reset)).await;
+                return;
+            }
+
             {
-                let mut map = state.sessions.lock().unwrap();
+                // FIX: Safe lock helper
+                let mut map = state.lock_sessions();
                 map.insert(session_id.clone(), (container_name.clone(), final_shell.to_string()));
             }
 
-            let auto_type_cmd = format!("{} && echo '\r\n\r\n--- READY ---' && exec {}\n", install_script, final_shell);
+            let auto_type_cmd = format!("{} && echo '\r\n\r\n READY ' && exec {}\n", install_script, final_shell);
             attach_to_container(socket, state, session_id, container_name, "/bin/sh".to_string(), Some(auto_type_cmd)).await;
         },
         Err(e) => {
@@ -454,7 +479,7 @@ async fn attach_to_container(
         cmd: Some(vec![shell_path]), 
         ..Default::default()
     };
-    
+
     let exec = match state.docker.create_exec(&container_name, config).await {
         Ok(e) => e,
         Err(e) => {
@@ -462,14 +487,14 @@ async fn attach_to_container(
             return;
         }
     };
-    
+
     if let Ok(StartExecResults::Attached { mut output, mut input }) = state.docker.start_exec(&exec.id, None).await {
         let (mut sender, mut receiver) = socket.split();
 
         if let Some(script) = initial_input {
             let _ = input.write_all(script.as_bytes()).await;
         }
-        
+
         let mut send_task = tokio::spawn(async move {
             while let Some(Ok(Message::Text(text))) = receiver.next().await {
                 let _ = input.write_all(text.as_bytes()).await;
@@ -488,12 +513,11 @@ async fn attach_to_container(
         };
 
         println!("Cleaning up session: {}", session_id);
-        
         {
-            let mut map = state.sessions.lock().unwrap();
+            // FIX: Safe lock helper
+            let mut map = state.lock_sessions();
             map.remove(&session_id);
         }
-
         let _ = state.docker.stop_container(&container_name, None).await;
     }
 }
