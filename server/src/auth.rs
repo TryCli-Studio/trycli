@@ -84,7 +84,7 @@ async fn github_callback(
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Session Insert Error".into()))?;
     
     // 4. Redirect
-    Ok(Redirect::to("http://localhost:8080/new"))
+    Ok(Redirect::to("http://localhost:8080/dashboard"))
 }
 
 // 3. Helper to check session

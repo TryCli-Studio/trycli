@@ -7,7 +7,7 @@ use pulldown_cmark::{Parser, Options, html};
 use gloo_net::http::Request;
 use web_sys::RequestCredentials;
 
-//  CONFIGURATION HELPER 
+// --- CONFIGURATION HELPERS ---
 fn api_base() -> &'static str {
     option_env!("API_URL").unwrap_or("http://localhost:3000")
 }
@@ -16,7 +16,135 @@ fn ws_base() -> &'static str {
     option_env!("WS_URL").unwrap_or("ws://localhost:3000")
 }
 
-//  BINDING 1: FitAddon 
+mod dashboard;
+use dashboard::DashboardPage;
+
+#[component]
+fn LandingPage() -> impl IntoView {
+    let navigate = leptos_router::use_navigate();
+    let (checked, set_checked) = create_signal(false);
+
+    {
+        let navigate = navigate.clone();
+        create_resource(|| (), move |_| {
+            let navigate = navigate.clone();
+            async move {
+                // FIX: Use dynamic API URL
+                let url = format!("{}/api/me", api_base());
+                let auth_req = Request::get(&url)
+                    .credentials(RequestCredentials::Include)
+                    .send()
+                    .await;
+
+                match auth_req {
+                    Ok(resp) => {
+                        if resp.ok() {
+                            if let Ok(_user) = resp.json::<dashboard::User>().await {
+                                // User is authenticated, redirect to dashboard
+                                navigate("/dashboard", Default::default());
+                            }
+                        }
+                    }
+                    Err(_) => {}
+                }
+                set_checked.set(true);
+            }
+        });
+    }
+
+    view! {
+        {move || {
+            if !checked.get() {
+                return view! {
+                    <div style="display: flex; height: 100vh; justify-content: center; align-items: center; background: var(--bg-dark);">
+                        <div class="spinner"></div>
+                    </div>
+                }.into_view();
+            }
+
+            view! {
+                <div style="display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; gap: 40px; background: var(--bg-dark);">
+                    <div style="text-align: center;">
+                        <h1 style="font-size: 4rem; font-weight: 800; color: var(--text-main); margin: 0 0 16px 0; letter-spacing: -1px;">
+                            "TryCLI Studio"
+                        </h1>
+                        <p style="font-size: 1.2rem; color: var(--text-muted); margin: 0 0 8px 0;">
+                            "Create and share interactive CLI experiences"
+                        </p>
+                        <p style="font-size: 1rem; color: var(--text-muted); margin: 0;">
+                            "Build, demo, and deploy your tools instantly"
+                        </p>
+                    </div>
+
+                    // FIX: Use dynamic API URL
+                    <a href=format!("{}/auth/github", api_base()) 
+                       class="btn-primary"
+                       style="padding: 14px 32px; font-size: 1.1rem; text-decoration: none;">
+                        "Sign in with GitHub"
+                    </a>
+                </div>
+            }.into_view()
+        }}
+    }
+}
+
+#[component]
+fn ProtectedRoute(children: Children) -> impl IntoView {
+    let (user, set_user) = create_signal(None::<dashboard::User>);
+    let (checked, set_checked) = create_signal(false);
+
+    create_resource(|| (), move |_| async move {
+        // FIX: Use dynamic API URL
+        let url = format!("{}/api/me", api_base());
+        let auth_req = Request::get(&url)
+            .credentials(RequestCredentials::Include)
+            .send()
+            .await;
+
+        match auth_req {
+            Ok(resp) => {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<dashboard::User>().await {
+                        set_user.set(Some(u));
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+        set_checked.set(true);
+    });
+
+    let children_view = children();
+
+    view! {
+        {move || {
+            if !checked.get() {
+                return view! {
+                    <div style="display: flex; height: 100vh; justify-content: center; align-items: center;">
+                        <div class="spinner"></div>
+                    </div>
+                }.into_view();
+            }
+
+            if user.get().is_some() {
+                children_view.clone().into_view()
+            } else {
+                view! {
+                    <div style="display: flex; height: 100vh; justify-content: center; align-items: center; flex-direction: column; gap: 20px; background: var(--bg-dark);">
+                        <h2 style="color: var(--text-main);">"Access Denied"</h2>
+                        <p style="color: var(--text-muted);">"Please log in to access this page."</p>
+                        // FIX: Use dynamic API URL
+                        <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">
+                            "Sign in with GitHub"
+                        </a>
+                    </div>
+                }.into_view()
+            }
+        }}
+    }
+}
+
+// --- BINDING 1: FitAddon ---
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_name = FitAddon)]
@@ -48,7 +176,17 @@ pub fn App() -> impl IntoView {
     view! {
         <Router>
             <Routes>
-                <Route path="/new" view=CreatePage />
+                <Route path="/" view=LandingPage />
+                <Route path="/dashboard" view=move || view! {
+                    <ProtectedRoute>
+                        <DashboardPage />
+                    </ProtectedRoute>
+                } />
+                <Route path="/new" view=move || view! {
+                    <ProtectedRoute>
+                        <CreatePage />
+                    </ProtectedRoute>
+                } />
                 <Route path="/:username/:slug" view=ViewPage />
                 <Route path="/embed/:username/:slug" view=EmbedPage />
             </Routes>
