@@ -3,18 +3,7 @@ use leptos_router::*;
 use gloo_net::http::Request;
 use web_sys::RequestCredentials;
 use wasm_bindgen::JsValue;
-
-#[derive(Clone, Debug, serde::Deserialize, PartialEq)]
-pub struct ProjectSummary {
-    pub slug: String,
-    pub image_tag: String,
-}
-
-#[derive(Clone, Debug, serde::Deserialize)]
-pub struct User {
-    pub login: String,
-    pub avatar_url: String,
-}
+use crate::types::{User, ProjectSummary};
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
