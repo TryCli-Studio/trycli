@@ -90,6 +90,28 @@ body {
     text-decoration: none;
 }
 
+.btn-logout {
+    background: #27272a;
+    border: 1px solid var(--border);
+    transition: background-color 0.3s ease;
+}
+
+.btn-logout:hover {
+    background-color: #772323;
+    box-shadow: 0 0 6px rgba(129, 40, 40, 0.884);
+}
+
+.btn-success {
+    background: #27272a;
+    border: 1px solid var(--border);
+    transition: background-color 0.3s ease;
+}
+
+.btn-success:hover {
+    background-color: #2e832e;
+    box-shadow: 0 0 4px rgba(30, 215, 42, 0.3);
+}
+
 /*  Workspace Layout  */
 .workspace {
     display: flex;
@@ -97,11 +119,25 @@ body {
 }
 
 .pane {
-    width: 50%;
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border);
     position: relative;
+    overflow: hidden;
+}
+
+.resize-divider {
+    width: 6px;
+    background: var(--border);
+    cursor: col-resize;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.resize-divider:hover {
+    background-color: #50c878;
+    box-shadow: inset 0 0 8px rgba(80, 200, 120, 0.4);
 }
 
 /*  Editor (Textarea)  */

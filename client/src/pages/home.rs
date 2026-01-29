@@ -90,7 +90,7 @@ pub fn LandingPage() -> impl IntoView {
                                         "Start Building"
                                         <span class="arrow">"→"</span>
                                     </A>
-                                    <a href="https://github.com/your-repo/TryCli Studio" target="_blank" class="btn-secondary">
+                                    <a href="https://github.com/joshikarthikey/trycli" target="_blank" class="btn-secondary">
                                         "View Source"
                                     </a>
                                 </div>
