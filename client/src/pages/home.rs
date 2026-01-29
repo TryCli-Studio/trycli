@@ -56,7 +56,7 @@ pub fn LandingPage() -> impl IntoView {
                         <nav class="landing-nav">
                             <div class="nav-brand">
                                 <span class="logo-icon">>_</span>
-                                <span class="logo-text">"TryCLI"</span>
+                                <span class="logo-text">"TryCli Studio"</span>
                             </div>
                             <div class="nav-actions">
                                 <A href="/dashboard" class="btn-nav">
@@ -90,7 +90,7 @@ pub fn LandingPage() -> impl IntoView {
                                         "Start Building"
                                         <span class="arrow">"→"</span>
                                     </A>
-                                    <a href="https://github.com/your-repo/trycli" target="_blank" class="btn-secondary">
+                                    <a href="https://github.com/your-repo/TryCli Studio" target="_blank" class="btn-secondary">
                                         "View Source"
                                     </a>
                                 </div>
@@ -101,12 +101,12 @@ pub fn LandingPage() -> impl IntoView {
                                         <div class="dot red"></div>
                                         <div class="dot yellow"></div>
                                         <div class="dot green"></div>
-                                        <span class="terminal-title-preview">"guest@trycli:~"</span>
+                                        <span class="terminal-title-preview">"guest@TryCli Studio:~"</span>
                                     </div>
                                     <div class="terminal-body-preview">
                                         <div class="line">
                                             <span class="prompt">"$"</span> 
-                                            <span class="cmd">"cargo install trycli"</span>
+                                            <span class="cmd">" TryCli"</span>
                                         </div>
                                         <div class="line output">
                                             <span>"Downloading crates.io..."</span>

@@ -63,7 +63,7 @@ async fn github_callback(
     let http_client = reqwest::Client::new();
     let user_data: User = http_client
         .get("https://api.github.com/user")
-        .header("User-Agent", "TryCLI")
+        .header("User-Agent", "TryCli Studio")
         .bearer_auth(token.access_token().secret())
         .send()
         .await

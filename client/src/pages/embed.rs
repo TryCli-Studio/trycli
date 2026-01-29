@@ -31,13 +31,13 @@ pub fn EmbedPage() -> impl IntoView {
                     <div class="embed-overlay" 
                          style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); z-index: 10;">
                         <div style="text-align: center; color: white;">
-                            <h3 style="margin-bottom: 1rem; font-family: var(--font-sans);">"TryCLI Demo"</h3>
+                            <h3 style="margin-bottom: 1rem; font-family: var(--font-sans);">"TryCli Studio Demo"</h3>
                             <button class="btn-primary" 
                                     style="padding: 12px 24px; font-size: 1.1rem;"
                                     on:click=move |_| set_started.set(true)>
                                 "▶ Start Terminal"
                             </button>
-                            <p style="margin-top: 1rem; color: #666; font-size: 0.8rem;">"Powered by TryCLI"</p>
+                            <p style="margin-top: 1rem; color: #666; font-size: 0.8rem;">"Powered by TryCli Studio"</p>
                         </div>
                     </div>
                 }.into_view()

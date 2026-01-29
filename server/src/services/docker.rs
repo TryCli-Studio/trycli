@@ -19,7 +19,7 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
         };
         
         let filters = HashMap::from([
-            ("label".to_string(), vec!["managed_by=trycli".to_string()])
+            ("label".to_string(), vec!["managed_by=TryCli Studio".to_string()])
         ]);
         
         let opts = ListContainersOptions {

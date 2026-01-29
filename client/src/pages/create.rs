@@ -117,7 +117,7 @@ pub fn CreatePage() -> impl IntoView {
                     navigate("/", Default::default());
                 }
             }>
-                "TryCLI Studio"
+                "TryCli Studio"
             </div>
         <div class="controls">
             {move || match user.get() {
@@ -188,7 +188,7 @@ pub fn CreatePage() -> impl IntoView {
             }.into_view(),
             None => view! {
                 <div style="display: flex; height: calc(100vh - 60px); justify-content: center; align-items: center; flex-direction: column; gap: 20px;">
-                    <h2 style="color: var(--text-main);">"Welcome to TryCLI"</h2>
+                    <h2 style="color: var(--text-main);">"Welcome to TryCli Studio"</h2>
                     <p style="color: var(--text-muted);">"Please sign in to start creating interactive demos."</p>
                 </div>
             }.into_view()

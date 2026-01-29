@@ -109,7 +109,7 @@ pub async fn publish_handler(
         }
     };
 
-    let new_image_tag = format!("trycli-project-{}", payload.slug);
+    let new_image_tag = format!("TryCli Studio-project-{}", payload.slug);
 
     // 2. Prepare Commit Options
     let commit_opts = CommitContainerOptions {
@@ -166,7 +166,7 @@ pub async fn get_project(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
-    let container_name = format!("trycli-viewer-{}", Uuid::new_v4());
+    let container_name = format!("TryCli Studio-viewer-{}", Uuid::new_v4());
     let session_id = Uuid::new_v4().to_string();
 
     let config = Config {
@@ -179,7 +179,7 @@ pub async fn get_project(
             format!("SHELL={}", shell) 
         ]),
         labels: Some(HashMap::from([
-            ("managed_by".to_string(), "trycli".to_string()),
+            ("managed_by".to_string(), "TryCli Studio".to_string()),
             ("type".to_string(), "viewer".to_string())
         ])),
         host_config: Some(HostConfig { 
