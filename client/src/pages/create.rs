@@ -166,8 +166,10 @@ pub fn CreatePage() -> impl IntoView {
                         if resp.ok() {
                             let _ = window().alert_with_message("Published!");
                         } else {
-                            let _ = window().alert_with_message("Publish Failed: Server rejected request");
-                        }
+                            let status = resp.status();
+                            let text = resp.text().await.unwrap_or_default();
+                            let _ = window().alert_with_message(&format!("Publish Failed ({}: {})", status, text));
+}
                     },
                     Err(_) => {
                         let _ = window().alert_with_message("Publish Failed: Network Error");

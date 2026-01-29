@@ -9,7 +9,6 @@ use bollard::models::HostConfig;
 use bollard::image::CommitContainerOptions;
 use tower_sessions::Session;
 use uuid::Uuid;
-use std::collections::HashMap;
 use serde::Deserialize;
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest};
@@ -173,18 +172,47 @@ pub async fn get_project(
     let config = Config {
         image: Some(image_tag),
         tty: Some(true),
+        // 1. Run as a non-root user if possible (requires image support), 
+        // otherwise rely on CapDrop (below).
+        user: Some("root".to_string()), 
         env: Some(vec![
             "LANG=C.UTF-8".to_string(), 
             "LC_ALL=C.UTF-8".to_string(),
             "TERM=xterm-256color".to_string(),
             format!("SHELL={}", shell) 
         ]),
-        labels: Some(HashMap::from([
-            ("managed_by".to_string(), "TryCli Studio".to_string()),
-            ("type".to_string(), "viewer".to_string())
-        ])),
         host_config: Some(HostConfig { 
-            memory: Some(512 * 1024 * 1024),  
+            // 2. RESOURCE LIMITS
+            memory: Some(512 * 1024 * 1024), // 512 MB RAM
+            memory_swap: Some(512 * 1024 * 1024), // No extra swap
+            nano_cpus: Some(1_000_000_000), // 1.0 CPU Core
+            pids_limit: Some(64), // Prevent Fork Bombs (max 64 processes)
+            
+            // 3. NETWORK SECURITY
+            // "bridge" is default, but ensures they can't access host networking
+            network_mode: Some("bridge".to_string()), 
+            
+            // 4. KERNEL SECURITY (The most important part)
+            // Drop ALL capabilities first
+            cap_drop: Some(vec!["ALL".to_string()]),
+            // Add back ONLY what is strictly needed for standard tools
+            cap_add: Some(vec![
+                "NET_BIND_SERVICE".to_string(), // Allow binding ports
+                "CHOWN".to_string(),            // File permissions
+                "SETUID".to_string(),           // Sudo/su support
+                "SETGID".to_string(),
+                "DAC_OVERRIDE".to_string()      // File permission overrides
+            ]),
+            
+            // 5. SECURITY OPT
+            // Prevents processes from gaining more privileges than they started with
+            // (e.g., prevents some buffer overflow exploits)
+            security_opt: Some(vec!["no-new-privileges".to_string()]),
+            
+            // 6. FILESYSTEM
+            // For now, we leave it writable for temp files, but we could mount a tmpfs.
+            readonly_rootfs: Some(false), 
+
             auto_remove: Some(true), 
             ..Default::default() 
         }),

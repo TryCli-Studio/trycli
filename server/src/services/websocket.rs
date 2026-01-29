@@ -156,20 +156,51 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
     let config = Config {
         image: Some(image.to_string()),
         tty: Some(true),
-        open_stdin: Some(true), 
+        open_stdin: Some(true),
         cmd: Some(vec!["tail".to_string(), "-f".to_string(), "/dev/null".to_string()]),
         env: Some(vec![
-            "LANG=C.UTF-8".to_string(), 
+            "LANG=C.UTF-8".to_string(),
             "LC_ALL=C.UTF-8".to_string(),
-            "TERM=xterm-256color".to_string() 
+            "TERM=xterm-256color".to_string()
         ]),
         labels: Some(HashMap::from([
             ("managed_by".to_string(), "TryCli Studio".to_string())
         ])),
-        host_config: Some(HostConfig { 
-            memory: Some(512 * 1024 * 1024), 
-            auto_remove: Some(true), 
-            ..Default::default() 
+        host_config: Some(HostConfig {
+            // 1. RESOURCE QUOTAS (Stop the "Noisy Neighbor")
+            // Give builders more RAM/CPU than viewers, but still cap them.
+            memory: Some(1024 * 1024 * 1024), // 1 GB RAM (Publishers need to compile/install)
+            memory_swap: Some(1024 * 1024 * 1024), // No extra swap to thrash disk
+            nano_cpus: Some(2_000_000_000),   // 2.0 CPUs (Installers are CPU heavy)
+            
+            // 2. FORK BOMB PROTECTION
+            // 128 processes is enough for 'apt-get' and 'make', but stops a fork bomb script
+            pids_limit: Some(128), 
+
+            // 3. CAPABILITY DROPPING (The "Root" protection)
+            // We cannot drop "ALL" because apt-get/apk need to change file owners.
+            // But we explicitly DROP the dangerous ones used for hacking/escaping.
+            cap_drop: Some(vec![
+                "SYS_ADMIN".to_string(),   // Prevents mounting filesystems / container escape
+                "NET_RAW".to_string(),     // Prevents packet sniffing/spoofing (nmap/arp)
+                "SYS_MODULE".to_string(),  // Prevents loading kernel modules (rootkits)
+                "SYS_PTRACE".to_string(),  // Prevents inspecting other processes
+                "AUDIT_CONTROL".to_string(), // Prevents messing with audit logs
+                "MAC_ADMIN".to_string(),     // Prevents messing with security modules
+                "SYS_TIME".to_string(),      // Prevents changing system time
+            ]),
+
+            // 4. PRIVILEGE ESCALATION PREVENTION
+            // This ensures that even if they download a binary with the SUID bit set,
+            // it cannot grant them more privileges than they already have.
+            security_opt: Some(vec!["no-new-privileges".to_string()]),
+
+            // 5. NETWORK SECURITY
+            // Keeps them on the bridge network but isolated
+            network_mode: Some("bridge".to_string()),
+
+            auto_remove: Some(true),
+            ..Default::default()
         }),
         ..Default::default()
     };
