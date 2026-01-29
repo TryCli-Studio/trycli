@@ -183,14 +183,15 @@ pub fn CreatePage() -> impl IntoView {
     let navigate = leptos_router::use_navigate();
     view! {
        <div class="nav">
-            <div class="brand" style="cursor: pointer;" on:click=move |_| {
+            <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
                 if user.get().is_some() {
                     navigate("/dashboard", Default::default());
                 } else {
                     navigate("/", Default::default());
                 }
             }>
-                "TryCli Studio"
+                <span class="logo-icon">">_"</span>
+                <span>"TryCli Studio"</span>
             </div>
         <div class="controls">
             {move || match user.get() {
