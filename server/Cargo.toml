@@ -21,3 +21,4 @@ axum-extra = { version = "0.9", features = ["cookie"] }
 dotenvy = "0.15" # To load client secrets
 reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
 time = "0.3.46"
+openssl = { version = "0.10", features = ["vendored"] }
