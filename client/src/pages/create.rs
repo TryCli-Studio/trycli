@@ -67,9 +67,9 @@ pub fn CreatePage() -> impl IntoView {
     let on_publish = move |_| {
         spawn_local(async move {
             let body_data = serde_json::json!({
-                "container_id": container_id.get(),
-                "slug": slug.get(),
-                "markdown": markdown.get()
+                "container_id": container_id.get_untracked(),
+                "slug": slug.get_untracked(),
+                "markdown": markdown.get_untracked()
             });
 
             // FIX: Safe serialization instead of unwrap()
