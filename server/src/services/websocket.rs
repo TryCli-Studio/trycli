@@ -127,7 +127,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
 
     let _ = state.docker.create_image(Some(CreateImageOptions { from_image: image, ..Default::default() }), None, None).collect::<Vec<_>>().await;
 
-    let container_name = format!("TryCli-Studio-session-{}", Uuid::new_v4());
+    let container_name = format!("trycli-studio-session-{}", Uuid::new_v4());
     let config = Config {
         image: Some(image.to_string()),
         tty: Some(true),

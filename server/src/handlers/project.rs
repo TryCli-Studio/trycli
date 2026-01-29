@@ -109,7 +109,8 @@ pub async fn publish_handler(
         }
     };
 
-    let new_image_tag = format!("TryCli Studio-project-{}", payload.slug);
+    let safe_slug = payload.slug.trim().to_lowercase();
+    let new_image_tag = format!("trycli-studio-project-{}", safe_slug);
 
     // 2. Prepare Commit Options
     let commit_opts = CommitContainerOptions {
@@ -166,7 +167,7 @@ pub async fn get_project(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
-    let container_name = format!("TryCli Studio-viewer-{}", Uuid::new_v4());
+    let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
     let session_id = Uuid::new_v4().to_string();
 
     let config = Config {
