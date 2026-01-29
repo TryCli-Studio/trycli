@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos_router::*;
 use gloo_net::http::Request;
 use web_sys::RequestCredentials;
 use wasm_bindgen::JsValue;
@@ -8,9 +9,16 @@ use crate::components::terminal::TerminalView;
 
 #[component]
 pub fn CreatePage() -> impl IntoView {
+    let query_params = use_query_map();
+    let pre_filled_name = move || {
+        query_params.with(|params| {
+            params.get("name").cloned().unwrap_or_default()
+        })
+    };
+
     let (container_id, set_container_id) = create_signal("".to_string());
     let (markdown, set_markdown) = create_signal("# My Awesome Tool\n\nRun the install command...".to_string());
-    let (slug, set_slug) = create_signal("demo-project".to_string());
+    let (slug, set_slug) = create_signal(pre_filled_name());
     let (slug_error, set_slug_error) = create_signal(None::<String>);
     let (user, set_user) = create_signal(None::<User>);
 

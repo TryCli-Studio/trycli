@@ -1,30 +1,35 @@
 use axum::{
-    extract::{Path, State, Query},
-    http::{StatusCode, HeaderMap, header},
+    extract::{Path, Query, State},
+    http::{header, HeaderMap, StatusCode},
     routing::{get, post},
-    Router, Json,
+    Json, Router,
 };
 
-use bollard::container::{CreateContainerOptions, Config};
-use bollard::models::HostConfig;
+use bollard::container::{Config, CreateContainerOptions};
 use bollard::image::CommitContainerOptions;
+use bollard::models::HostConfig;
 use tower_sessions::Session;
 use uuid::Uuid;
 use std::collections::HashMap;
+use serde::Deserialize;
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest};
 
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    q: String,
+}
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 pub struct EmbedQuery {
     key: Option<String>,
 }
-
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/my-projects", get(list_user_projects))
         .route("/api/project/:username/:slug", get(get_project))
+        .route("/api/search-projects", get(search_projects))
         .route("/api/publish", post(publish_handler))
 }
 
@@ -48,6 +53,35 @@ pub async fn list_user_projects(
     .map_err(|e| {
         eprintln!("Database error fetching projects: {}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch projects".to_string())
+    })?;
+
+    Ok(Json(projects))
+}
+
+pub async fn search_projects(
+    State(state): State<AppState>,
+    session: Session,
+    Query(search): Query<SearchQuery>,
+) -> Result<Json<Vec<ProjectSummary>>, (StatusCode, String)> {
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    let query_term = format!("%{}%", search.q);
+    
+    // Use PostgreSQL ILIKE for case-insensitive fuzzy search
+    let projects = sqlx::query_as::<_, ProjectSummary>(
+        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
+    )
+    .bind(user.id)
+    .bind(query_term)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error searching projects: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Failed to search projects".to_string())
     })?;
 
     Ok(Json(projects))
