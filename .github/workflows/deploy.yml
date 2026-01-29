@@ -1,0 +1,74 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  # Update this to match the binary name in your Cargo.toml
+  BINARY_NAME: server 
+
+jobs:
+  build_and_deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    # Required if you set up GitHub Environments for protection
+    environment: SSH_PRIVATE_KEY
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- FRONTEND BUILD (Leptos) ---
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, x86_64-unknown-linux-musl
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Trunk (Frontend Builder)
+        uses: jetli/trunk-action@v0.4.0
+
+      - name: Build Frontend
+        working-directory: ./client
+        run: trunk build --release
+
+      # --- BACKEND BUILD (Axum) ---
+      - name: Install Cross (Cross-Compiler)
+        run: cargo install cross
+
+      - name: Build Backend (Static Binary)
+        working-directory: ./server
+        run: cross build --release --target x86_64-unknown-linux-musl
+
+      # --- DEPLOYMENT ---
+      - name: Prepare Deployment Package
+        run: |
+          mkdir deploy_package
+          # Copy backend binary
+          cp server/target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }} deploy_package/server_bin
+          # Copy frontend files
+          cp -r client/dist deploy_package/dist
+
+      - name: Deploy to DigitalOcean
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deploy_package/*"
+          target: "/home/deploy/app"
+          strip_components: 1
+
+      - name: Restart Application
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # 1. Make binary executable
+            chmod +x /home/deploy/app/server_bin
+            # 2. Restart Systemd Service
+            sudo systemctl restart trycli
