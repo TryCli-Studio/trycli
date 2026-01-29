@@ -36,7 +36,9 @@ jobs:
 
       - name: Build Frontend
         working-directory: ./client
-        # Ensure your index.html references the right base path if needed
+        env:
+          API_URL: "https://karthikey.me"
+          WS_URL: "wss://karthikey.me"
         run: trunk build --release
 
       # --- BACKEND BUILD (Axum) ---
