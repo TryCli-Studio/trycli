@@ -45,7 +45,7 @@ It orchestrates isolated Docker environments on-demand, providing a seamless "Re
 Start a PostgreSQL container on port **5433** to avoid conflicts:
 
 ```bash
-docker run --name TryCli Studio-db -e POSTGRES_PASSWORD=password -p 5433:5432 -d postgres
+docker run --name trycli-db -e POSTGRES_PASSWORD=password -p 5433:5432 -d postgres
 ```
 
 ### 2. Backend Setup
