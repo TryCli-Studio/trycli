@@ -157,8 +157,8 @@ pub fn DashboardPage() -> impl IntoView {
                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                         </div>
                         <a href="http://localhost:3000/auth/logout" 
-                           class="btn-primary" 
-                           style="background: #27272a; text-decoration: none; font-size: 0.9rem; border: 1px solid var(--border);">
+                           class="btn-primary btn-logout" 
+                           style="text-decoration: none; font-size: 0.9rem;">
                             "Logout"
                         </a>
                     }.into_view(),

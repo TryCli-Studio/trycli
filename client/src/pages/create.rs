@@ -3,9 +3,80 @@ use leptos_router::*;
 use gloo_net::http::Request;
 use web_sys::RequestCredentials;
 use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::*;
+use std::rc::Rc;
+use std::cell::RefCell;
 use crate::api::api_base;
 use crate::types::User;
 use crate::components::terminal::TerminalView;
+
+// Simple resize divider setup
+fn setup_resize_divider() {
+    if let Some(divider) = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.query_selector(".resize-divider").ok().flatten())
+        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        let is_dragging = Rc::new(RefCell::new(false));
+        
+        let on_mousedown = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+                *is_dragging.borrow_mut() = true;
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
+        
+        let on_mousemove = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
+                if !*is_dragging.borrow() {
+                    return;
+                }
+                
+                if let Some(workspace) = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.query_selector(".workspace").ok().flatten())
+                    .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                {
+                    let workspace_width = workspace.offset_width() as f64;
+                    let workspace_left = workspace.offset_left() as f64;
+                    let relative_x = e.client_x() as f64 - workspace_left;
+                    let percentage = (relative_x / workspace_width * 100.0).max(20.0).min(80.0);
+                    
+                    if let Ok(panes) = workspace.query_selector_all(".pane") {
+                        if panes.length() >= 2 {
+                            if let Some(first_pane) = panes.get(0).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                                first_pane.style().set_property("flex", "0 1 auto").ok();
+                                first_pane.style().set_property("width", &format!("{}%", percentage)).ok();
+                            }
+                            if let Some(second_pane) = panes.get(1).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                                second_pane.style().set_property("flex", "0 1 auto").ok();
+                                second_pane.style().set_property("width", &format!("{}%", 100.0 - percentage)).ok();
+                            }
+                        }
+                    }
+                }
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
+        
+        let on_mouseup = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+                *is_dragging.borrow_mut() = false;
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
+        
+        divider.add_event_listener_with_callback("mousedown", on_mousedown.as_ref().unchecked_ref()).ok();
+        on_mousedown.forget();
+        
+        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+            document.add_event_listener_with_callback("mousemove", on_mousemove.as_ref().unchecked_ref()).ok();
+            document.add_event_listener_with_callback("mouseup", on_mouseup.as_ref().unchecked_ref()).ok();
+            on_mousemove.forget();
+            on_mouseup.forget();
+        }
+    }
+}
 
 #[component]
 pub fn CreatePage() -> impl IntoView {
@@ -132,8 +203,8 @@ pub fn CreatePage() -> impl IntoView {
                         </span>
                      </div>
                      <a href=format!("{}/auth/logout", api_base()) 
-                        class="btn-primary" 
-                        style="background: #27272a; margin-right: 12px; text-decoration: none; font-size: 0.8rem; border: 1px solid var(--border);">
+                        class="btn-primary btn-logout" 
+                        style="margin-right: 12px; text-decoration: none; font-size: 0.8rem;">
                         "Logout"
                      </a>
                      <span style="color: var(--text-muted); font-size: 0.9rem; margin-right: 8px;">"Project Slug:"</span>
@@ -152,7 +223,7 @@ pub fn CreatePage() -> impl IntoView {
                      {move || slug_error.get().map(|err| view! {
                          <span style="color: #ef4444; font-size: 0.75rem; margin-left: 8px;">{err}</span>
                      })}
-                     <button class="btn-primary" on:click=on_publish 
+                     <button class="btn-primary btn-success" on:click=on_publish 
                              prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some()>"Publish"</button>
                 }.into_view(),
                 None => view! {
@@ -164,30 +235,49 @@ pub fn CreatePage() -> impl IntoView {
         </div>
        </div>
         {move || match user.get() {
-            Some(_) => view! {
-                <div class="workspace">
-                    <div class="pane">
-                        <div class="terminal-header">
-                            <div class="dot red"></div>
-                            <div class="dot yellow"></div>
-                            <div class="dot green"></div>
-                            <span class="terminal-title">"bash — interactive"</span>
+            Some(_) => {
+                let mounted = create_signal(false);
+                
+                create_effect(move |_| {
+                    if !mounted.0.get() {
+                        // Use requestAnimationFrame to ensure DOM is fully rendered
+                        if let Some(window) = web_sys::window() {
+                            let callback = wasm_bindgen::closure::Closure::once(move || {
+                                setup_resize_divider();
+                                mounted.1.set(true);
+                            });
+                            window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
+                            callback.forget();
+                        }
+                    }
+                });
+                
+                view! {
+                    <div class="workspace">
+                        <div class="pane" style="width: 50%">
+                            <div class="terminal-header">
+                                <div class="dot red"></div>
+                                <div class="dot yellow"></div>
+                                <div class="dot green"></div>
+                                <span class="terminal-title">"bash — interactive"</span>
+                            </div>
+                            <div class="terminal-body">
+                                {move || match container_id.get().as_str() {
+                                    "" => view! { <div style="padding: 20px; color: #666;">"Initializing Environment..."</div> }.into_view(),
+                                    id => view! { <TerminalView container_id=id.to_string() /> }.into_view()
+                                }}
+                            </div>
                         </div>
-                        <div class="terminal-body">
-                            {move || match container_id.get().as_str() {
-                                "" => view! { <div style="padding: 20px; color: #666;">"Initializing Environment..."</div> }.into_view(),
-                                id => view! { <TerminalView container_id=id.to_string() /> }.into_view()
-                            }}
+                        <div class="resize-divider"></div>
+                        <div class="pane" style="width: 50%">
+                             <textarea class="editor-textarea"
+                                spellcheck="false"
+                                on:input=move |ev| set_markdown.set(event_target_value(&ev))
+                             >{markdown}</textarea>
                         </div>
                     </div>
-                    <div class="pane">
-                         <textarea class="editor-textarea"
-                            spellcheck="false"
-                            on:input=move |ev| set_markdown.set(event_target_value(&ev))
-                         >{markdown}</textarea>
-                    </div>
-                </div>
-            }.into_view(),
+                }.into_view()
+            },
             None => view! {
                 <div style="display: flex; height: calc(100vh - 60px); justify-content: center; align-items: center; flex-direction: column; gap: 20px;">
                     <h2 style="color: var(--text-main);">"Welcome to TryCli Studio"</h2>
