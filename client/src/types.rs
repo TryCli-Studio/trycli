@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct ProjectSummary {
     pub slug: String,
     pub image_tag: String,
+    pub is_protected: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

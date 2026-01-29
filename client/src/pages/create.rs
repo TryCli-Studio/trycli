@@ -92,6 +92,8 @@ pub fn CreatePage() -> impl IntoView {
     let (slug, set_slug) = create_signal(pre_filled_name());
     let (slug_error, set_slug_error) = create_signal(None::<String>);
     let (user, set_user) = create_signal(None::<User>);
+    let (is_protected, set_is_protected) = create_signal(false);
+    let (allowed_origins, set_allowed_origins) = create_signal("".to_string());
 
     create_resource(|| (), move |_| async move {
         let url = format!("{}/api/me", api_base());
@@ -140,7 +142,13 @@ pub fn CreatePage() -> impl IntoView {
             let body_data = serde_json::json!({
                 "container_id": container_id.get_untracked(),
                 "slug": slug.get_untracked(),
-                "markdown": markdown.get_untracked()
+                "markdown": markdown.get_untracked(),
+                "is_protected": is_protected.get_untracked(),
+                "allowed_origins": if is_protected.get_untracked() && !allowed_origins.get_untracked().is_empty() {
+                    Some(allowed_origins.get_untracked())
+                } else {
+                    None
+                }
             });
 
             // FIX: Safe serialization instead of unwrap()
@@ -224,6 +232,28 @@ pub fn CreatePage() -> impl IntoView {
                      {move || slug_error.get().map(|err| view! {
                          <span style="color: #ef4444; font-size: 0.75rem; margin-left: 8px;">{err}</span>
                      })}
+                     <div style="display: flex; align-items: center; gap: 12px; margin-left: 12px;">
+                         <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; color: var(--text-muted);">
+                             <input type="checkbox" 
+                                    prop:checked=is_protected
+                                    on:change=move |ev| {
+                                        set_is_protected.set(event_target_checked(&ev));
+                                    } />
+                             <span>"Protect Embed"</span>
+                         </label>
+                         {move || if is_protected.get() {
+                             view! {
+                                 <input type="text" 
+                                        class="input-slug" 
+                                        placeholder="example.com, another.com"
+                                        prop:value=allowed_origins
+                                        on:input=move |ev| set_allowed_origins.set(event_target_value(&ev))
+                                        style="min-width: 200px; font-size: 0.85rem;" />
+                             }.into_view()
+                         } else {
+                             view! { <div></div> }.into_view()
+                         }}
+                     </div>
                      <button class="btn-primary btn-success" on:click=on_publish 
                              prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some()>"Publish"</button>
                 }.into_view(),

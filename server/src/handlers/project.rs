@@ -11,6 +11,7 @@ use bollard::models::HostConfig;
 use tower_sessions::Session;
 use uuid::Uuid;
 use serde::Deserialize;
+use url::Url;
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest};
 
@@ -22,6 +23,24 @@ pub struct SearchQuery {
 #[derive(Deserialize)]
 pub struct EmbedQuery {
     key: Option<String>,
+}
+
+// Strict host matching to prevent subdomain spoofing
+fn is_authorized(referer: &str, allowed_origins: &str, self_domain: &str) -> bool {
+    let ref_url = match Url::parse(referer) {
+        Ok(u) => u,
+        Err(_) => return false,
+    };
+    let ref_host = ref_url.host_str().unwrap_or("");
+    //1. Internal Check (localhost or your domain)
+    if ref_host == "localhost" || ref_host == "127.0.0.1" || 
+       ref_host == self_domain || ref_host.ends_with(&format!(".{}", self_domain)) {
+        return true;
+    }
+    // 2. Strict Whitelist Check (Prevents domain.com.evil.com exploits)
+    allowed_origins.split(',')
+        .map(|s| s.trim().trim_start_matches("https://").trim_start_matches("http://"))
+        .any(|domain| ref_host == domain || ref_host.ends_with(&format!(".{}", domain)))
 }
 
 pub fn routes() -> Router<AppState> {
@@ -44,7 +63,7 @@ pub async fn list_user_projects(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
+        "SELECT slug, image_tag, is_protected FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
     )
     .bind(user.id)
     .fetch_all(&state.db)
@@ -72,7 +91,7 @@ pub async fn search_projects(
     
     // Use PostgreSQL ILIKE for case-insensitive fuzzy search
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
+        "SELECT slug, image_tag, is_protected FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
     )
     .bind(user.id)
     .bind(query_term)
@@ -136,15 +155,23 @@ pub async fn publish_handler(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Commit Error: {}", e)))?;
 
     // NEW: Generate Token and Process Origins
-    let embed_token = Uuid::new_v4().to_string();
-    let origins_str = payload.allowed_origins.unwrap_or_default(); // Store as provided
+    let embed_token = if payload.is_protected {
+        Some(Uuid::new_v4().to_string())
+    } else {
+        None
+    };
+    let origins_str = if payload.is_protected {
+        payload.allowed_origins
+    } else {
+        None
+    };
 
     // NEW: Insert with Security Fields
     sqlx::query(
-        "INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell, embed_token, allowed_origins) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        "INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell, is_protected, embed_token, allowed_origins) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT (owner_username, slug) 
-         DO UPDATE SET image_tag = $2, markdown = $3, shell = $6, embed_token = $7, allowed_origins = $8"
+         DO UPDATE SET image_tag = $2, markdown = $3, shell = $6, is_protected = $7, embed_token = $8, allowed_origins = $9"
     )
         .bind(&payload.slug)
         .bind(&new_image_tag)
@@ -152,6 +179,7 @@ pub async fn publish_handler(
         .bind(user.id)          
         .bind(&user.login)
         .bind(&shell_path)
+        .bind(payload.is_protected)
         .bind(&embed_token)
         .bind(&origins_str)
         .execute(&state.db)
@@ -161,7 +189,11 @@ pub async fn publish_handler(
     let _ = state.docker.stop_container(&container_name, None).await;
 
     // Return the token to the user for immediate use
-    Ok(Json(format!("Published! Embed Token: {}", embed_token)))
+    if let Some(token) = &embed_token {
+        Ok(Json(format!("Published! Embed Token: {}", token)))
+    } else {
+        Ok(Json("Published!".to_string()))
+    }
 }
 
 pub async fn get_project(
@@ -172,55 +204,36 @@ pub async fn get_project(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
     // 1. Fetch Project Data + Security Fields
-    let row_result = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>)>(
-        "SELECT image_tag, markdown, shell, embed_token, allowed_origins FROM projects WHERE owner_username = $1 AND slug = $2"
+    let row_result = sqlx::query_as::<_, (String, String, String, bool, Option<String>, Option<String>)>(
+        "SELECT image_tag, markdown, shell, is_protected, embed_token, allowed_origins FROM projects WHERE owner_username = $1 AND slug = $2"
     )
     .bind(&username).bind(&slug)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    let (image_tag, markdown, shell, token, origins_raw) = match row_result {
+    let (image_tag, markdown, shell, is_protected, token, origins_raw) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
     // 2. === AUTHORIZATION LOGIC ===
-    let referer = headers.get(header::REFERER)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    
-    // Parse the allowed list
-    let allowed_list: Vec<&str> = origins_raw.as_deref().unwrap_or("")
-        .split(',')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    // Check 1: Is it our own frontend? (Always allow)
-    // In production, change "localhost" to your actual domain
-    let is_self = referer.contains("localhost") || referer.contains("127.0.0.1") || referer.contains("trycli.com");
-
-    // Check 2: Is the Referer in the whitelist?
-    // We check if the referer *starts with* the allowed origin to handle paths
-    let is_whitelisted = allowed_list.iter().any(|&origin| {
-        // Handle cases where user might enter "example.com" or "https://example.com"
-        let clean_origin = origin.trim_start_matches("https://").trim_start_matches("http://");
-        referer.contains(clean_origin)
-    });
-
-    // Check 3: Is the provided token correct?
-    let is_valid_token = token.as_deref() == query.key.as_deref();
-
-    // DECISION MATRIX
-    if !is_self {
-        // If we have security rules set up (either a whitelist or a token exists)
-        if !allowed_list.is_empty() || token.is_some() {
-            // We need EITHER a whitelist match OR a valid token
-            if !is_whitelisted && !is_valid_token {
-                tracing::warn!("Blocked Unauthorized Embed: Referer='{}', Slug='{}'", referer, slug);
-                return Err((StatusCode::FORBIDDEN, "Access Denied: Domain not authorized.".to_string()));
-            }
+    // Only run security logic if is_protected is TRUE (zero-inference: explicit flag required)
+    if is_protected {
+        let referer = headers.get(header::REFERER)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        
+        let allowed_origins_str = origins_raw.as_deref().unwrap_or("");
+        let self_domain = "trycli.com"; // Your production domain
+        
+        // Check authorization: either whitelist match OR valid token
+        let is_authorized_domain = is_authorized(referer, allowed_origins_str, self_domain);
+        let is_valid_token = token.as_deref() == query.key.as_deref();
+        
+        if !is_authorized_domain && !is_valid_token {
+            tracing::warn!("Blocked Unauthorized Embed: Referer='{}', Slug='{}'", referer, slug);
+            return Err((StatusCode::FORBIDDEN, "Access Denied: Domain not authorized.".to_string()));
         }
     }
     
@@ -297,6 +310,8 @@ pub async fn get_project(
     
     Ok(Json(serde_json::json!({
         "container_id": session_id,
-        "markdown": markdown
+        "markdown": markdown,
+        "is_protected": is_protected,
+        "embed_token": token
     })))
 }

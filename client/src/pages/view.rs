@@ -44,11 +44,18 @@ pub fn ViewPage() -> impl IntoView {
     let navigate = leptos_router::use_navigate();
     
     // FIX: Using window.location.origin for the embed code
-    let copy_embed_code = move |u: String, s: String| {
+    let copy_embed_code = move |u: String, s: String, is_protected: bool, embed_token: Option<String>| {
         let origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
+        let mut url = format!("{}/embed/{}/{}", origin, u, s);
+        // If protected, append the embed token to the URL
+        if is_protected {
+            if let Some(token) = embed_token {
+                url = format!("{}?key={}", url, token);
+            }
+        }
         let code = format!(
-            "<iframe src=\"{}/embed/{}/{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\"></iframe>",
-            origin, u, s
+            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\"></iframe>",
+            url
         );
         let _ = window().navigator().clipboard().write_text(&code);
         let _ = window().alert_with_message("Embed code copied to clipboard!");
@@ -92,7 +99,9 @@ pub fn ViewPage() -> impl IntoView {
                                     on:click=move |_| {
                                         let u_val = username();
                                         let s_val = slug();
-                                        copy_embed_code(u_val, s_val);
+                                        let is_prot = project_data.get().and_then(|d| d.as_ref().and_then(|v| v["is_protected"].as_bool())).unwrap_or(false);
+                                        let token = project_data.get().and_then(|d| d.as_ref().and_then(|v| v["embed_token"].as_str().map(|s| s.to_string())));
+                                        copy_embed_code(u_val, s_val, is_prot, token);
                                     }>
                                 "Share / Embed"
                             </button>
@@ -108,7 +117,9 @@ pub fn ViewPage() -> impl IntoView {
                                     on:click=move |_| {
                                         let u_val = username();
                                         let s_val = slug();
-                                        copy_embed_code(u_val, s_val);
+                                        let is_prot = project_data.get().and_then(|d| d.as_ref().and_then(|v| v["is_protected"].as_bool())).unwrap_or(false);
+                                        let token = project_data.get().and_then(|d| d.as_ref().and_then(|v| v["embed_token"].as_str().map(|s| s.to_string())));
+                                        copy_embed_code(u_val, s_val, is_prot, token);
                                     }>
                                 "Share / Embed"
                             </button>

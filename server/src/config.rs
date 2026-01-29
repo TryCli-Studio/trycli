@@ -23,6 +23,7 @@ pub async fn setup_database_and_docker() -> Result<AppState, Box<dyn std::error:
             owner_id BIGINT, 
             
             -- NEW: Security Fields
+            is_protected BOOLEAN NOT NULL DEFAULT FALSE,
             embed_token TEXT,
             allowed_origins TEXT, -- Stored as comma-separated values
             
