@@ -42,6 +42,24 @@ body {
     letter-spacing: -0.5px;
 }
 
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: white;
+    letter-spacing: -0.02em;
+}
+
+.logo-icon {
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(255,255,255,0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
 .controls {
     display: flex;
     gap: 12px;
@@ -457,25 +475,6 @@ body {
   width: 100%;
   box-sizing: border-box;
   z-index: 10;
-}
-
-.nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 800;
-  font-size: 1.25rem;
-  font-family: 'Inter', sans-serif;
-  color: white;
-  letter-spacing: -0.02em;
-}
-
-.logo-icon {
-  color: var(--text-muted);
-  font-family: 'JetBrains Mono', monospace;
-  background: rgba(255,255,255,0.1);
-  padding: 4px 8px;
-  border-radius: 4px;
 }
 
 .nav-actions {
