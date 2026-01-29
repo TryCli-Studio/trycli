@@ -76,7 +76,7 @@ pub fn ViewPage() -> impl IntoView {
                         navigate("/", Default::default());
                     }
                 }>
-                    "TryCLI Studio"
+                    "TryCli Studio"
                 </div>
                 <div class="controls">
                     {move || match user.get() {
@@ -86,8 +86,8 @@ pub fn ViewPage() -> impl IntoView {
                                      style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
                                 <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                             </div>
-                            <button class="btn-primary" 
-                                    style="background: #27272a; border: 1px solid var(--border); margin-right: 10px;"
+                            <button class="btn-primary btn-success" 
+                                    style="margin-right: 10px;"
                                     on:click=move |_| {
                                         let u_val = username();
                                         let s_val = slug();
@@ -96,14 +96,14 @@ pub fn ViewPage() -> impl IntoView {
                                 "Share / Embed"
                             </button>
                             <a href="http://localhost:3000/auth/logout" 
-                               class="btn-primary" 
-                               style="background: #27272a; text-decoration: none; font-size: 0.9rem; border: 1px solid var(--border);">
+                               class="btn-primary btn-logout" 
+                               style="text-decoration: none; font-size: 0.9rem;">
                                 "Logout"
                             </a>
                         }.into_view(),
                         None => view! {
-                            <button class="btn-primary" 
-                                    style="background: #27272a; border: 1px solid var(--border); margin-right: 10px;"
+                            <button class="btn-primary btn-success" 
+                                    style="margin-right: 10px;"
                                     on:click=move |_| {
                                         let u_val = username();
                                         let s_val = slug();

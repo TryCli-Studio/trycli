@@ -146,7 +146,7 @@ pub fn DashboardPage() -> impl IntoView {
                     navigate("/", Default::default());
                 }
             }>
-                "TryCLI Studio"
+                "TryCli Studio"
             </div>
             <div class="controls">
                 {move || match user.get() {
@@ -157,8 +157,8 @@ pub fn DashboardPage() -> impl IntoView {
                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                         </div>
                         <a href="http://localhost:3000/auth/logout" 
-                           class="btn-primary" 
-                           style="background: #27272a; text-decoration: none; font-size: 0.9rem; border: 1px solid var(--border);">
+                           class="btn-primary btn-logout" 
+                           style="text-decoration: none; font-size: 0.9rem;">
                             "Logout"
                         </a>
                     }.into_view(),
@@ -216,7 +216,7 @@ pub fn DashboardPage() -> impl IntoView {
                     },
                     (None, false) => view! {
                         <div style="display: flex; height: calc(100vh - 60px); justify-content: center; align-items: center; flex-direction: column; gap: 20px;">
-                            <h2 style="color: var(--text-main);">"Welcome to TryCLI"</h2>
+                            <h2 style="color: var(--text-main);">"Welcome to TryCli Studio"</h2>
                             <p style="color: var(--text-muted);">"Please sign in to start creating interactive demos."</p>
                         </div>
                     }.into_view(),
