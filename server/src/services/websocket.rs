@@ -55,17 +55,42 @@ pub async fn ws_handler(
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
-    // Re-acquire lock to get details (prevents race conditions if session died between check and upgrade)
-    let existing_session = {
-        let map = state.lock_sessions();
-        map.get(&session_id).cloned()
+    // 1. Attempt to CLAIM the session immediately
+    let is_claimed_by_us = {
+        let mut map = state.lock_sessions();
+        if map.contains_key(&session_id) {
+            false
+        } else {
+            // Insert a placeholder to block other connections
+            map.insert(session_id.clone(), SessionContext {
+                container_name: "INITIALIZING".to_string(), // Marker value
+                shell: "".to_string(),
+                owner_id: user_id
+            });
+            true
+        }
     };
 
-    if let Some(ctx) = existing_session {
-        attach_to_container(socket, state, session_id, ctx.container_name, ctx.shell, None).await;
-    } else {
-        // Pass user_id to wizard so it can claim ownership of the new container
+    if is_claimed_by_us {
+        // We won the race -> Run the wizard
         run_setup_wizard(socket, state, session_id, user_id).await;
+    } else {
+        // Session exists (or is being initialized by another socket)
+        let existing_session = {
+            let map = state.lock_sessions();
+            map.get(&session_id).cloned()
+        };
+
+        if let Some(ctx) = existing_session {
+            if ctx.container_name == "INITIALIZING" {
+                // Another connection is currently setting this up. 
+                // Close this duplicate connection to prevent the race.
+                let _ = socket.close().await;
+                return;
+            }
+            // Normal attach logic
+            attach_to_container(socket, state, session_id, ctx.container_name, ctx.shell, None).await;
+        }
     }
 }
 
@@ -153,18 +178,23 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
         Some(CreateContainerOptions { name: container_name.clone(), platform: None }), config
     ).await {
         Ok(_) => {
-            // FIX: Removed dangerous unwrap() on start_container
             if let Err(e) = state.docker.start_container::<String>(&container_name, None).await {
+                // ERROR HANDLER: If start fails, remove the "INITIALIZING" lock
+                {
+                    let mut map = state.lock_sessions();
+                    map.remove(&session_id);
+                }
                 send_txt(&mut socket, &format!("{}Fatal Error: Could not start container: {}{}", red, e, reset)).await;
                 return;
             }
 
             {
                 let mut map = state.lock_sessions();
+                // UPDATE the placeholder with the REAL container details
                 map.insert(session_id.clone(), SessionContext {
                     container_name: container_name.clone(),
                     shell: final_shell.to_string(),
-                    owner_id: user_id // Assign ownership here
+                    owner_id: user_id 
                 });
             }
 
@@ -172,6 +202,11 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             attach_to_container(socket, state, session_id, container_name, "/bin/sh".to_string(), Some(auto_type_cmd)).await;
         },
         Err(e) => {
+            // ERROR HANDLER: If create fails, remove the "INITIALIZING" lock
+            {
+                let mut map = state.lock_sessions();
+                map.remove(&session_id);
+            }
             send_txt(&mut socket, &format!("Error creating container: {}", e)).await;
         }
     }
