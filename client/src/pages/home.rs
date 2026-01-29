@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos_router::A;
 use gloo_net::http::Request;
 use web_sys::RequestCredentials;
 use crate::api::api_base;
@@ -9,12 +10,13 @@ pub fn LandingPage() -> impl IntoView {
     let navigate = leptos_router::use_navigate();
     let (checked, set_checked) = create_signal(false);
 
+    // --- RESTORED AUTHENTICATION LOGIC ---
     {
         let navigate = navigate.clone();
         create_resource(|| (), move |_| {
             let navigate = navigate.clone();
             async move {
-                // FIX: Use dynamic API URL
+                // Check if user is authenticated
                 let url = format!("{}/api/me", api_base());
                 let auth_req = Request::get(&url)
                     .credentials(RequestCredentials::Include)
@@ -25,7 +27,7 @@ pub fn LandingPage() -> impl IntoView {
                     Ok(resp) => {
                         if resp.ok() {
                             if let Ok(_user) = resp.json::<User>().await {
-                                // User is authenticated, redirect to dashboard
+                                // User is authenticated, redirect to dashboard immediately
                                 navigate("/dashboard", Default::default());
                             }
                         }
@@ -40,35 +42,89 @@ pub fn LandingPage() -> impl IntoView {
     view! {
         {move || {
             if !checked.get() {
-                return view! {
-                    <div style="display: flex; height: 100vh; justify-content: center; align-items: center; background: var(--bg-dark);">
+                // Show spinner while checking auth
+                view! {
+                    <div class="loading-overlay">
                         <div class="spinner"></div>
                     </div>
-                }.into_view();
-            }
+                }
+            } else {
+                // Show Landing Page if not logged in
+                view! {
+                    <div class="landing-container">
+                        // Navigation Bar
+                        <nav class="landing-nav">
+                            <div class="nav-brand">
+                                <span class="logo-icon">>_</span>
+                                <span class="logo-text">"TryCli Studio"</span>
+                            </div>
+                            <div class="nav-actions">
+                                <A href="/dashboard" class="btn-nav">
+                                    "Login"
+                                </A>
+                                <A href="/dashboard" class="btn-primary btn-lg">
+                                    "Launch Dashboard"
+                                </A>
+                            </div>
+                        </nav>
 
-            view! {
-                <div style="display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; gap: 40px; background: var(--bg-dark);">
-                    <div style="text-align: center;">
-                        <h1 style="font-size: 4rem; font-weight: 800; color: var(--text-main); margin: 0 0 16px 0; letter-spacing: -1px;">
-                            "TryCLI Studio"
-                        </h1>
-                        <p style="font-size: 1.2rem; color: var(--text-muted); margin: 0 0 8px 0;">
-                            "Create and share interactive CLI experiences"
-                        </p>
-                        <p style="font-size: 1rem; color: var(--text-muted); margin: 0;">
-                            "Build, demo, and deploy your tools instantly"
-                        </p>
+                        // Hero Section
+                        <main class="hero-main">
+                            <div class="hero-content">
+                                <div class="badge">
+                                    "100% Rust • WebAssembly"
+                                </div>
+                                
+                                <h1 class="hero-title">
+                                    "Demo your CLI tools"<br />
+                                    <span class="text-gradient">"in the browser."</span>
+                                </h1>
+                                
+                                <p class="hero-subtitle">
+                                    "Instantly spin up isolated Docker containers. Interact via terminal, "
+                                    "edit guides with Markdown, and share your projects with a single link."
+                                </p>
+
+                                <div class="cta-group">
+                                    <A href="/dashboard" class="btn-primary btn-hero">
+                                        "Start Building"
+                                        <span class="arrow">"→"</span>
+                                    </A>
+                                    <a href="https://github.com/your-repo/TryCli Studio" target="_blank" class="btn-secondary">
+                                        "View Source"
+                                    </a>
+                                </div>
+
+                                // Visual Terminal Preview (Pure CSS)
+                                <div class="terminal-preview">
+                                    <div class="terminal-header-preview">
+                                        <div class="dot red"></div>
+                                        <div class="dot yellow"></div>
+                                        <div class="dot green"></div>
+                                        <span class="terminal-title-preview">"guest@TryCli Studio:~"</span>
+                                    </div>
+                                    <div class="terminal-body-preview">
+                                        <div class="line">
+                                            <span class="prompt">"$"</span> 
+                                            <span class="cmd">" TryCli"</span>
+                                        </div>
+                                        <div class="line output">
+                                            <span>"Downloading crates.io..."</span>
+                                        </div>
+                                        <div class="line output">
+                                            <span class="success">"✓ Installed successfully"</span>
+                                        </div>
+                                        <div class="line">
+                                            <span class="prompt">"$"</span> 
+                                            <span class="cursor">"_"</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </main>
                     </div>
-
-                    // FIX: Use dynamic API URL
-                    <a href=format!("{}/auth/github", api_base()) 
-                       class="btn-primary"
-                       style="padding: 14px 32px; font-size: 1.1rem; text-decoration: none;">
-                        "Sign in with GitHub"
-                    </a>
-                </div>
-            }.into_view()
+                }
+            }
         }}
     }
 }

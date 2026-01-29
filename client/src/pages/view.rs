@@ -76,7 +76,7 @@ pub fn ViewPage() -> impl IntoView {
                         navigate("/", Default::default());
                     }
                 }>
-                    "TryCLI Studio"
+                    "TryCli Studio"
                 </div>
                 <div class="controls">
                     {move || match user.get() {

@@ -81,7 +81,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
     let clear = "\x1b[2J\x1b[1;1H";
 
     send_txt(&mut socket, clear).await;
-    send_txt(&mut socket, &format!("{}Welcome to TryCLI Setup!{}\r\n\r\n", green, reset)).await;
+    send_txt(&mut socket, &format!("{}Welcome to TryCli Studio Setup!{}\r\n\r\n", green, reset)).await;
     
     send_txt(&mut socket, &format!("{}Select Base Image:{}\r\n", cyan, reset)).await;
     send_txt(&mut socket, "1. Ubuntu 22.04 (Heavy, Full-featured)\r\n").await;
@@ -127,7 +127,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
 
     let _ = state.docker.create_image(Some(CreateImageOptions { from_image: image, ..Default::default() }), None, None).collect::<Vec<_>>().await;
 
-    let container_name = format!("trycli-session-{}", Uuid::new_v4());
+    let container_name = format!("TryCli Studio-session-{}", Uuid::new_v4());
     let config = Config {
         image: Some(image.to_string()),
         tty: Some(true),
@@ -139,7 +139,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             "TERM=xterm-256color".to_string() 
         ]),
         labels: Some(HashMap::from([
-            ("managed_by".to_string(), "trycli".to_string())
+            ("managed_by".to_string(), "TryCli Studio".to_string())
         ])),
         host_config: Some(HostConfig { 
             memory: Some(512 * 1024 * 1024), 
