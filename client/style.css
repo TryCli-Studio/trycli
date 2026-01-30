@@ -7,10 +7,14 @@
     --text-main: #e4e4e7;
     --text-muted: #a1a1aa;
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; }
+
+h1, h2, h3, .brand, .logo-text {
+    letter-spacing: -0.03em; /* Tighter tracking looks more modern */
+}
 
 body {
     margin: 0;
@@ -18,6 +22,8 @@ body {
     color: var(--text-main);
     font-family: var(--font-sans);
     overflow-x: hidden; /* App-like feel */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /*  Navigation Bar  */
@@ -109,25 +115,42 @@ body {
 }
 
 .btn-logout {
-    background: #27272a;
+    background: transparent; /* or var(--bg-panel) */
     border: 1px solid var(--border);
-    transition: background-color 0.3s ease;
+    color: var(--text-muted);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-logout:hover {
-    background-color: #772323;
-    box-shadow: 0 0 6px rgba(129, 40, 40, 0.884);
+    background: rgba(239, 68, 68, 0.05); /* Very subtle red tint */
+    border-color: #ef4444; /* Bright Red */
+    color: #ef4444;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); /* The Red Glow */
+    transform: translateY(-1px);
 }
 
 .btn-success {
-    background: #27272a;
+    background: transparent;
     border: 1px solid var(--border);
-    transition: background-color 0.3s ease;
+    color: var(--text-main); /* Keep text white initially */
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.btn-success:hover {
-    background-color: #2e832e;
-    box-shadow: 0 0 4px rgba(30, 215, 42, 0.3);
+.btn-success:hover:not(:disabled) {
+    background: rgba(34, 197, 94, 0.05); /* Very subtle green tint */
+    border-color: #22c55e; /* Bright Green */
+    color: #22c55e;
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.3); /* The Green Glow */
+    transform: translateY(-1px);
+}
+
+/* Fix disabled state for Publish button */
+.btn-success:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--bg-panel);
+    border-color: var(--border);
+    box-shadow: none;
 }
 
 /*  Workspace Layout  */
@@ -721,3 +744,58 @@ body {
     justify-content: center;
     z-index: 9999;
 }
+
+.input-hero, .input-slug {
+    background: rgba(0, 0, 0, 0.3); /* Darker, slightly transparent background */
+    border: 1px solid var(--border);
+    transition: all 0.2s ease;
+}
+
+.input-hero:focus, .input-slug:focus {
+    background: rgba(0, 0, 0, 0.5);
+    border-color: var(--text-muted); /* Whiter border */
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1); /* Subtle white ring */
+    transform: none; /* Remove the movement on inputs, it can be distracting */
+}
+
+.project-card {
+    background: linear-gradient(180deg, var(--bg-panel) 0%, rgba(24, 24, 27, 0.6) 100%);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.project-card:hover {
+    border-color: var(--text-muted); /* Light up border */
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); /* Deeper shadow */
+    transform: translateY(-2px); /* Smaller movement */
+}
+
+/* Make the 'View' button inside the card match the card style */
+.btn-card {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+
+.btn-card:hover {
+    border-color: var(--text-main);
+    color: var(--text-main);
+    background: var(--bg-panel);
+    box-shadow: none;
+}
+
+.terminal-header {
+    background: #1e1e20; /* Slightly lighter than panel */
+    border-bottom: 1px solid #2a2a2c;
+}
+
+.terminal-title {
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0.7;
+}
+
+/* Make the dots slightly muted until hovered */
+.dot { opacity: 0.6; transition: opacity 0.2s; }
+.terminal-header:hover .dot { opacity: 1; }
+
