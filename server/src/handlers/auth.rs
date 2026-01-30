@@ -124,13 +124,15 @@ fn make_client(state: &AppState) -> Result<BasicClient, String> {
 async fn logout(session: Session) -> Result<impl IntoResponse, (StatusCode, String)> {
     session.delete().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     
-    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
-    
-    let redirect_url = if api_url.contains("localhost") {
-        "http://localhost:8080/".to_string()
-    } else {
-        format!("{}/", api_url)
-    };
+    // Check for a specific Frontend URL, fallback to logic if not found
+    let redirect_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| {
+        let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+        if api_url.contains("localhost") {
+            "http://localhost:8080/".to_string()
+        } else {
+            api_url
+        }
+    });
 
     Ok(Redirect::to(&redirect_url)) 
 }
