@@ -95,8 +95,8 @@ pub fn ViewPage() -> impl IntoView {
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();
     let (user, set_user) = create_signal(None::<User>);
     
-    create_resource(|| (), move |_| async move {
-        let auth_req = Request::get("http://localhost:3000/api/me")
+create_resource(|| (), move |_| async move {
+        let auth_req = Request::get(&format!("{}/api/me", api_base()))
             .credentials(RequestCredentials::Include)
             .send()
             .await;
@@ -112,9 +112,8 @@ pub fn ViewPage() -> impl IntoView {
             Err(_) => {}
         }
     });
-    let navigate = leptos_router::use_navigate();
+let navigate = leptos_router::use_navigate();
     
-    // FIX: Using window.location.origin for the embed code
     let copy_embed_code = move |u: String, s: String| {
         let origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
         let code = format!(
@@ -125,6 +124,7 @@ pub fn ViewPage() -> impl IntoView {
         let _ = window().alert_with_message("Embed code copied to clipboard!");
     };
 
+    // 2. Fetch Project Data
     let project_data = create_resource(
         move || (username(), slug()), 
         |(u, s)| async move {
@@ -136,8 +136,24 @@ pub fn ViewPage() -> impl IntoView {
             }
         }
     );
+    // 3. Ownership Logic Signal
+    let is_owner = move || {
+        let current_user = user.get();
+        let project_json = project_data.get().flatten(); // Flatten Option<Option<Value>> to Option<Value>
 
-    view! {
+        match (current_user, project_json) {
+            (Some(u), Some(p)) => {
+                // Extract owner_id from project JSON (it comes as a Number/i64)
+                let project_owner_id = p.get("owner_id").and_then(|id| id.as_i64());
+                
+                // Compare IDs
+                Some(u.id) == project_owner_id
+            },
+            _ => false
+        }
+    };
+
+view! {
         <>
             <div class="nav">
                 <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
@@ -151,39 +167,40 @@ pub fn ViewPage() -> impl IntoView {
                     <span>"TryCli Studio"</span>
                 </div>
                 <div class="controls">
-                    {move || {
-                        let is_owner = project_data.get().and_then(|data| data.and_then(|d| d.get("owner_id").and_then(|id| id.as_i64()))).zip(user.get()).map_or(false, |(owner_id, u)| owner_id == u.id);
-
-                        match user.get() {
-                            Some(u) => view! {
-                                <div style="display: flex; align-items: center; gap: 16px;">
+                    {move || match user.get() {
+                        Some(u) => view! {
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
                                     <img src=u.avatar_url 
-                                        style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                                         style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
                                     <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                                 </div>
-                                {if is_owner {
-                                    view! {
-                                        <button class="btn-primary btn-success" 
-                                                style="margin-right: 10px;"
-                                                on:click=move |_| {
-                                                    let u_val = username();
-                                                    let s_val = slug();
-                                                    copy_embed_code(u_val, s_val);
-                                                }>
-                                            "Share / Embed"
-                                        </button>
-                                    }.into_view()
-                                } else {
-                                    ().into_view()
-                                }}
-                                <a href="http://localhost:3000/auth/logout" 
+
+                                // 4. Conditionally Render Button
+                                <Show when=is_owner fallback=|| ()>
+                                    <button class="btn-primary btn-success" 
+                                            on:click=move |_| {
+                                                let u_val = username();
+                                                let s_val = slug();
+                                                copy_embed_code(u_val, s_val);
+                                            }>
+                                        "Share / Embed"
+                                    </button>
+                                </Show>
+
+                                <a href=format!("{}/auth/logout", api_base()) 
                                    class="btn-primary btn-logout" 
                                    style="text-decoration: none; font-size: 0.9rem;">
                                     "Logout"
                                 </a>
-                            }.into_view(),
-                            None => ().into_view() // No button for non-logged-in users
-                        }
+                            </div>
+                        }.into_view(),
+                        None => view! {
+                             // Optional: Login button if not authenticated
+                             <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">
+                                "Login"
+                            </a>
+                        }.into_view()
                     }}
                 </div>
             </div>
