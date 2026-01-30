@@ -6,6 +6,7 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::*;
 use std::rc::Rc;
 use crate::types::{User, ProjectSummary};
+use crate::api::api_base;
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
@@ -15,7 +16,9 @@ pub fn DashboardPage() -> impl IntoView {
     let (error, set_error) = create_signal(None::<String>);
 
     create_resource(|| (), move |_| async move {
-        let auth_req = Request::get("http://localhost:3000/api/me")
+
+        let url = format!("{}/api/me", api_base());
+        let auth_req = Request::get(&url)
             .credentials(RequestCredentials::Include)
             .send()
             .await;
@@ -27,7 +30,8 @@ pub fn DashboardPage() -> impl IntoView {
                         web_sys::console::log_1(&JsValue::from_str(&format!("User authenticated: {}", u.login)));
                         set_user.set(Some(u.clone()));
 
-                        let projects_req = Request::get("http://localhost:3000/api/my-projects")
+                        let proj_url = format!("{}/api/my-projects", api_base());
+                        let projects_req = Request::get(&proj_url)
                             .credentials(RequestCredentials::Include)
                             .send()
                             .await;
@@ -80,7 +84,7 @@ pub fn DashboardPage() -> impl IntoView {
         let query_clone = query.clone();
         spawn_local(async move {
             let encoded_query = js_sys::encode_uri_component(&query_clone).to_string();
-            let search_url = format!("http://localhost:3000/api/search-projects?q={}", encoded_query);
+            let search_url = format!("{}/api/search-projects?q={}", api_base(), encoded_query);
             web_sys::console::log_1(&JsValue::from_str(&format!("Searching for: {}", search_url)));
             match Request::get(&search_url)
                 .credentials(RequestCredentials::Include)
@@ -157,15 +161,15 @@ pub fn DashboardPage() -> impl IntoView {
                                  style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                         </div>
-                        <a href="http://localhost:3000/auth/logout" 
-                           class="btn-primary btn-logout" 
-                           style="text-decoration: none; font-size: 0.9rem;">
+                        <a href=format!("{}/auth/logout", api_base()) 
+                            class="btn-primary btn-logout" 
+                            rel="external"  
+                            style="text-decoration: none; font-size: 0.9rem;">
                             "Logout"
                         </a>
                     }.into_view(),
                     None => view! {
-                        <a href="http://localhost:3000/auth/github" class="btn-primary" style="text-decoration: none;">
-                            "Login with GitHub"
+                        <a href=format!("{}/auth/github", api_base()) class="btn-primary" rel="external" style="text-decoration: none;">                            "Login with GitHub"
                         </a>
                     }.into_view()
                 }}
