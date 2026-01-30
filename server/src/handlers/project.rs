@@ -153,15 +153,15 @@ pub async fn get_project(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
     // FIX: Handle DB errors properly
-    let row_result = sqlx::query_as::<_, (String, String, String)>(
-        "SELECT image_tag, markdown, shell FROM projects WHERE owner_username = $1 AND slug = $2"
+    let row_result = sqlx::query_as::<_, (String, String, String, i64)>(
+        "SELECT image_tag, markdown, shell, owner_id FROM projects WHERE owner_username = $1 AND slug = $2"
     )
     .bind(username).bind(slug)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    let (image_tag, markdown, shell) = match row_result {
+    let (image_tag, markdown, shell, owner_id) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
@@ -239,6 +239,7 @@ pub async fn get_project(
     
     Ok(Json(serde_json::json!({
         "container_id": session_id,
-        "markdown": markdown
+        "markdown": markdown,
+        "owner_id": owner_id
     })))
 }

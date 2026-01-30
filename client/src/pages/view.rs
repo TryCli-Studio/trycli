@@ -151,39 +151,39 @@ pub fn ViewPage() -> impl IntoView {
                     <span>"TryCli Studio"</span>
                 </div>
                 <div class="controls">
-                    {move || match user.get() {
-                        Some(u) => view! {
-                            <div style="display: flex; align-items: center; gap: 16px;">
-                                <img src=u.avatar_url 
-                                     style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
-                                <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
-                            </div>
-                            <button class="btn-primary btn-success" 
-                                    style="margin-right: 10px;"
-                                    on:click=move |_| {
-                                        let u_val = username();
-                                        let s_val = slug();
-                                        copy_embed_code(u_val, s_val);
-                                    }>
-                                "Share / Embed"
-                            </button>
-                            <a href="http://localhost:3000/auth/logout" 
-                               class="btn-primary btn-logout" 
-                               style="text-decoration: none; font-size: 0.9rem;">
-                                "Logout"
-                            </a>
-                        }.into_view(),
-                        None => view! {
-                            <button class="btn-primary btn-success" 
-                                    style="margin-right: 10px;"
-                                    on:click=move |_| {
-                                        let u_val = username();
-                                        let s_val = slug();
-                                        copy_embed_code(u_val, s_val);
-                                    }>
-                                "Share / Embed"
-                            </button>
-                        }.into_view()
+                    {move || {
+                        let is_owner = project_data.get().and_then(|data| data.and_then(|d| d.get("owner_id").and_then(|id| id.as_i64()))).zip(user.get()).map_or(false, |(owner_id, u)| owner_id == u.id);
+
+                        match user.get() {
+                            Some(u) => view! {
+                                <div style="display: flex; align-items: center; gap: 16px;">
+                                    <img src=u.avatar_url 
+                                        style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                                    <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
+                                </div>
+                                {if is_owner {
+                                    view! {
+                                        <button class="btn-primary btn-success" 
+                                                style="margin-right: 10px;"
+                                                on:click=move |_| {
+                                                    let u_val = username();
+                                                    let s_val = slug();
+                                                    copy_embed_code(u_val, s_val);
+                                                }>
+                                            "Share / Embed"
+                                        </button>
+                                    }.into_view()
+                                } else {
+                                    ().into_view()
+                                }}
+                                <a href="http://localhost:3000/auth/logout" 
+                                   class="btn-primary btn-logout" 
+                                   style="text-decoration: none; font-size: 0.9rem;">
+                                    "Logout"
+                                </a>
+                            }.into_view(),
+                            None => ().into_view() // No button for non-logged-in users
+                        }
                     }}
                 </div>
             </div>
