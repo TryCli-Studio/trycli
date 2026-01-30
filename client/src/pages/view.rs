@@ -167,9 +167,10 @@ pub fn ViewPage() -> impl IntoView {
                                     }>
                                 "Share / Embed"
                             </button>
-                            <a href="http://localhost:3000/auth/logout" 
-                               class="btn-primary btn-logout" 
-                               style="text-decoration: none; font-size: 0.9rem;">
+                            <a href=format!("{}/auth/logout", api_base()) 
+                                class="btn-primary btn-logout" 
+                                rel="external" 
+                                style="text-decoration: none; font-size: 0.9rem;">
                                 "Logout"
                             </a>
                         }.into_view(),
