@@ -16,14 +16,19 @@ pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Erro
         .with_same_site(tower_sessions::cookie::SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(time::Duration::minutes(60)));
 
+    // 1. DYNAMIC ORIGIN: Reads from env, defaults to localhost for dev
+    let frontend_url = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+
     let app = Router::new()
         .merge(auth::routes())
         .merge(spawn::routes())
         .merge(project::routes())
         .route("/ws/:session_id", get(websocket::ws_handler))
         .layer(tower_http::cors::CorsLayer::new()
-            .allow_origin("http://localhost:8080".parse::<axum::http::HeaderValue>()?)
-            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+            .allow_origin(frontend_url.parse::<axum::http::HeaderValue>()?)
+            // 2. ALLOW DELETE METHOD
+            .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
             .allow_headers([CONTENT_TYPE, AUTHORIZATION])
             .allow_credentials(true) 
         )

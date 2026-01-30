@@ -1,12 +1,12 @@
 use axum::{
     extract::{Path, Query, State},
-    routing::{get, post},
+    routing::{get, post,delete},
     Router, Json,
     http::StatusCode,
 };
 use bollard::container::{CreateContainerOptions, Config};
 use bollard::models::HostConfig;
-use bollard::image::CommitContainerOptions;
+use bollard::image::{CommitContainerOptions, RemoveImageOptions};
 use tower_sessions::Session;
 use uuid::Uuid;
 use serde::Deserialize;
@@ -22,6 +22,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/my-projects", get(list_user_projects))
         .route("/api/project/:username/:slug", get(get_project))
+        .route("/api/project/:slug", delete(delete_project)) // <--- New Route
         .route("/api/search-projects", get(search_projects))
         .route("/api/publish", post(publish_handler))
 }
@@ -242,4 +243,65 @@ pub async fn get_project(
         "markdown": markdown,
         "owner_id": owner_id
     })))
+}
+
+pub async fn delete_project(
+    State(state): State<AppState>,
+    session: Session,
+    Path(slug): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    // 1. Authenticate User
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    // 2. Fetch Image Tag & Verify Ownership (Before Deletion)
+    // We need the image tag to clean up Docker, and we need to verify ownership strictly.
+    let record: Option<(String,)> = sqlx::query_as(
+        "SELECT image_tag FROM projects WHERE slug = $1 AND owner_id = $2"
+    )
+    .bind(&slug)
+    .bind(user.id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    let image_tag = match record {
+        Some(r) => r.0,
+        None => return Err((StatusCode::NOT_FOUND, "Project not found or access denied".to_string())),
+    };
+
+    // 3. Delete from Database (Source of Truth)
+    let db_result = sqlx::query(
+        "DELETE FROM projects WHERE slug = $1 AND owner_id = $2"
+    )
+    .bind(&slug)
+    .bind(user.id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Delete Error: {}", e)))?;
+
+    if db_result.rows_affected() == 0 {
+        // This is unlikely given step 2, but handles race conditions
+        return Err((StatusCode::NOT_FOUND, "Project not found".to_string()));
+    }
+
+    // 4. Purge Docker Image
+    // We use force=true to kill any active containers using this image.
+    // We map errors but do NOT fail the request if Docker fails (e.g., image already manualy deleted).
+    let remove_opts = RemoveImageOptions {
+        force: true, // Force removal even if containers are running
+        noprune: false,
+    };
+
+    if let Err(e) = state.docker.remove_image(&image_tag, Some(remove_opts), None).await {
+        // Log it, but don't fail the request to the client, as the DB entry is already gone.
+        eprintln!("Warning: Failed to remove docker image {}: {}", image_tag, e);
+    } else {
+        println!("Cleaned up image: {}", image_tag);
+    }
+
+    Ok(StatusCode::OK)
 }
