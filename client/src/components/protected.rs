@@ -51,6 +51,7 @@ pub fn ProtectedRoute(children: Children) -> impl IntoView {
                         <p style="color: var(--text-muted);">"Please log in to access this page"</p>
                         <a href=format!("{}/auth/github", api_base()) 
                            class="btn-primary" 
+                           rel="external" 
                            style="text-decoration: none;">
                             "Login with GitHub"
                         </a>

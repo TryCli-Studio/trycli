@@ -32,11 +32,14 @@ fn is_authorized(referer: &str, allowed_origins: &str, self_domain: &str) -> boo
         Err(_) => return false,
     };
     let ref_host = ref_url.host_str().unwrap_or("");
-    //1. Internal Check (localhost or your domain)
+    
+    // 1. Internal Check (localhost, 127.0.0.1, or your domain)
+    // NOTE: This is the "Localhost Loophole" that allows your tests to pass on port 8080.
     if ref_host == "localhost" || ref_host == "127.0.0.1" || 
        ref_host == self_domain || ref_host.ends_with(&format!(".{}", self_domain)) {
         return true;
     }
+    
     // 2. Strict Whitelist Check (Prevents domain.com.evil.com exploits)
     allowed_origins.split(',')
         .map(|s| s.trim().trim_start_matches("https://").trim_start_matches("http://"))
@@ -55,7 +58,6 @@ pub async fn list_user_projects(
     State(state): State<AppState>,
     session: Session,
 ) -> Result<Json<Vec<ProjectSummary>>, (StatusCode, String)> {
-    // FIX: Safely handle session retrieval instead of unwrap()
     let user: Option<User> = session.get("user")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
@@ -198,27 +200,29 @@ pub async fn publish_handler(
 
 pub async fn get_project(
     Path((username, slug)): Path<(String, String)>, 
-    headers: HeaderMap,           // NEW: Capture Headers
-    Query(query): Query<EmbedQuery>, // NEW: Capture Query Params
+    headers: HeaderMap,           
+    Query(query): Query<EmbedQuery>, 
     State(state): State<AppState>
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
-    // 1. Fetch Project Data + Security Fields
-    let row_result = sqlx::query_as::<_, (String, String, String, bool, Option<String>, Option<String>)>(
-        "SELECT image_tag, markdown, shell, is_protected, embed_token, allowed_origins FROM projects WHERE owner_username = $1 AND slug = $2"
+    // RESOLVED CONFLICT: Fetching ALL fields (security fields + owner_id)
+    // We added 'owner_id' (int8) to the query tuple
+    let row_result = sqlx::query_as::<_, (String, String, String, bool, Option<String>, Option<String>, i64)>(
+        "SELECT image_tag, markdown, shell, is_protected, embed_token, allowed_origins, owner_id FROM projects WHERE owner_username = $1 AND slug = $2"
     )
     .bind(&username).bind(&slug)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    let (image_tag, markdown, shell, is_protected, token, origins_raw) = match row_result {
+    // Destructuring all 7 fields
+    let (image_tag, markdown, shell, is_protected, token, origins_raw, owner_id) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
     // 2. === AUTHORIZATION LOGIC ===
-    // Only run security logic if is_protected is TRUE (zero-inference: explicit flag required)
+    // Only run security logic if is_protected is TRUE
     if is_protected {
         let referer = headers.get(header::REFERER)
             .and_then(|v| v.to_str().ok())
@@ -237,15 +241,12 @@ pub async fn get_project(
         }
     }
     
-    // MERGED: Use logic from HEAD but naming convention from main
     let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
     let session_id = Uuid::new_v4().to_string();
 
     let config = Config {
         image: Some(image_tag),
         tty: Some(true),
-        // 1. Run as a non-root user if possible (requires image support), 
-        // otherwise rely on CapDrop (below).
         user: Some("root".to_string()), 
         env: Some(vec![
             "LANG=C.UTF-8".to_string(), 
@@ -254,37 +255,21 @@ pub async fn get_project(
             format!("SHELL={}", shell) 
         ]),
         host_config: Some(HostConfig { 
-            // 2. RESOURCE LIMITS
-            memory: Some(512 * 1024 * 1024), // 512 MB RAM
-            memory_swap: Some(512 * 1024 * 1024), // No extra swap
-            nano_cpus: Some(1_000_000_000), // 1.0 CPU Core
-            pids_limit: Some(64), // Prevent Fork Bombs (max 64 processes)
-            
-            // 3. NETWORK SECURITY
-            // "bridge" is default, but ensures they can't access host networking
+            memory: Some(512 * 1024 * 1024), 
+            memory_swap: Some(512 * 1024 * 1024), 
+            nano_cpus: Some(1_000_000_000), 
+            pids_limit: Some(64), 
             network_mode: Some("bridge".to_string()), 
-            
-            // 4. KERNEL SECURITY (The most important part)
-            // Drop ALL capabilities first
             cap_drop: Some(vec!["ALL".to_string()]),
-            // Add back ONLY what is strictly needed for standard tools
             cap_add: Some(vec![
-                "NET_BIND_SERVICE".to_string(), // Allow binding ports
-                "CHOWN".to_string(),            // File permissions
-                "SETUID".to_string(),           // Sudo/su support
+                "NET_BIND_SERVICE".to_string(), 
+                "CHOWN".to_string(),            
+                "SETUID".to_string(),           
                 "SETGID".to_string(),
-                "DAC_OVERRIDE".to_string()      // File permission overrides
+                "DAC_OVERRIDE".to_string()      
             ]),
-            
-            // 5. SECURITY OPT
-            // Prevents processes from gaining more privileges than they started with
-            // (e.g., prevents some buffer overflow exploits)
             security_opt: Some(vec!["no-new-privileges".to_string()]),
-            
-            // 6. FILESYSTEM
-            // For now, we leave it writable for temp files, but we could mount a tmpfs.
             readonly_rootfs: Some(false), 
-
             auto_remove: Some(true), 
             ..Default::default() 
         }),
@@ -308,10 +293,12 @@ pub async fn get_project(
         }); 
     }
     
+    // MERGED: Return all necessary fields including owner_id
     Ok(Json(serde_json::json!({
         "container_id": session_id,
         "markdown": markdown,
         "is_protected": is_protected,
-        "embed_token": token
+        "embed_token": token,
+        "owner_id": owner_id
     })))
 }

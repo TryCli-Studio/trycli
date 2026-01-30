@@ -92,8 +92,11 @@ pub fn CreatePage() -> impl IntoView {
     let (slug, set_slug) = create_signal(pre_filled_name());
     let (slug_error, set_slug_error) = create_signal(None::<String>);
     let (user, set_user) = create_signal(None::<User>);
+    
+    // RESOLVED: Merge security signals from feat/keys with publishing state from main
     let (is_protected, set_is_protected) = create_signal(false);
     let (allowed_origins, set_allowed_origins) = create_signal("".to_string());
+    let (is_publishing, set_is_publishing) = create_signal(false);
 
     create_resource(|| (), move |_| async move {
         let url = format!("{}/api/me", api_base());
@@ -136,8 +139,13 @@ pub fn CreatePage() -> impl IntoView {
             Err(e) => web_sys::console::log_1(&JsValue::from_str(&format!("Auth Error: {}", e))),
         }
     });
-
     let on_publish = move |_| {
+        // Prevent concurrent publish requests
+        if is_publishing.get() {
+            return;
+        }
+        set_is_publishing.set(true);
+        
         spawn_local(async move {
             let body_data = serde_json::json!({
                 "container_id": container_id.get_untracked(),
@@ -155,6 +163,7 @@ pub fn CreatePage() -> impl IntoView {
             let body_str = match serde_json::to_string(&body_data) {
                 Ok(s) => s,
                 Err(_) => {
+                    set_is_publishing.set(false);
                     let _ = window().alert_with_message("Failed to serialize request");
                     return;
                 }
@@ -177,7 +186,7 @@ pub fn CreatePage() -> impl IntoView {
                             let status = resp.status();
                             let text = resp.text().await.unwrap_or_default();
                             let _ = window().alert_with_message(&format!("Publish Failed ({}: {})", status, text));
-}
+                        }
                     },
                     Err(_) => {
                         let _ = window().alert_with_message("Publish Failed: Network Error");
@@ -186,6 +195,9 @@ pub fn CreatePage() -> impl IntoView {
             } else {
                 let _ = window().alert_with_message("Failed to build request");
             }
+            
+            // Re-enable button after request completes
+            set_is_publishing.set(false);
         });
     };
     let navigate = leptos_router::use_navigate();
@@ -213,6 +225,7 @@ pub fn CreatePage() -> impl IntoView {
                      </div>
                      <a href=format!("{}/auth/logout", api_base()) 
                         class="btn-primary btn-logout" 
+                        rel="external"  
                         style="margin-right: 12px; text-decoration: none; font-size: 0.8rem;">
                         "Logout"
                      </a>
@@ -240,22 +253,25 @@ pub fn CreatePage() -> impl IntoView {
                                         set_is_protected.set(event_target_checked(&ev));
                                     } />
                              <span>"Protect Embed"</span>
-                         </label>
-                         {move || if is_protected.get() {
+                          </label>
+                          {move || if is_protected.get() {
                              view! {
-                                 <input type="text" 
-                                        class="input-slug" 
-                                        placeholder="example.com, another.com"
-                                        prop:value=allowed_origins
-                                        on:input=move |ev| set_allowed_origins.set(event_target_value(&ev))
-                                        style="min-width: 200px; font-size: 0.85rem;" />
+                                     <input type="text" 
+                                            class="input-slug" 
+                                            placeholder="example.com, another.com"
+                                            prop:value=allowed_origins
+                                            on:input=move |ev| set_allowed_origins.set(event_target_value(&ev))
+                                            style="min-width: 200px; font-size: 0.85rem;" />
                              }.into_view()
-                         } else {
+                          } else {
                              view! { <div></div> }.into_view()
-                         }}
+                          }}
                      </div>
                      <button class="btn-primary btn-success" on:click=on_publish 
-                             prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some()>"Publish"</button>
+                             prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some() || is_publishing.get()
+                             style=move || if is_publishing.get() { "opacity: 0.6; cursor: not-allowed;" } else { "" }>
+                        {move || if is_publishing.get() { "Publishing..." } else { "Publish" }}
+                     </button>
                 }.into_view(),
                 None => view! {
                     <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">

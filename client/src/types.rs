@@ -9,6 +9,7 @@ pub struct ProjectSummary {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct User {
+    pub id: i64,
     pub login: String,
     pub avatar_url: String,
 }

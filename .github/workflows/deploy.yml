@@ -1,0 +1,85 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  BINARY_NAME: server
+
+jobs:
+  build_and_deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment: SSH_PRIVATE_KEY
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      # This fixes the "pkg-config" error for the frontend build on the host runner.
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      # --- FRONTEND BUILD (Leptos) ---
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, x86_64-unknown-linux-musl
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+
+      - name: Build Frontend
+        working-directory: ./client
+        env:
+          API_URL: "https://karthikey.me"
+          WS_URL: "wss://karthikey.me"
+        run: trunk build --release
+
+      # --- BACKEND BUILD (Axum) ---
+      - name: Install Cross
+        run: cargo install cross
+
+      - name: Build Backend (Static Binary)
+        # ⚠️ CHANGE: Run from root to ensure workspace lockfile is respected
+        # and point to the server binary explicitly.
+        run: cross build --release --target x86_64-unknown-linux-musl --bin server
+
+      # --- DEPLOYMENT ---
+      - name: Prepare Deployment Package
+        run: |
+          mkdir deploy_package
+          
+          # ⚠️ FIX: Path is now 'target/...' not 'server/target/...'
+          cp target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }} deploy_package/server_bin
+          
+          # Frontend 'dist' is still inside client/ because trunk ran there
+          cp -r client/dist deploy_package/dist
+
+      - name: Deploy to DigitalOcean
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deploy_package/*"
+          target: "/home/deploy/app"
+          strip_components: 1
+
+      - name: Restart Application
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            chmod +x /home/deploy/app/server_bin
+            
+            # Ensure your systemd file points to /home/deploy/app/server_bin
+            # and Environment="LEPTOS_SITE_ROOT=./dist"
+            sudo systemctl restart trycli
