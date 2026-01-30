@@ -97,8 +97,10 @@ fn make_client(state: &AppState) -> Result<BasicClient, String> {
     
     let token_url = TokenUrl::new(TOKEN_URL.to_string())
         .map_err(|e| format!("Invalid Token URL: {}", e))?;
+
+    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
         
-    let redirect_url = RedirectUrl::new("http://localhost:3000/auth/callback".to_string())
+    let redirect_url = RedirectUrl::new(format!("{}/auth/callback", api_url))
         .map_err(|e| format!("Invalid Redirect URL: {}", e))?;
 
     Ok(BasicClient::new(

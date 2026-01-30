@@ -215,6 +215,7 @@ pub fn CreatePage() -> impl IntoView {
                      </div>
                      <a href=format!("{}/auth/logout", api_base()) 
                         class="btn-primary btn-logout" 
+                        rel="external"  
                         style="margin-right: 12px; text-decoration: none; font-size: 0.8rem;">
                         "Logout"
                      </a>
