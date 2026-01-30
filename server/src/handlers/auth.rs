@@ -76,9 +76,17 @@ async fn github_callback(
     session.insert("user", &user_data)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Session Insert Error".into()))?;
+
+    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+
+    let dashboard_url = if api_url.contains("localhost") {
+        "http://localhost:8080/dashboard".to_string()
+    } else {
+        format!("{}/dashboard", api_url)
+    };
     
     // 4. Redirect
-    Ok(Redirect::to("http://localhost:8080/dashboard"))
+    Ok(Redirect::to(&dashboard_url))
 }
 
 // 3. Helper to check session
@@ -115,5 +123,14 @@ fn make_client(state: &AppState) -> Result<BasicClient, String> {
 
 async fn logout(session: Session) -> Result<impl IntoResponse, (StatusCode, String)> {
     session.delete().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Redirect::to("http://localhost:8080/")) 
+    
+    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    
+    let redirect_url = if api_url.contains("localhost") {
+        "http://localhost:8080/".to_string()
+    } else {
+        format!("{}/", api_url)
+    };
+
+    Ok(Redirect::to(&redirect_url)) 
 }
