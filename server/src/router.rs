@@ -23,7 +23,7 @@ pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Erro
         .route("/ws/:session_id", get(websocket::ws_handler))
         .layer(tower_http::cors::CorsLayer::new()
             .allow_origin("http://localhost:8080".parse::<axum::http::HeaderValue>()?)
-            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+            .allow_methods([Method::GET, Method::POST, Method::OPTIONS,Method::DELETE])//add delete method 
             .allow_headers([CONTENT_TYPE, AUTHORIZATION])
             .allow_credentials(true) 
         )

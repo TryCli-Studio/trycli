@@ -799,3 +799,26 @@ body {
 .dot { opacity: 0.6; transition: opacity 0.2s; }
 .terminal-header:hover .dot { opacity: 1; }
 
+
+
+.btn-danger {
+    padding: 8px 16px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.9rem;
+    text-decoration: none;
+    margin-left: 8px; /* Gap between View and Delete */
+}
+
+.btn-danger:hover {
+    background: rgba(220, 38, 38, 0.1); /* Darker Red bg */
+    border-color: #dc2626; 
+    color: #dc2626;
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.2);
+    transform: translateY(-1px);
+}
