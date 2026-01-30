@@ -190,6 +190,7 @@ view! {
 
                                 <a href=format!("{}/auth/logout", api_base()) 
                                    class="btn-primary btn-logout" 
+                                   rel="external" 
                                    style="text-decoration: none; font-size: 0.9rem;">
                                     "Logout"
                                 </a>
