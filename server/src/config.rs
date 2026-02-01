@@ -5,22 +5,16 @@ use std::collections::HashMap;
 use crate::state::AppState;
 
 pub async fn setup_database_and_docker() -> Result<AppState, Box<dyn std::error::Error>> {
-    // 1. Docker (Propagate error instead of unwrap)
+    // 1. Docker setup 
     let docker = Arc::new(Docker::connect_with_local_defaults()?);
     
-    // 2. DB (Propagate error instead of unwrap)
+    // 2. DB Connection 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db = PgPoolOptions::new().connect(&database_url).await?;
 
-    // 3. Schema (Propagate error)
-    sqlx::query(
-        r#"CREATE TABLE IF NOT EXISTS projects (
-            owner_username TEXT NOT NULL, slug TEXT NOT NULL,
-            image_tag TEXT NOT NULL, markdown TEXT NOT NULL,
-            shell TEXT NOT NULL DEFAULT '/bin/bash', 
-            owner_id BIGINT, PRIMARY KEY (owner_username, slug)
-        )"#
-    ).execute(&db).await?;
+    sqlx::migrate!("./migrations")
+        .run(&db)
+        .await?;
 
     let state = AppState { 
         docker, 
