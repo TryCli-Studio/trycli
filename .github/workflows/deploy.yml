@@ -37,8 +37,8 @@ jobs:
       - name: Build Frontend
         working-directory: ./client
         env:
-          API_URL: "https://karthikey.me"
-          WS_URL: "wss://karthikey.me"
+          API_URL: "https://trycli.com"
+          WS_URL: "wss://trycli.com"
         run: trunk build --release
 
       # --- BACKEND BUILD (Axum) ---
