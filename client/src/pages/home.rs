@@ -202,9 +202,9 @@ pub fn LandingPage() -> impl IntoView {
                                 <span class="brand-name">"TryCLI"</span>
                             </div>
                             <div class="footer-links">
-                                <a href="https://github.com/joshikarthikey/tryCLI" target="_blank" rel="noopener noreferrer">"GitHub"</a>
-                                <a href="#" rel="noopener noreferrer">"Documentation"</a>
-                                <a href="#" rel="noopener noreferrer">"Twitter"</a>
+                                <a href="https://github.com/TryCli-Studio" target="_blank" rel="noopener noreferrer">"GitHub"</a>
+                                <a href="/docs" rel="noopener noreferrer">"Documentation"</a>
+                                <a href="https://x.com/TryCliStudio" rel="noopener noreferrer">"Twitter"</a>
                             </div>
                         </div>
                         <div class="footer-bottom">
