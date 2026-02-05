@@ -194,6 +194,7 @@
     color: var(--text-main);
     display: flex;
     flex-direction: column;
+    scroll-padding-top: 80px;
 }
 
 .docs-container .nav {
@@ -294,6 +295,7 @@
     margin: 56px 0 24px 0;
     color: var(--text-main);
     padding-top: 16px;
+    scroll-margin-top: 80px;
 }
 
 .docs-content h3 {
@@ -301,6 +303,7 @@
     font-weight: 600;
     margin: 40px 0 16px 0;
     color: var(--text-main);
+    scroll-margin-top: 80px;
 }
 
 .docs-content p {
@@ -347,6 +350,7 @@
 
 .docs-content section {
     margin-bottom: 48px;
+    scroll-margin-top: 80px;
 }
 
 .docs-content strong {

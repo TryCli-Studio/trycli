@@ -39,6 +39,12 @@ pub fn DocsPage() -> impl IntoView {
                                 </ul>
                             </li>
                             <li><a href="#publishing">"Publishing Your Demo"</a></li>
+                            <li><a href="#managing">"Managing Your Projects"</a>
+                                <ul>
+                                    <li><a href="#viewing-projects">"Viewing Your Projects"</a></li>
+                                    <li><a href="#deleting-projects">"Deleting Projects"</a></li>
+                                </ul>
+                            </li>
                             <li><a href="#sharing">"Sharing & Embedding"</a>
                                 <ul>
                                     <li><a href="#public-links">"Public Project Links"</a></li>
@@ -82,7 +88,7 @@ pub fn DocsPage() -> impl IntoView {
 
                     <section id="creating-project">
                         <h2>"3. Creating a Project"</h2>
-                        <p>"The Studio (/new) is where the magic happens. It features a responsive split-pane layout."</p>
+                        <p>"The Studio is where the magic happens. It features a responsive split-pane layout."</p>
 
                         <h3 id="studio-interface">"The Studio Interface"</h3>
                         <ul>
@@ -158,8 +164,41 @@ curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
                         <p class="warning"><strong>"Warning:"</strong>" Publishing creates a static image. Any changes made afterwards requires re-publishing."</p>
                     </section>
 
+                    <section id="managing">
+                        <h2>"5. Managing Your Projects"</h2>
+
+                        <h3 id="viewing-projects">"Viewing Your Projects"</h3>
+                        <p>"All your published projects are accessible from your Dashboard. Each project card displays:"</p>
+                        <ul>
+                            <li>"The project slug (URL identifier)"</li>
+                            <li>"The base Docker image used"</li>
+                            <li>"Quick action buttons (View and Delete)"</li>
+                        </ul>
+
+                        <h3 id="deleting-projects">"Deleting Projects"</h3>
+                        <p>"You can permanently delete any of your projects from the Dashboard."</p>
+                        
+                        <p><strong>"To delete a project:"</strong></p>
+                        <ol>
+                            <li>"Navigate to your Dashboard."</li>
+                            <li>"Find the project card you want to remove."</li>
+                            <li>"Click the red \"Delete\" button on the project card."</li>
+                            <li>"Confirm the deletion when prompted."</li>
+                        </ol>
+
+                        <p class="warning"><strong>"Warning:"</strong>" Deleting a project is permanent and cannot be undone. This will:"</p>
+                        <ul>
+                            <li>"Remove the project from your dashboard"</li>
+                            <li>"Delete the Docker image snapshot from our servers"</li>
+                            <li>"Make the public URL ("<code>"/<username>/<slug>"</code>") inaccessible"</li>
+                            <li>"Break any existing embeds of this project"</li>
+                        </ul>
+                        
+                        <p class="tip"><strong>"Tip:"</strong>" If you just want to update your project, use the \"Re-publish\" feature instead of deleting and recreating it. This preserves your project's URL."</p>
+                    </section>
+
                     <section id="sharing">
-                        <h2>"5. Sharing & Embedding"</h2>
+                        <h2>"6. Sharing & Embedding"</h2>
 
                         <h3 id="public-links">"Public Project Links"</h3>
                         <p>"Share your project using the URL format: "<code>"https://trycli.com/<your-username>/<project-slug>"</code></p>
@@ -187,7 +226,7 @@ curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
                     </section>
 
                     <section id="security">
-                        <h2>"6. Security & Sandbox"</h2>
+                        <h2>"7. Security & Sandbox"</h2>
                         <p>"We take security seriously. While you (the creator) have broad permissions during the setup phase, the Viewer Containers (what your users see) are strictly sandboxed:"</p>
                         
                         <ul>
