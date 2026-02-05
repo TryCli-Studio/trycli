@@ -196,6 +196,12 @@
     flex-direction: column;
 }
 
+.docs-container .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
 .docs-layout {
     display: flex;
     flex: 1;
