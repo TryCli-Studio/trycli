@@ -1,0 +1,48 @@
+/* ====================================
+   NAVIGATION BAR
+   ==================================== */
+
+.nav {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(9, 9, 11, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+}
+
+.brand {
+    font-weight: 800;
+    font-size: 1.2rem;
+    background: linear-gradient(to right, #ffffff, #71717a);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: white;
+    letter-spacing: -0.02em;
+}
+
+.logo-icon {
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(255,255,255,0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}

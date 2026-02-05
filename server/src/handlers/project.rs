@@ -22,7 +22,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/my-projects", get(list_user_projects))
         .route("/api/project/:username/:slug", get(get_project))
-        .route("/api/project/:slug", delete(delete_project)) // <--- New Route
+        .route("/api/project/:slug", delete(delete_project)) // < New Route
         .route("/api/search-projects", get(search_projects))
         .route("/api/publish", post(publish_handler))
 }

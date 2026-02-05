@@ -1,4 +1,4 @@
-// --- CONFIGURATION HELPERS ---
+//  CONFIGURATION HELPERS 
 pub fn api_base() -> &'static str {
     option_env!("API_URL").unwrap_or("http://localhost:3000")
 }

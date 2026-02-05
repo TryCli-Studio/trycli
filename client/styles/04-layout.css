@@ -1,0 +1,95 @@
+/* ====================================
+   LAYOUT & WORKSPACE
+   ==================================== */
+
+/* Workspace Layout */
+.workspace {
+    display: flex;
+    height: calc(100vh - 65px);
+}
+
+.pane {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+}
+
+.resize-divider {
+    width: 6px;
+    background: var(--border);
+    cursor: col-resize;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.resize-divider:hover {
+    background-color: #50c878;
+    box-shadow: inset 0 0 8px rgba(80, 200, 120, 0.4);
+}
+
+/* Editor Textarea */
+.editor-textarea {
+    width: 100%;
+    height: 100%;
+    background: var(--bg-dark);
+    color: var(--text-main);
+    border: none;
+    resize: none;
+    padding: 20px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.6;
+    outline: none;
+}
+
+/* Containers & Common Layout */
+.container-narrow {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.dashboard-container {
+    min-height: 100vh;
+    background: var(--bg-dark);
+}
+
+.embed-container {
+    font-family: var(--font-mono);
+}
+
+.embed-overlay {
+    backdrop-filter: blur(5px);
+}
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--bg-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+/* Grid Utilities */
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

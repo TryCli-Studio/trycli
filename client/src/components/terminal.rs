@@ -4,7 +4,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{WebSocket, MessageEvent, ErrorEvent};
 use crate::api::ws_base;
 
-// --- BINDING 1: FitAddon ---
+// BINDING 1: FitAddon 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_name = FitAddon)]
