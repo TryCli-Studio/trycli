@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
 };
 use bollard::container::{CreateContainerOptions, Config};
-use bollard::models::HostConfig;
+use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
 use bollard::image::{CommitContainerOptions, RemoveImageOptions};
 use tower_sessions::Session;
 use uuid::Uuid;
@@ -173,8 +173,6 @@ pub async fn get_project(
     let config = Config {
         image: Some(image_tag),
         tty: Some(true),
-        // 1. Run as a non-root user if possible (requires image support), 
-        // otherwise rely on CapDrop (below).
         user: Some("root".to_string()), 
         env: Some(vec![
             "LANG=C.UTF-8".to_string(), 
@@ -183,36 +181,56 @@ pub async fn get_project(
             format!("SHELL={}", shell) 
         ]),
         host_config: Some(HostConfig { 
+            runtime: Some("runsc".to_string()),
+            
             // 2. RESOURCE LIMITS
             memory: Some(512 * 1024 * 1024), // 512 MB RAM
             memory_swap: Some(512 * 1024 * 1024), // No extra swap
-            nano_cpus: Some(1_000_000_000), // 1.0 CPU Core
-            pids_limit: Some(64), // Prevent Fork Bombs (max 64 processes)
+            nano_cpus: Some(250_000_000), // 0.25 CPU Core
+            pids_limit: Some(64), // Prevent Fork Bombs
             
             // 3. NETWORK SECURITY
-            // "bridge" is default, but ensures they can't access host networking
+            // Viewers usually don't need internet. If they do, use "bridge".
             network_mode: Some("bridge".to_string()), 
             
-            // 4. KERNEL SECURITY (The most important part)
-            // Drop ALL capabilities first
+            // 4. KERNEL SECURITY
             cap_drop: Some(vec!["ALL".to_string()]),
-            // Add back ONLY what is strictly needed for standard tools
             cap_add: Some(vec![
-                "NET_BIND_SERVICE".to_string(), // Allow binding ports
-                "CHOWN".to_string(),            // File permissions
-                "SETUID".to_string(),           // Sudo/su support
+                "NET_BIND_SERVICE".to_string(),
+                "CHOWN".to_string(),
+                "SETUID".to_string(),
                 "SETGID".to_string(),
-                "DAC_OVERRIDE".to_string()      // File permission overrides
+                "DAC_OVERRIDE".to_string()
             ]),
             
             // 5. SECURITY OPT
-            // Prevents processes from gaining more privileges than they started with
-            // (e.g., prevents some buffer overflow exploits)
             security_opt: Some(vec!["no-new-privileges".to_string()]),
             
-            // 6. FILESYSTEM
-            // For now, we leave it writable for temp files, but we could mount a tmpfs.
-            readonly_rootfs: Some(false), 
+            // 6. FILESYSTEM (Immutable Root + Tmpfs)
+            readonly_rootfs: Some(true),
+            mounts: Some(vec![
+                Mount {
+                    target: Some("/root".to_string()), 
+                    // CHANGE 1: Field is named 'typ', not 'type_'
+                    typ: Some(MountTypeEnum::TMPFS), 
+                    // CHANGE 2: Struct is named 'MountTmpfsOptions'
+                    tmpfs_options: Some(MountTmpfsOptions {
+                        size_bytes: Some(50 * 1024 * 1024), // 50MB
+                        mode: Some(0o1777),
+                    }),
+                    ..Default::default()
+                },
+                // Optional /tmp mount
+                Mount {
+                    target: Some("/tmp".to_string()),
+                    typ: Some(MountTypeEnum::TMPFS),
+                    tmpfs_options: Some(MountTmpfsOptions {
+                        size_bytes: Some(50 * 1024 * 1024),
+                        mode: Some(0o1777),
+                    }),
+                    ..Default::default()
+                }
+            ]),
 
             auto_remove: Some(true), 
             ..Default::default() 
@@ -230,7 +248,6 @@ pub async fn get_project(
 
     {
         let mut map = state.lock_sessions();
-        // Viewers are public (owner_id: None)
         map.insert(session_id.clone(), SessionContext {
             container_name: container_name.clone(), 
             shell,
