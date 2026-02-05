@@ -92,6 +92,99 @@
 }
 
 /* ====================================
+   FOOTER
+   ==================================== */
+
+.landing-footer {
+    background: #020202;
+    padding: 3rem 0;
+    margin-top: auto;
+    border-top: 1px solid #1f1f22;
+    width: 100%;
+}
+
+.footer-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.footer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.brand-name {
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: white;
+}
+
+.footer-brand p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.footer-links {
+    display: flex;
+    gap: 24px;
+}
+
+.footer-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: color 0.2s;
+}
+
+.footer-links a:hover {
+    color: var(--text-main);
+}
+
+.footer-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 1.5rem;
+    text-align: center;
+}
+
+.copyright {
+    color: #52525b;
+    font-size: 0.85rem;
+}
+
+.brand-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .footer-top {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .footer-brand {
+        align-items: center;
+    }
+}
+
+/* ====================================
    DOCUMENTATION PAGE
    ==================================== */
 
@@ -99,34 +192,232 @@
     min-height: 100vh;
     background: var(--bg-dark);
     color: var(--text-main);
+    display: flex;
+    flex-direction: column;
 }
 
-.docs-content {
-    max-width: 800px;
+.docs-layout {
+    display: flex;
+    flex: 1;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 40px 20px;
-    line-height: 1.6;
+    width: 100%;
+}
+
+/* Documentation Sidebar */
+.docs-sidebar {
+    width: 280px;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 60px;
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+    padding: 32px 0;
+}
+
+.docs-toc {
+    padding: 0 24px;
+}
+
+.toc-title {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 0 0 16px 0;
+    font-weight: 600;
+}
+
+.toc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.toc-list li {
+    margin-bottom: 4px;
+}
+
+.toc-list a {
+    display: block;
+    padding: 8px 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.toc-list a:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+}
+
+.toc-list ul {
+    list-style: none;
+    padding-left: 16px;
+    margin: 4px 0;
+}
+
+.toc-list ul a {
+    font-size: 0.875rem;
+    padding: 6px 12px;
+}
+
+/* Documentation Content */
+.docs-content {
+    flex: 1;
+    max-width: 900px;
+    padding: 60px 40px;
+    line-height: 1.7;
 }
 
 .docs-content h1 {
-    font-size: 2.5rem;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 16px;
-    margin-bottom: 32px;
+    font-size: 2.75rem;
+    font-weight: 800;
+    margin: 0 0 48px 0;
+    padding-bottom: 24px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.02em;
 }
 
 .docs-content h2 {
-    margin-top: 40px;
-    color: #fff;
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 56px 0 24px 0;
+    color: var(--text-main);
+    padding-top: 16px;
+}
+
+.docs-content h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 40px 0 16px 0;
+    color: var(--text-main);
+}
+
+.docs-content p {
+    margin: 16px 0;
+    font-size: 1.05rem;
+}
+
+.docs-content ul,
+.docs-content ol {
+    margin: 16px 0;
+    padding-left: 32px;
+}
+
+.docs-content li {
+    margin: 8px 0;
+    line-height: 1.7;
+}
+
+.docs-content code {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    color: #e4e4e7;
+    border: 1px solid var(--border);
 }
 
 .docs-content pre {
     background: #000;
-    padding: 16px;
+    padding: 20px;
     border-radius: 8px;
     border: 1px solid var(--border);
     overflow-x: auto;
-    font-family: var(--font-mono);
+    margin: 24px 0;
+}
+
+.docs-content pre code {
+    background: none;
+    padding: 0;
+    border: none;
+    font-size: 0.95rem;
+}
+
+.docs-content section {
+    margin-bottom: 48px;
+}
+
+.docs-content strong {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+/* Special callout boxes */
+.docs-content .note,
+.docs-content .tip,
+.docs-content .warning {
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin: 24px 0;
+    border-left: 4px solid;
+}
+
+.docs-content .note {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: #3b82f6;
+}
+
+.docs-content .tip {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: #22c55e;
+}
+
+.docs-content .warning {
+    background: rgba(234, 179, 8, 0.1);
+    border-color: #eab308;
+}
+
+.docs-footer {
+    margin-top: 64px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.docs-footer a {
+    color: var(--text-main);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s;
+}
+
+.docs-footer a:hover {
+    color: #3b82f6;
+}
+
+/* Mobile Responsive for Docs */
+@media (max-width: 968px) {
+    .docs-layout {
+        flex-direction: column;
+    }
+
+    .docs-sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+        top: 0;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .docs-content {
+        padding: 32px 20px;
+    }
+
+    .docs-content h1 {
+        font-size: 2rem;
+    }
+
+    .docs-content h2 {
+        font-size: 1.5rem;
+    }
 }
 
 /* Markdown Preview */

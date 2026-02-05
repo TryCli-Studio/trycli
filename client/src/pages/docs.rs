@@ -5,41 +5,204 @@ use leptos_router::A;
 pub fn DocsPage() -> impl IntoView {
     view! {
         <div class="docs-container">
-            // Navigation (Public)
+            // Top Navigation Bar
             <nav class="nav">
-                <div class="brand">
+                <div class="nav-brand">
+                    <span class="logo-icon">">_"</span>
                     <A href="/" class="brand-link">"TryCli Studio"</A>
                 </div>
                 <div class="controls">
+                    <A href="/" class="btn-nav">"Home"</A>
                     <A href="/dashboard" class="btn-primary">"Dashboard"</A>
                 </div>
             </nav>
 
-            // Main Content
-            <main class="docs-content">
-                <h1>"Documentation"</h1>
-                
-                <section>
-                    <h2>"Getting Started"</h2>
-                    <p>"TryCli Studio allows you to create interactive CLI demos in seconds."</p>
-                </section>
+            <div class="docs-layout">
+                // Sidebar Navigation
+                <aside class="docs-sidebar">
+                    <div class="docs-toc">
+                        <h3 class="toc-title">"Contents"</h3>
+                        <ul class="toc-list">
+                            <li><a href="#introduction">"Introduction"</a></li>
+                            <li><a href="#getting-started">"Getting Started"</a>
+                                <ul>
+                                    <li><a href="#authentication">"Authentication"</a></li>
+                                    <li><a href="#dashboard">"The Dashboard"</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="#creating-project">"Creating a Project"</a>
+                                <ul>
+                                    <li><a href="#studio-interface">"Studio Interface"</a></li>
+                                    <li><a href="#setup-wizard">"Setup Wizard"</a></li>
+                                    <li><a href="#installing-tool">"Installing Your CLI Tool"</a></li>
+                                    <li><a href="#writing-guide">"Writing the Guide"</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="#publishing">"Publishing Your Demo"</a></li>
+                            <li><a href="#sharing">"Sharing & Embedding"</a>
+                                <ul>
+                                    <li><a href="#public-links">"Public Project Links"</a></li>
+                                    <li><a href="#embedding">"Embedding on Websites"</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="#security">"Security & Sandbox"</a></li>
+                        </ul>
+                    </div>
+                </aside>
 
-                <section>
-                    <h2>"1. Create a Project"</h2>
-                    <p>"Go to your dashboard and click 'New Project'. You will be dropped into a live terminal environment."</p>
-                    <pre><code>"apt-get update && apt-get install my-tool"</code></pre>
-                </section>
+                // Main Documentation Content
+                <main class="docs-content">
+                    <h1>"TryCli Studio User Documentation"</h1>
+                    
+                    <section id="introduction">
+                        <h2>"1. Introduction"</h2>
+                        <p>"TryCli Studio is a platform for developers to build, host, and share interactive Command Line Interface (CLI) demos directly in the browser. It removes the need for users to install dependencies locally by spinning up isolated, ephemeral Docker containers on demand."</p>
+                        <p><strong>"Core Philosophy:"</strong>" \"Dream it, Build it.\" We provide a split-pane interface: one side for a live Linux terminal, the other for a rich Markdown guide, allowing you to walk users through your tool step-by-step."</p>
+                    </section>
 
-                <section>
-                    <h2>"2. Write the Guide"</h2>
-                    <p>"Use the Markdown editor on the right to write instructions. These will be shown to your users alongside the terminal."</p>
-                </section>
+                    <section id="getting-started">
+                        <h2>"2. Getting Started"</h2>
+                        
+                        <h3 id="authentication">"Authentication"</h3>
+                        <p>"To create projects, you must be logged in. We use GitHub OAuth for secure and quick authentication."</p>
+                        <ol>
+                            <li>"Click the \"Login with GitHub\" button on the home page or navigation bar."</li>
+                            <li>"Grant TryCli Studio permission to read your public profile (we only store your Username, ID, and Avatar)."</li>
+                            <li>"Once authenticated, you will be redirected to your personal Dashboard."</li>
+                        </ol>
 
-                <section>
-                    <h2>"3. Publish"</h2>
-                    <p>"Click 'Publish'. We snapshot your container state and give you a shareable link."</p>
-                </section>
-            </main>
+                        <h3 id="dashboard">"The Dashboard"</h3>
+                        <p>"Your Dashboard is the command center for your projects."</p>
+                        <ul>
+                            <li><strong>"Your Projects:"</strong>" Displays a grid of all the demos you have created. Each card shows the project slug and the base Docker image used."</li>
+                            <li><strong>"Search:"</strong>" Use the search bar at the top to filter your projects by name. It supports fuzzy search logic."</li>
+                            <li><strong>"New Project:"</strong>" Click the \"+ New Project\" button to enter the Studio."</li>
+                        </ul>
+                    </section>
+
+                    <section id="creating-project">
+                        <h2>"3. Creating a Project"</h2>
+                        <p>"The Studio (/new) is where the magic happens. It features a responsive split-pane layout."</p>
+
+                        <h3 id="studio-interface">"The Studio Interface"</h3>
+                        <ul>
+                            <li><strong>"Left Pane (Terminal):"</strong>" A fully functional xterm.js terminal connected to a live container via WebSockets."</li>
+                            <li><strong>"Right Pane (Editor):"</strong>" A Markdown editor where you write the tutorial or documentation for your tool."</li>
+                            <li><strong>"Resize:"</strong>" You can drag the divider between the panes to adjust their width."</li>
+                        </ul>
+
+                        <h3 id="setup-wizard">"The Setup Wizard"</h3>
+                        <p>"When you first load the Studio, the terminal will automatically launch the Setup Wizard. You will be prompted to configure your environment using your keyboard:"</p>
+                        
+                        <p><strong>"Select Base Image:"</strong></p>
+                        <ul>
+                            <li><strong>"Ubuntu 22.04:"</strong>" Best for general compatibility and heavier tools."</li>
+                            <li><strong>"Alpine Linux:"</strong>" Lightweight and fast, ideal for simple binaries."</li>
+                            <li><strong>"Debian Bookworm:"</strong>" Stable and widely supported."</li>
+                        </ul>
+
+                        <p><strong>"Select Shell:"</strong></p>
+                        <ul>
+                            <li><strong>"Bash:"</strong>" The standard shell."</li>
+                            <li><strong>"Zsh:"</strong>" Feature-rich, often preferred by developers."</li>
+                            <li><strong>"Fish:"</strong>" User-friendly interactive shell."</li>
+                        </ul>
+
+                        <p class="note">"Note: The system will automatically provision the container and install the selected shell for you."</p>
+
+                        <h3 id="installing-tool">"Installing Your CLI Tool"</h3>
+                        <p>"Once the wizard completes, you have full root access (or pseudo-root capabilities depending on configuration) inside the container."</p>
+                        <ul>
+                            <li>"Run standard Linux commands: "<code>"apt-get update"</code>", "<code>"curl"</code>", "<code>"wget"</code>", "<code>"git clone"</code>"."</li>
+                            <li>"Install your specific CLI tool."</li>
+                        </ul>
+                        
+                        <p><strong>"Example:"</strong></p>
+                        <pre><code>"apt-get update && apt-get install -y curl
+curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
+                        
+                        <p class="tip"><strong>"Tip:"</strong>" Clean up temporary files (like downloaded zips) to keep your project image small."</p>
+
+                        <h3 id="writing-guide">"Writing the Guide"</h3>
+                        <p>"In the right-hand pane, document your tool using Markdown."</p>
+                        <ul>
+                            <li><strong>"Headers:"</strong>" "<code>"# My Tool"</code>", "<code>"## Installation"</code>"."</li>
+                            <li><strong>"Code Blocks:"</strong>" Use triple backticks (```) for code snippets."</li>
+                            <li><strong>"Lists & Formatting:"</strong>" Standard bold, italics, and lists are supported."</li>
+                        </ul>
+                        <p>"This text will be rendered into beautiful HTML for your viewers."</p>
+                    </section>
+
+                    <section id="publishing">
+                        <h2>"4. Publishing Your Demo"</h2>
+                        <p>"Once your environment is set up and your guide is written:"</p>
+                        
+                        <ol>
+                            <li>
+                                <strong>"Set a Slug:"</strong>" Enter a unique URL identifier for your project in the top navigation bar (e.g., "<code>"my-awesome-cli"</code>")."
+                                <ul>
+                                    <li><strong>"Validation:"</strong>" Only letters, numbers, and hyphens are allowed."</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>"Click \"Publish\":"</strong>
+                                <ul>
+                                    <li>"The system will pause your running container."</li>
+                                    <li>"It creates a Docker Snapshot (Image) of the exact state of your file system."</li>
+                                    <li>"It saves your Markdown guide and links it to this new image."</li>
+                                    <li>"It generates a permanent link to your project."</li>
+                                </ul>
+                            </li>
+                        </ol>
+
+                        <p class="warning"><strong>"Warning:"</strong>" Publishing creates a static image. Any changes made afterwards requires re-publishing."</p>
+                    </section>
+
+                    <section id="sharing">
+                        <h2>"5. Sharing & Embedding"</h2>
+
+                        <h3 id="public-links">"Public Project Links"</h3>
+                        <p>"Share your project using the URL format: "<code>"https://trycli.com/<your-username>/<project-slug>"</code></p>
+                        <p>"Viewers who visit this link will:"</p>
+                        <ul>
+                            <li>"See your Markdown guide rendered on the left."</li>
+                            <li>"Get a fresh, isolated copy of your container on the right."</li>
+                            <li>"Have full interactive access to try the tool you installed."</li>
+                        </ul>
+
+                        <h3 id="embedding">"Embedding on Websites"</h3>
+                        <p>"You can embed your CLI demo directly into your own documentation, blog, or landing page."</p>
+                        <ol>
+                            <li>"Go to your Project Page."</li>
+                            <li>"Click the \"Share / Embed\" button in the top right."</li>
+                            <li>"Copy the generated "<code>"<iframe>"</code>" code."</li>
+                            <li>"Paste it into your website's HTML."</li>
+                        </ol>
+
+                        <p><strong>"Embed Features:"</strong></p>
+                        <ul>
+                            <li><strong>"Lazy Loading:"</strong>" The terminal only boots up when the user clicks \"Start Terminal\" to save resources."</li>
+                            <li><strong>"Responsive:"</strong>" The embed adapts to the container width."</li>
+                        </ul>
+                    </section>
+
+                    <section id="security">
+                        <h2>"6. Security & Sandbox"</h2>
+                        <p>"We take security seriously. While you (the creator) have broad permissions during the setup phase, the Viewer Containers (what your users see) are strictly sandboxed:"</p>
+                        
+                        <ul>
+                            <li><strong>"Network Isolation:"</strong>" Viewer containers run on a restricted bridge network. They cannot access internal services or other user containers."</li>
+                            <li><strong>"Resource Limits:"</strong>" Each session is capped at 512MB RAM and 1.0 CPU Core to prevent abuse."</li>
+                            <li><strong>"Anti-Abuse:"</strong>" We drop dangerous Linux capabilities (like CAP_SYS_ADMIN) and limit process counts (PIDs) to prevent \"fork bombs\"."</li>
+                            <li><strong>"Ephemeral:"</strong>" All viewer sessions are temporary. As soon as the user closes the tab or the session times out, the container is destroyed and all data is wiped."</li>
+                        </ul>
+                    </section>
+
+                    <div class="docs-footer">
+                        <p>"Need help? "<a href="https://github.com/TryCli-Studio/trycli/issues" target="_blank" rel="noopener noreferrer">"Open an issue on GitHub"</a>" or join our community."</p>
+                    </div>
+                </main>
+            </div>
         </div>
     }
 }
