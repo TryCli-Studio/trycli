@@ -13,6 +13,7 @@ pub mod pages {
     pub mod create;
     pub mod view;
     pub mod embed;
+    pub mod docs;
 }
 
 pub use app::App;

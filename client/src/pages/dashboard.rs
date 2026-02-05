@@ -337,7 +337,7 @@ fn DashboardProjectList(
     set_error: WriteSignal<Option<String>>,
     set_loading: WriteSignal<bool>,
     projects: ReadSignal<Vec<ProjectSummary>>,
-    set_projects: WriteSignal<Vec<ProjectSummary>>, // <--- Receive Setter
+    set_projects: WriteSignal<Vec<ProjectSummary>>, // < Receive Setter
     user_login: Rc<String>,
 ) -> impl IntoView {
 

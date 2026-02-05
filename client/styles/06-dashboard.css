@@ -1,0 +1,156 @@
+/* ====================================
+   DASHBOARD & PROJECT CARDS
+   ==================================== */
+
+.glass-header {
+    position: sticky;
+    top: 0;
+    backdrop-filter: blur(12px);
+    background: rgba(9, 9, 11, 0.8);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+}
+
+.dashboard-hero {
+    padding: 60px 40px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(113, 113, 122, 0.01) 100%);
+    border-bottom: 1px solid var(--border);
+}
+
+.hero-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.hero-title {
+    font-size: 3rem;
+    font-weight: 800;
+    margin: 0 0 16px 0;
+    color: var(--text-main);
+    letter-spacing: -1px;
+}
+
+.hero-subtitle {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin: 0 0 32px 0;
+    line-height: 1.6;
+}
+
+/* Dashboard Section */
+.dashboard-section {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 60px 40px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.section-header h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-main);
+}
+
+/* Project Cards Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+}
+
+.project-card {
+    background: linear-gradient(180deg, var(--bg-panel) 0%, rgba(24, 24, 27, 0.6) 100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.project-card:hover {
+    border-color: var(--text-muted);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.card-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-main);
+    word-break: break-word;
+}
+
+.card-body {
+    flex: 1;
+    padding: 16px 20px;
+}
+
+.card-meta {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-meta code {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    color: #e4e4e7;
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+.card-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+}
+
+/* Empty & Error States */
+.empty-state {
+    text-align: center;
+    padding: 80px 40px;
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+}
+
+.empty-message {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin: 0 0 24px 0;
+}
+
+.error-state {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+}
+
+.error-message {
+    color: #fca5a5;
+    font-size: 1rem;
+    margin: 0 0 16px 0;
+}

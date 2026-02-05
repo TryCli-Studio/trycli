@@ -5,7 +5,7 @@ use leptos_meta::{Title, Meta, Link, Script};
 
 #[component]
 pub fn LandingPage() -> impl IntoView {
-    // --- 2. STRUCTURED DATA (JSON-LD) ---
+    //  2. STRUCTURED DATA (JSON-LD) 
     // Defines the site as a 'SoftwareApplication' for search engines[cite: 52].
     // This allows Google to display "Free", "Web/WASM", and feature lists in snippets[cite: 53].
     let schema_json = r#"{
@@ -26,7 +26,7 @@ pub fn LandingPage() -> impl IntoView {
 
     view! {
         <>
-            // --- 4. SEO METADATA ---
+            //  4. SEO METADATA 
             // Explicit Title and Description for correct indexing[cite: 22].
             <Title text="TryCLI - Interactive CLI Demos & Embeds" />
             <Meta name="description" content="Host, share, and embed fully interactive CLI demos directly in the browser. Think Replit, but purpose-built for command-line applications." />
@@ -49,7 +49,7 @@ pub fn LandingPage() -> impl IntoView {
             <Meta name="twitter:title" content="TryCLI - Interactive CLI Demos" />
             <Meta name="twitter:description" content="Host, share, and embed fully interactive CLI demos directly in the browser." />
         
-            // --- MAIN CONTENT ---
+            //  MAIN CONTENT 
             <div class="landing-container">
                 
                 // Navigation: Added aria-label for accessibility[cite: 75].
@@ -86,13 +86,13 @@ pub fn LandingPage() -> impl IntoView {
                                 <span class="arrow">"→"</span>
                             </A>
                             
-                            // SECURITY FIX: Added rel="noopener noreferrer".
-                            <a href="https://github.com/TryCli-Studio/trycli" target="_blank" rel="noopener noreferrer" class="btn-secondary">
-                                "View Source"
-                            </a>
+                            // Docs button - navigate to documentation page.
+                            <A href="/docs" class="btn-secondary">
+                                "View Docs"
+                            </A>
                         </div>
 
-                        // --- 5. TERMINAL PREVIEW ---
+                        //  5. TERMINAL PREVIEW 
                         // Added role="log" so search engines treat this as code output.
                         <div class="terminal-preview" role="log" aria-label="Terminal Preview Demo">
                             // Hidden decorative elements to reduce screen reader noise[cite: 70].
@@ -116,7 +116,7 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </main>
 
-                // --- FEATURES ---
+                //  FEATURES 
                 <section class="section-features" style="background: rgba(255,255,255,0.01);">
                     <div class="container-narrow">
                         <h2 class="section-title">"What Is TryCLI?"</h2>
@@ -153,7 +153,7 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </section>
 
-                // --- USE CASES ---
+                //  USE CASES 
                 <section class="section-usage">
                     <div class="container-narrow">
                         <h2 class="section-title">"Use Cases"</h2>
@@ -175,7 +175,7 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </section>
 
-                // --- FINAL CTA ---
+                //  FINAL CTA 
                 <section class="section-usage" style="border-bottom: none;">
                     <div class="container-narrow">
                         <div class="final-cta">
@@ -193,7 +193,7 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </section>
 
-                // --- FOOTER ---
+                //  FOOTER 
                 <footer class="landing-footer">
                     <div class="footer-container">
                         <div class="footer-top">
@@ -202,9 +202,9 @@ pub fn LandingPage() -> impl IntoView {
                                 <span class="brand-name">"TryCLI"</span>
                             </div>
                             <div class="footer-links">
-                                <a href="https://github.com/joshikarthikey/tryCLI" target="_blank" rel="noopener noreferrer">"GitHub"</a>
-                                <a href="#" rel="noopener noreferrer">"Documentation"</a>
-                                <a href="#" rel="noopener noreferrer">"Twitter"</a>
+                                <a href="https://github.com/TryCli-Studio" target="_blank" rel="noopener noreferrer">"GitHub"</a>
+                                <a href="/docs" rel="noopener noreferrer">"Documentation"</a>
+                                <a href="https://x.com/TryCliStudio" rel="noopener noreferrer">"Twitter"</a>
                             </div>
                         </div>
                         <div class="footer-bottom">
