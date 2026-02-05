@@ -167,11 +167,12 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             ("managed_by".to_string(), "TryCli Studio".to_string())
         ])),
         host_config: Some(HostConfig {
+            runtime: Some("runsc".to_string()),
             // 1. RESOURCE QUOTAS (Stop the "Noisy Neighbor")
             // Give builders more RAM/CPU than viewers, but still cap them.
             memory: Some(1024 * 1024 * 1024), // 1 GB RAM (Publishers need to compile/install)
             memory_swap: Some(1024 * 1024 * 1024), // No extra swap to thrash disk
-            nano_cpus: Some(2_000_000_000),   // 2.0 CPUs (Installers are CPU heavy)
+            nano_cpus: Some(500_000_000),   // 2.0 CPUs (Installers are CPU heavy)
             
             // 2. FORK BOMB PROTECTION
             // 128 processes is enough for 'apt-get' and 'make', but stops a fork bomb script
