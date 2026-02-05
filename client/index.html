@@ -1,12 +1,68 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
     <title>TryCli Studio</title>
+    <meta name="description" content="Host, share, and embed fully interactive CLI demos in your browser. A zero-config Rust & Docker sandbox for documenting and testing command-line tools." />
+    <meta name="author" content="TryCli Studio" />
+
+    <link data-trunk rel="copy-file" href="octopus_terminal_opt.png" />
+    
+    <link rel="icon" type="image/png" href="octopus_terminal_opt.png">
+    <link rel="apple-touch-icon" href="octopus_terminal_opt.png">
+    <link data-trunk rel="copy-file" href="sitemap.xml" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "TryCli Studio",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "WebBrowser",
+      "hasPart": [
+        {
+          "@type": "WebPage",
+          "name": "Documentation",
+          "url": "https://trycli.com/docs",
+          "description": "Learn how to host and embed your first CLI demo."
+        },
+        {
+          "@type": "WebPage",
+          "name": "Dashboard",
+          "url": "https://trycli.com/dashboard",
+          "description": "Manage your CLI demos and view analytics."
+        }
+      ],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "Host, share, and embed fully interactive CLI demos directly in the browser.",
+      "image": "https://trycli.com/octopus_terminal_opt.png",
+      "author": {
+          "@type": "Organization",
+          "name": "TryCli Studio",
+          "logo": "https://trycli.com/octopus_terminal_opt.png"
+      }
+    }
+    </script>
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://trycli.com/" />
+    <meta property="og:title" content="TryCLI Studio - Interactive CLI Demos" />
+    <meta property="og:description" content="Instantly spin up isolated Docker containers and share your CLI projects with a single link." />
+    <meta property="og:image" content="https://trycli.com/octopus_terminal_opt.png" /> 
+    
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:title" content="TryCLI Studio" />
+    <meta property="twitter:description" content="Host, share, and embed fully interactive CLI demos." />
+    <meta property="twitter:image" content="https://trycli.com/octopus_terminal_opt.png" />
     
     <link data-trunk rel="rust" href="Cargo.toml" />
     
-    <!-- Modular CSS files -->
     <link data-trunk rel="css" href="styles/01-base.css" />
     <link data-trunk rel="css" href="styles/02-navigation.css" />
     <link data-trunk rel="css" href="styles/03-buttons-inputs.css" />
@@ -17,15 +73,13 @@
     <link data-trunk rel="css" href="styles/08-footer-docs.css" />
     <link data-trunk rel="css" href="styles/09-utilities.css" />
     
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2309090b' rx='6'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='central' text-anchor='middle' font-family='monospace' font-size='20' fill='%23e4e4e7' font-weight='bold'%3E_%26gt%3B%3C/text%3E%3C/svg%3E" />
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown-dark.min.css">
-    
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+    
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   </head>
