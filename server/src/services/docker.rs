@@ -56,7 +56,7 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
                 else {
                     // It is active, but is it misbehaving?
                     if let Some(id) = container.id {
-                       check_cpu_usage(&docker, &id).await;
+                       check_resource_usage(&docker, &id).await;
                     }
                 }
             }
@@ -65,40 +65,49 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
 }
 
 // Helper function to check CPU usage
-async fn check_cpu_usage(docker: &Docker, container_id: &str) {
+async fn check_resource_usage(docker: &Docker, container_id: &str) {
     let options = StatsOptions {
-        stream: false, // We only want one snapshot, not a continuous stream
+        stream: false,
         ..Default::default()
     };
 
     let mut stats_stream = docker.stats(container_id, Some(options));
 
-    // FIX: .next() is now available because of `use futures::StreamExt;`
     if let Some(Ok(stats)) = stats_stream.next().await {
-        // Calculate CPU Usage Percentage
-        // Formula: (total_delta / system_delta) * number_of_cpus * 100.0
+        // --- EXISTING CPU CHECK ---
         let cpu_delta = stats.cpu_stats.cpu_usage.total_usage as f64 - stats.precpu_stats.cpu_usage.total_usage as f64;
-        
-        // Protect against 0 division or missing system usage data
         let system_cpu_usage = stats.cpu_stats.system_cpu_usage.unwrap_or(0);
         let pre_system_cpu_usage = stats.precpu_stats.system_cpu_usage.unwrap_or(0);
         let system_delta = system_cpu_usage as f64 - pre_system_cpu_usage as f64;
 
         if system_delta > 0.0 && cpu_delta > 0.0 {
-            // Usually docker stats include the number of CPUs in the calculation, 
-            // but for a simple "hog" check, raw % relative to system delta is often enough.
-            // If you allocated 1.0 CPU, 100% usage means they are using all of it.
             let cpu_percent = (cpu_delta / system_delta) * 100.0;
-
-            // THRESHOLD: If they are using > 90% of the CPU allocated to them
             if cpu_percent > 90.0 {
-                println!("ABUSE DETECTED: Container {} using {:.2}% CPU. Killing.", container_id, cpu_percent);
-                
-                let _ = docker.remove_container(container_id, Some(RemoveContainerOptions {
-                    force: true,
-                    ..Default::default()
-                })).await;
+                println!("ABUSE: CPU Hog {} ({:.2}%). Killing.", container_id, cpu_percent);
+                let _ = docker.remove_container(container_id, Some(RemoveContainerOptions { force: true, ..Default::default() })).await;
+                return; // Container killed, exit
             }
+        }
+
+        // --- NEW NETWORK CHECK ---
+        // Sum up Rx (Received) and Tx (Transmitted) across all interfaces
+        let mut total_network_bytes = 0;
+        if let Some(networks) = stats.networks {
+            for (_, net_stats) in networks {
+                total_network_bytes += net_stats.rx_bytes + net_stats.tx_bytes;
+            }
+        }
+
+        // LIMIT: 1 GB (1024 * 1024 * 1024)
+        // If they download/upload more than 1GB total, kill them.
+        const NETWORK_LIMIT_BYTES: u64 = 1024 * 1024 * 1024; 
+
+        if total_network_bytes > NETWORK_LIMIT_BYTES {
+            println!("ABUSE: Network Limit Exceeded {} ({} bytes). Killing.", container_id, total_network_bytes);
+            let _ = docker.remove_container(container_id, Some(RemoveContainerOptions {
+                force: true,
+                ..Default::default()
+            })).await;
         }
     }
 }

@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
 };
 use bollard::container::{CreateContainerOptions, Config};
-use bollard::models::HostConfig;
+use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
 use bollard::image::CreateImageOptions;
 use bollard::exec::{CreateExecOptions, StartExecResults};
 use futures::{stream::StreamExt, SinkExt};
@@ -170,9 +170,29 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             runtime: Some("runsc".to_string()),
             // 1. RESOURCE QUOTAS (Stop the "Noisy Neighbor")
             // Give builders more RAM/CPU than viewers, but still cap them.
-            memory: Some(1024 * 1024 * 1024), // 1 GB RAM (Publishers need to compile/install)
+            memory: Some(512 * 1024 * 1024), // 512 MB RAM (Publishers need to compile/install)
             memory_swap: Some(1024 * 1024 * 1024), // No extra swap to thrash disk
-            nano_cpus: Some(500_000_000),   // 2.0 CPUs (Installers are CPU heavy)
+            nano_cpus: Some(500_000_000),   // 0.5 CPUs (Installers are CPU heavy)
+
+            ulimits: Some(vec![
+            bollard::models::ResourcesUlimits {
+                name: Some("fsize".to_string()),
+                soft: Some(100 * 1024 * 1024), // 100 MB Soft Limit
+                hard: Some(100 * 1024 * 1024), // 100 MB Hard Limit
+            }
+            ]),
+
+            mounts: Some(vec![
+            Mount {
+                target: Some("/tmp".to_string()),
+                typ: Some(MountTypeEnum::TMPFS),
+                tmpfs_options: Some(MountTmpfsOptions {
+                    size_bytes: Some(256 * 1024 * 1024), // 256 MB Limit for /tmp
+                    mode: Some(0o1777),
+                }),
+                ..Default::default()
+            }
+            ]),
             
             // 2. FORK BOMB PROTECTION
             // 128 processes is enough for 'apt-get' and 'make', but stops a fork bomb script
@@ -229,8 +249,18 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
                     owner_id: user_id 
                 });
             }
+            let limit_config = "Acquire::http::Dl-Limit \"500\"; Acquire::https::Dl-Limit \"500\";";
+            let inject_limit_cmd = format!(
+            "echo '{}' > /etc/apt/apt.conf.d/99limit", 
+            limit_config
+            );
 
-            let auto_type_cmd = format!("{} && echo '\r\n\r\n READY ' && exec {}\n", install_script, final_shell);
+            let auto_type_cmd = format!(
+                "mkdir -p /etc/apt/apt.conf.d && {} && {} && echo '\r\n\r\n READY ' && exec {}\n", 
+                inject_limit_cmd,
+                install_script, 
+                final_shell
+            );
             attach_to_container(socket, state, session_id, container_name, "/bin/sh".to_string(), Some(auto_type_cmd)).await;
         },
         Err(e) => {
