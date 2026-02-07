@@ -223,6 +223,7 @@ pub fn CreatePage() -> impl IntoView {
                      <input type="text" class="input-slug" 
                             on:input=move |ev| {
                                 let value = event_target_value(&ev);
+                                let value = value.to_lowercase();
                                 // Only allow alphanumeric characters and hyphens (Docker-safe)
                                 if value.is_empty() || value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
                                     set_slug.set(value);

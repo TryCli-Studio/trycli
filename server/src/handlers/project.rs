@@ -174,7 +174,7 @@ pub async fn publish_handler(
 
     // 6. Update Database
     sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (owner_username, slug) DO UPDATE SET image_tag = $2, markdown = $3, shell = $6")
-        .bind(&payload.slug)
+        .bind(&safe_slug)
         .bind(&new_image_tag)
         .bind(&payload.markdown)
         .bind(user.id)          
@@ -322,7 +322,7 @@ pub async fn delete_project(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let record: Option<(String,)> = sqlx::query_as(
-        "SELECT image_tag FROM projects WHERE slug = $1 AND owner_id = $2"
+        "SELECT image_tag FROM projects WHERE LOWER(slug) = LOWER($1) AND owner_id = $2"
     )
     .bind(&slug)
     .bind(user.id)
@@ -336,7 +336,7 @@ pub async fn delete_project(
     };
 
     let db_result = sqlx::query(
-        "DELETE FROM projects WHERE slug = $1 AND owner_id = $2"
+        "DELETE FROM projects WHERE LOWER(slug) = LOWER($1) AND owner_id = $2"
     )
     .bind(&slug)
     .bind(user.id)
