@@ -1,21 +1,15 @@
 use leptos::*;
 use leptos_router::A;
+use crate::components::navbar::Navbar;
 
 #[component]
 pub fn DocsPage() -> impl IntoView {
     view! {
         <div class="docs-container">
-            // Top Navigation Bar
-            <nav class="nav">
-                <div class="nav-brand">
-                    <span class="logo-icon">">_"</span>
-                    <A href="/" class="brand-link">"TryCli Studio"</A>
-                </div>
-                <div class="controls">
-                    <A href="/" class="btn-nav">"Home"</A>
-                    <A href="/dashboard" class="btn-primary">"Dashboard"</A>
-                </div>
-            </nav>
+            <Navbar>
+                <A href="/" class="btn-nav">"Home"</A>
+                <A href="/dashboard" class="btn-primary">"Dashboard"</A>
+            </Navbar>
 
             <div class="docs-layout">
                 // Sidebar Navigation

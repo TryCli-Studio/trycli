@@ -9,6 +9,7 @@ use pulldown_cmark::{Parser, Options, html};
 use crate::api::api_base;
 use crate::components::terminal::TerminalView;
 use crate::components::limit::LimitReached;
+use crate::components::navbar::Navbar;
 use crate::types::User;
 use serde::{Serialize, Deserialize};
 
@@ -121,8 +122,6 @@ pub fn ViewPage() -> impl IntoView {
         }
     });
 
-    let navigate = leptos_router::use_navigate();
-    
     let copy_embed_code = move |u: String, s: String| {
         let origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
         let code = format!(
@@ -174,40 +173,33 @@ pub fn ViewPage() -> impl IntoView {
 
     view! {
         <>
-            <div class="nav">
-                // ... Nav content same as before ...
-                 <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
-                    if user.get().is_some() { navigate("/dashboard", Default::default()); } 
-                    else { navigate("/", Default::default()); }
-                }>
-                    <span class="logo-icon">">_"</span>
-                    <span>"TryCli Studio"</span>
-                </div>
+            <Navbar>
                 <div class="controls">
-                    // ... User/Login controls same as before ...
-                    {move || match user.get() {
-                        Some(u) => view! {
-                             <div style="display: flex; align-items: center; gap: 16px;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <img src=u.avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
-                                    <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
-                                </div>
-                                <Show when=is_owner fallback=|| ()>
-                                    <button class="btn-primary btn-success" on:click=move |_| {
-                                        copy_embed_code(username(), slug());
-                                    }>
-                                        "Share / Embed"
-                                    </button>
-                                </Show>
-                                <a href=format!("{}/auth/logout", api_base()) class="btn-primary btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
-                            </div>
-                        }.into_view(),
-                        None => view! {
-                             <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">"Login"</a>
-                        }.into_view()
+                    {move || {
+                        if is_owner() {
+                            match user.get() {
+                                Some(u) => view! {
+                                    <div style="display: flex; align-items: center; gap: 16px;">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <img src=u.avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                                            <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
+                                        </div>
+                                        <button class="btn-primary btn-success" on:click=move |_| {
+                                            copy_embed_code(username(), slug());
+                                        }>
+                                            "Share / Embed"
+                                        </button>
+                                        <a href=format!("{}/auth/logout", api_base()) class="btn-primary btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
+                                    </div>
+                                }.into_view(),
+                                None => view! { <></> }.into_view()
+                            }
+                        } else {
+                            view! { <></> }.into_view()
+                        }
                     }}
                 </div>
-            </div>
+            </Navbar>
 
             // MAIN CONTENT SWITCH
             {move || match project_resource.get() {
