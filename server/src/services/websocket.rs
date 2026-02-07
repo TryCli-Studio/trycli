@@ -4,16 +4,16 @@ use axum::{
     http::StatusCode,
 };
 use bollard::container::{CreateContainerOptions, Config};
-use bollard::models::HostConfig;
+use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
 use bollard::image::CreateImageOptions;
 use bollard::exec::{CreateExecOptions, StartExecResults};
 use futures::{stream::StreamExt, SinkExt};
 use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
-use tower_sessions::Session; // Added
-use crate::state::{AppState, SessionContext}; // Added SessionContext
-use crate::models::User; // Added User
+use tower_sessions::Session; 
+use crate::state::{AppState, SessionContext}; 
+use crate::models::User; 
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade, 
@@ -21,28 +21,21 @@ pub async fn ws_handler(
     State(state): State<AppState>,
     session: Session, 
 ) -> Result<Response, StatusCode> {
-    // 1. Extract User ID (No unwrap)
     let user: Option<User> = session.get("user").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let user_id = user.map(|u| u.id);
 
-    // 2. Validate Permissions BEFORE Upgrade
     {
         let map = state.lock_sessions();
         
         match map.get(&session_id) {
             Some(ctx) => {
-                // Scenario A: Connecting to existing session
                 if let Some(owner) = ctx.owner_id {
-                    // If session has an owner, user MUST match
                     if Some(owner) != user_id {
                         return Err(StatusCode::FORBIDDEN);
                     }
                 }
-                // If owner_id is None, it's a public viewer; allow access.
             },
             None => {
-                // Scenario B: Spawning a new session
-                // User MUST be logged in to spawn resources
                 if user_id.is_none() {
                     return Err(StatusCode::UNAUTHORIZED);
                 }
@@ -50,32 +43,29 @@ pub async fn ws_handler(
         }
     }
 
-    // 3. Upgrade Connection
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, session_id, user_id)))
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
-    // 1. Attempt to CLAIM the session immediately
     let is_claimed_by_us = {
         let mut map = state.lock_sessions();
         if map.contains_key(&session_id) {
             false
         } else {
-            // Insert a placeholder to block other connections
             map.insert(session_id.clone(), SessionContext {
-                container_name: "INITIALIZING".to_string(), // Marker value
+                container_name: "INITIALIZING".to_string(),
                 shell: "".to_string(),
-                owner_id: user_id
+                owner_id: user_id,
+                project_owner_id: user_id,
+                is_publishing: false, // <--- INIT FLAG
             });
             true
         }
     };
 
     if is_claimed_by_us {
-        // We won the race -> Run the wizard
         run_setup_wizard(socket, state, session_id, user_id).await;
     } else {
-        // Session exists (or is being initialized by another socket)
         let existing_session = {
             let map = state.lock_sessions();
             map.get(&session_id).cloned()
@@ -83,12 +73,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, u
 
         if let Some(ctx) = existing_session {
             if ctx.container_name == "INITIALIZING" {
-                // Another connection is currently setting this up. 
-                // Close this duplicate connection to prevent the race.
                 let _ = socket.close().await;
                 return;
             }
-            // Normal attach logic
             attach_to_container(socket, state, session_id, ctx.container_name, ctx.shell, None).await;
         }
     }
@@ -157,7 +144,8 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
         image: Some(image.to_string()),
         tty: Some(true),
         open_stdin: Some(true),
-        cmd: Some(vec!["tail".to_string(), "-f".to_string(), "/dev/null".to_string()]),
+        // FIX: Use shell instead of tail to keep it alive reliably
+        cmd: Some(vec!["/bin/sh".to_string()]),
         env: Some(vec![
             "LANG=C.UTF-8".to_string(),
             "LC_ALL=C.UTF-8".to_string(),
@@ -167,39 +155,48 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             ("managed_by".to_string(), "TryCli Studio".to_string())
         ])),
         host_config: Some(HostConfig {
-            // 1. RESOURCE QUOTAS (Stop the "Noisy Neighbor")
-            // Give builders more RAM/CPU than viewers, but still cap them.
-            memory: Some(1024 * 1024 * 1024), // 1 GB RAM (Publishers need to compile/install)
-            memory_swap: Some(1024 * 1024 * 1024), // No extra swap to thrash disk
-            nano_cpus: Some(2_000_000_000),   // 2.0 CPUs (Installers are CPU heavy)
-            
-            // 2. FORK BOMB PROTECTION
-            // 128 processes is enough for 'apt-get' and 'make', but stops a fork bomb script
-            pids_limit: Some(128), 
+            runtime: Some("runsc".to_string()),
+            memory: Some(512 * 1024 * 1024), 
+            memory_swap: Some(1024 * 1024 * 1024), 
+            nano_cpus: Some(500_000_000),   
 
-            // 3. CAPABILITY DROPPING (The "Root" protection)
-            // We cannot drop "ALL" because apt-get/apk need to change file owners.
-            // But we explicitly DROP the dangerous ones used for hacking/escaping.
-            cap_drop: Some(vec![
-                "SYS_ADMIN".to_string(),   // Prevents mounting filesystems / container escape
-                "NET_RAW".to_string(),     // Prevents packet sniffing/spoofing (nmap/arp)
-                "SYS_MODULE".to_string(),  // Prevents loading kernel modules (rootkits)
-                "SYS_PTRACE".to_string(),  // Prevents inspecting other processes
-                "AUDIT_CONTROL".to_string(), // Prevents messing with audit logs
-                "MAC_ADMIN".to_string(),     // Prevents messing with security modules
-                "SYS_TIME".to_string(),      // Prevents changing system time
+            ulimits: Some(vec![
+            bollard::models::ResourcesUlimits {
+                name: Some("fsize".to_string()),
+                soft: Some(100 * 1024 * 1024), 
+                hard: Some(100 * 1024 * 1024), 
+            }
             ]),
 
-            // 4. PRIVILEGE ESCALATION PREVENTION
-            // This ensures that even if they download a binary with the SUID bit set,
-            // it cannot grant them more privileges than they already have.
-            security_opt: Some(vec!["no-new-privileges".to_string()]),
+            mounts: Some(vec![
+            Mount {
+                target: Some("/tmp".to_string()),
+                typ: Some(MountTypeEnum::TMPFS),
+                tmpfs_options: Some(MountTmpfsOptions {
+                    size_bytes: Some(256 * 1024 * 1024), 
+                    mode: Some(0o1777),
+                }),
+                ..Default::default()
+            }
+            ]),
+            
+            pids_limit: Some(128), 
 
-            // 5. NETWORK SECURITY
-            // Keeps them on the bridge network but isolated
+            cap_drop: Some(vec![
+                "SYS_ADMIN".to_string(),   
+                "NET_RAW".to_string(),     
+                "SYS_MODULE".to_string(),  
+                "SYS_PTRACE".to_string(),  
+                "AUDIT_CONTROL".to_string(), 
+                "MAC_ADMIN".to_string(),     
+                "SYS_TIME".to_string(),      
+            ]),
+
+            security_opt: Some(vec!["no-new-privileges".to_string()]),
             network_mode: Some("bridge".to_string()),
 
-            auto_remove: Some(true),
+            // FIX: Must be false so we can export stopped containers
+            auto_remove: Some(false),
             ..Default::default()
         }),
         ..Default::default()
@@ -210,7 +207,6 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
     ).await {
         Ok(_) => {
             if let Err(e) = state.docker.start_container::<String>(&container_name, None).await {
-                // ERROR HANDLER: If start fails, remove the "INITIALIZING" lock
                 {
                     let mut map = state.lock_sessions();
                     map.remove(&session_id);
@@ -221,19 +217,29 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
 
             {
                 let mut map = state.lock_sessions();
-                // UPDATE the placeholder with the REAL container details
                 map.insert(session_id.clone(), SessionContext {
                     container_name: container_name.clone(),
                     shell: final_shell.to_string(),
-                    owner_id: user_id 
+                    owner_id: user_id,
+                    project_owner_id: user_id,
+                    is_publishing: false, // <--- INIT FLAG
                 });
             }
+            let limit_config = "Acquire::http::Dl-Limit \"500\"; Acquire::https::Dl-Limit \"500\";";
+            let inject_limit_cmd = format!(
+            "echo '{}' > /etc/apt/apt.conf.d/99limit", 
+            limit_config
+            );
 
-            let auto_type_cmd = format!("{} && echo '\r\n\r\n READY ' && exec {}\n", install_script, final_shell);
+            let auto_type_cmd = format!(
+                "mkdir -p /etc/apt/apt.conf.d && {} && {} && echo '\r\n\r\n READY ' && exec {}\n", 
+                inject_limit_cmd,
+                install_script, 
+                final_shell
+            );
             attach_to_container(socket, state, session_id, container_name, "/bin/sh".to_string(), Some(auto_type_cmd)).await;
         },
         Err(e) => {
-            // ERROR HANDLER: If create fails, remove the "INITIALIZING" lock
             {
                 let mut map = state.lock_sessions();
                 map.remove(&session_id);
@@ -290,12 +296,28 @@ async fn attach_to_container(
             _ = &mut recv_task => {},
         };
 
-        println!("Cleaning up session: {}", session_id);
-        {
-            // FIX: Safe lock helper
+        // --- HANDOFF PROTOCOL: Only delete if NOT publishing ---
+        let should_delete = {
             let mut map = state.lock_sessions();
-            map.remove(&session_id);
+            if let Some(ctx) = map.get(&session_id) {
+                if ctx.is_publishing {
+                    false 
+                } else {
+                    map.remove(&session_id); 
+                    true 
+                }
+            } else {
+                false
+            }
+        };
+
+        if should_delete {
+            println!("Cleaning up session: {}", session_id);
+            let _ = state.docker.remove_container(&container_name, Some(
+                bollard::container::RemoveContainerOptions { force: true, ..Default::default() }
+            )).await;
+        } else {
+            println!("Preserving session {} for publishing...", session_id);
         }
-        let _ = state.docker.stop_container(&container_name, None).await;
     }
 }

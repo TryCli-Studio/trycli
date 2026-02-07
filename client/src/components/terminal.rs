@@ -4,7 +4,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{WebSocket, MessageEvent, ErrorEvent};
 use crate::api::ws_base;
 
-// --- BINDING 1: FitAddon ---
+// BINDING 1: FitAddon 
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_name = FitAddon)]
@@ -51,7 +51,9 @@ pub fn TerminalView(container_id: String) -> impl IntoView {
             });
             window().set_onresize(Some(on_resize.as_ref().unchecked_ref()));
             on_resize.forget();
-
+            on_cleanup(move || {
+                window().set_onresize(None);
+            });
             term.write(&format!("Connecting to session {}...\r\n", id_for_effect));
             
             let term_clone: Terminal = term.clone().unchecked_into();
@@ -60,6 +62,11 @@ pub fn TerminalView(container_id: String) -> impl IntoView {
             // FIX: Removed unwrap() on WebSocket::new
             match WebSocket::new(&ws_url) {
                 Ok(ws) => {
+                    let ws_cleanup = ws.clone();
+                    
+                    on_cleanup(move || {
+                        let _ = ws_cleanup.close();
+                    });
                     let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
                         if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
                             term_clone.write(&String::from(txt));

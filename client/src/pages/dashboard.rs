@@ -7,6 +7,7 @@ use wasm_bindgen::prelude::*;
 use std::rc::Rc;
 use crate::types::{User, ProjectSummary};
 use crate::api::api_base;
+use crate::components::navbar::Navbar;
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
@@ -65,8 +66,6 @@ pub fn DashboardPage() -> impl IntoView {
             }
         }
     });
-
-    let navigate = leptos_router::use_navigate();
 
     // Search state and debounce logic
     let (search_input, set_search_input) = create_signal(String::new());
@@ -142,17 +141,7 @@ pub fn DashboardPage() -> impl IntoView {
     };
 
     view! {
-        <div class="nav">
-            <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
-                if user.get().is_some() {
-                    navigate("/dashboard", Default::default());
-                } else {
-                    navigate("/", Default::default());
-                }
-            }>
-                <span class="logo-icon">">_"</span>
-                <span>"TryCli Studio"</span>
-            </div>
+        <Navbar>
             <div class="controls">
                 {move || match user.get() {
                     Some(u) => view! {
@@ -174,7 +163,7 @@ pub fn DashboardPage() -> impl IntoView {
                     }.into_view()
                 }}
             </div>
-        </div>
+        </Navbar>
 
         {
             let user_signal = user.clone();
@@ -201,7 +190,7 @@ pub fn DashboardPage() -> impl IntoView {
                                 </div>
 
                                 <div class="dashboard-section">
-                                    <div class="section-header">
+                                   <div class="section-header">
                                         <h2>"Your Projects"</h2>
                                         <A href="/new" class="btn-primary">
                                             "+ New Project"
@@ -213,6 +202,7 @@ pub fn DashboardPage() -> impl IntoView {
                                         set_error=set_error
                                         set_loading=set_loading
                                         projects=projects
+                                        set_projects=set_projects 
                                         user_login=user_login_rc.clone()
                                     />
                                 </div>
@@ -336,8 +326,52 @@ fn DashboardProjectList(
     set_error: WriteSignal<Option<String>>,
     set_loading: WriteSignal<bool>,
     projects: ReadSignal<Vec<ProjectSummary>>,
+    set_projects: WriteSignal<Vec<ProjectSummary>>, // < Receive Setter
     user_login: Rc<String>,
 ) -> impl IntoView {
+
+    // Handler for deletion logic
+    let handle_delete = move |slug: String| {
+        let prompt_text = format!(
+            "⚠️ DESTRUCTIVE ACTION\n\nThis will permanently delete the project '{}' and its Docker image.\n\nPlease type the project name to confirm:", 
+            slug
+        );
+
+        // FIX: Match against Ok(Some(input)) to handle the Result wrapper
+        if let Ok(Some(input)) = window().prompt_with_message(&prompt_text) {
+            if input == slug {
+                let slug_clone = slug.clone();
+                
+                spawn_local(async move {
+                    let url = format!("{}/api/project/{}", api_base(), slug_clone);
+                    
+                    let req = Request::delete(&url)
+                        .credentials(RequestCredentials::Include)
+                        .send()
+                        .await;
+
+                    match req {
+                        Ok(resp) => {
+                            if resp.ok() {
+                                set_projects.update(|list| {
+                                    list.retain(|p| p.slug != slug_clone);
+                                });
+                                let _ = window().alert_with_message("Project and Docker image deleted.");
+                            } else {
+                                let _ = window().alert_with_message("Failed to delete project. Check server logs.");
+                            }
+                        },
+                        Err(_) => {
+                            let _ = window().alert_with_message("Network error occurred.");
+                        }
+                    }
+                });
+            } else {
+                let _ = window().alert_with_message("Project name mismatch. Deletion cancelled.");
+            }
+        }
+    };
+
     view! {
         {move || match error.get() {
             Some(err) => view! {
@@ -371,6 +405,8 @@ fn DashboardProjectList(
                                 key=|p| p.slug.clone()
                                 children=move |proj| {
                                     let login = user_login_clone.as_ref().clone();
+                                    let delete_slug = proj.slug.clone();
+                                    
                                     view! {
                                         <div class="project-card">
                                             <div class="card-header">
@@ -379,11 +415,16 @@ fn DashboardProjectList(
                                             <div class="card-body">
                                                 <p class="card-meta">"Image: "<code>{proj.image_tag.clone()}</code></p>
                                             </div>
-                                            <div class="card-footer">
+                                            <div class="card-footer" style="display: flex;">
                                                 <A href=format!("/{}/{}", login, proj.slug)
                                                    class="btn-card">
                                                     "View"
                                                 </A>
+                                                <button 
+                                                    class="btn-danger"
+                                                    on:click=move |_| handle_delete(delete_slug.clone())>
+                                                    "Delete"
+                                                </button>
                                             </div>
                                         </div>
                                     }

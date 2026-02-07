@@ -22,7 +22,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pkg-config libssl-dev
 
-      # --- FRONTEND BUILD (Leptos) ---
+      #  FRONTEND BUILD (Leptos) 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -37,11 +37,11 @@ jobs:
       - name: Build Frontend
         working-directory: ./client
         env:
-          API_URL: "https://karthikey.me"
-          WS_URL: "wss://karthikey.me"
+          API_URL: "https://trycli.com"
+          WS_URL: "wss://trycli.com"
         run: trunk build --release
 
-      # --- BACKEND BUILD (Axum) ---
+      #  BACKEND BUILD (Axum) 
       - name: Install Cross
         run: cargo install cross
 
@@ -50,7 +50,7 @@ jobs:
         # and point to the server binary explicitly.
         run: cross build --release --target x86_64-unknown-linux-musl --bin server
 
-      # --- DEPLOYMENT ---
+      #  DEPLOYMENT 
       - name: Prepare Deployment Package
         run: |
           mkdir deploy_package

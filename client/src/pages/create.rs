@@ -9,6 +9,7 @@ use std::cell::RefCell;
 use crate::api::api_base;
 use crate::types::User;
 use crate::components::terminal::TerminalView;
+use crate::components::navbar::Navbar;
 
 // Simple resize divider setup
 fn setup_resize_divider() {
@@ -200,51 +201,40 @@ pub fn CreatePage() -> impl IntoView {
             set_is_publishing.set(false);
         });
     };
-    let navigate = leptos_router::use_navigate();
     view! {
-       <div class="nav">
-            <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
-                if user.get().is_some() {
-                    navigate("/dashboard", Default::default());
-                } else {
-                    navigate("/", Default::default());
-                }
-            }>
-                <span class="logo-icon">">_"</span>
-                <span>"TryCli Studio"</span>
-            </div>
-        <div class="controls">
-            {move || match user.get() {
-                Some(u) => view! {
-                     <div style="display: flex; align-items: center; margin-right: 20px;">
-                        <img src=u.avatar_url 
-                             style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid var(--border);" />
-                        <span style="color: var(--text-muted); font-size: 0.9rem;">
-                            {u.login.clone()}
-                        </span>
-                     </div>
-                     <a href=format!("{}/auth/logout", api_base()) 
-                        class="btn-primary btn-logout" 
-                        rel="external"  
-                        style="margin-right: 12px; text-decoration: none; font-size: 0.8rem;">
-                        "Logout"
-                     </a>
-                     <span style="color: var(--text-muted); font-size: 0.9rem; margin-right: 8px;">"Project Slug:"</span>
-                     <input type="text" class="input-slug" 
-                            on:input=move |ev| {
-                                let value = event_target_value(&ev);
-                                // Only allow alphanumeric characters and hyphens (Docker-safe)
-                                if value.is_empty() || value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-                                    set_slug.set(value);
-                                    set_slug_error.set(None);
-                                } else {
-                                    set_slug_error.set(Some("Only letters, numbers, and hyphens allowed".to_string()));
-                                }
-                            }
-                            prop:value=slug />
-                     {move || slug_error.get().map(|err| view! {
-                         <span style="color: #ef4444; font-size: 0.75rem; margin-left: 8px;">{err}</span>
-                     })}
+        <Navbar>
+            <div class="controls">
+                {move || match user.get() {
+                    Some(u) => view! {
+                        <div style="display: flex; align-items: center; margin-right: 20px;">
+                            <img src=u.avatar_url 
+                                 style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid var(--border);" />
+                            <span style="color: var(--text-muted); font-size: 0.9rem;">
+                                {u.login.clone()}
+                            </span>
+                        </div>
+                        <a href=format!("{}/auth/logout", api_base()) 
+                            class="btn-primary btn-logout" 
+                            rel="external"  
+                            style="margin-right: 12px; text-decoration: none; font-size: 0.8rem;">
+                            "Logout"
+                        </a>
+                        <span style="color: var(--text-muted); font-size: 0.9rem; margin-right: 8px;">"Project Slug:"</span>
+                        <input type="text" class="input-slug" 
+                               on:input=move |ev| {
+                                   let value = event_target_value(&ev);
+                                   let value = value.to_lowercase();
+                                   if value.is_empty() || value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                                       set_slug.set(value);
+                                       set_slug_error.set(None);
+                                   } else {
+                                       set_slug_error.set(Some("Only letters, numbers, and hyphens allowed".to_string()));
+                                   }
+                               }
+                               prop:value=slug />
+                        {move || slug_error.get().map(|err| view! {
+                            <span style="color: #ef4444; font-size: 0.75rem; margin-left: 8px;">{err}</span>
+                        })}
                      <div style="display: flex; align-items: center; gap: 12px; margin-left: 12px;">
                          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; color: var(--text-muted);">
                              <input type="checkbox" 
@@ -267,20 +257,20 @@ pub fn CreatePage() -> impl IntoView {
                              view! { <div></div> }.into_view()
                           }}
                      </div>
-                     <button class="btn-primary btn-success" on:click=on_publish 
-                             prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some() || is_publishing.get()
-                             style=move || if is_publishing.get() { "opacity: 0.6; cursor: not-allowed;" } else { "" }>
-                        {move || if is_publishing.get() { "Publishing..." } else { "Publish" }}
-                     </button>
-                }.into_view(),
-                None => view! {
-                    <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">
-                        "Login with GitHub"
-                    </a>
-                }.into_view()
-            }}
-        </div>
-       </div>
+                        <button class="btn-primary btn-success" on:click=on_publish 
+                                prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some() || is_publishing.get()
+                                style=move || if is_publishing.get() { "opacity: 0.6; cursor: not-allowed;" } else { "" }>
+                            {move || if is_publishing.get() { "Publishing..." } else { "Publish" }}
+                        </button>
+                    }.into_view(),
+                    None => view! {
+                        <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">
+                            "Login with GitHub"
+                        </a>
+                    }.into_view()
+                }}
+            </div>
+        </Navbar>
         {move || match user.get() {
             Some(_) => {
                 let mounted = create_signal(false);

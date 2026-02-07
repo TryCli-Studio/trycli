@@ -1,0 +1,117 @@
+/* ====================================
+   TERMINAL STYLES
+   ==================================== */
+
+.terminal-header {
+    height: 32px;
+    background: #1e1e20;
+    border-bottom: 1px solid #2a2a2c;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.dot.red { background: #ef4444; margin: 4px;}
+.dot.yellow { background: #eab308;}
+.dot.green { background: #22c55e; margin: 4px;}
+
+.terminal-header:hover .dot {
+    opacity: 1;
+}
+
+.terminal-title {
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0.7;
+    margin-left: 8px;
+}
+
+.terminal-body {
+    flex: 1;
+    background: #000;
+    padding: 4px 0 8px 4px;
+    overflow: hidden;
+}
+
+/* Terminal Preview */
+.terminal-preview {
+    width: 100%;
+    max-width: 700px;
+    background: #000;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
+    margin: 0 auto;
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    animation: slideUp 1s ease-out 0.2s backwards;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.terminal-header-preview {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.terminal-title-preview {
+    margin-left: 12px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.terminal-body-preview {
+    padding: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.line {
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.prompt {
+    color: #4ade80;
+    margin-right: 0.75rem;
+}
+
+.cmd {
+    color: #e5e7eb;
+}
+
+.output {
+    color: #6b7280;
+}
+
+.success {
+    color: #22c55e;
+}
+
+.cursor {
+    display: inline-block;
+    width: 8px;
+    height: 18px;
+    background: #e5e7eb;
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}

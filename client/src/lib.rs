@@ -6,6 +6,8 @@ pub mod app;
 pub mod components {
     pub mod terminal;
     pub mod protected;
+    pub mod limit;
+    pub mod navbar;
 }
 pub mod pages {
     pub mod home;
@@ -13,6 +15,8 @@ pub mod pages {
     pub mod create;
     pub mod view;
     pub mod embed;
+    pub mod docs;
+    pub mod blogs;
 }
 
 pub use app::App;
