@@ -162,8 +162,8 @@ pub fn LandingPage() -> impl IntoView {
                         <div class="badge">"Now supporting Alpine, Debian & Fish Shell"</div>
                         
                         <h1 class="hero-title">
-                            "Turn Static Docs into"<br />
-                            <span class="text-gradient">"Live Experiences."</span>
+                            "Interactive CLI Demos"<br />
+                            <span class="text-gradient">"for the Modern Web"</span>
                         </h1>
                         
                         <p class="hero-subtitle">
