@@ -29,7 +29,7 @@ pub fn BlogsPage() -> impl IntoView {
     });
 
     view! {
-        <div style="min-height: 100vh; background: var(--bg-dark); display: flex; flex-direction: column;">
+        <div style="min-height: 100vh; background: var(--bg-dark); display: flex; flex-direction: column; overflow-x: hidden;">
             <Navbar>
                 <div class="nav-actions">
                     // User Profile Picture
@@ -74,7 +74,7 @@ pub fn BlogsPage() -> impl IntoView {
                 </div>
             </Navbar>
 
-            <main style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center;">
+            <main style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; overflow-x: hidden;">
                 <div class="badge">"Under Construction"</div>
 
                 <h1 class="hero-title" style="font-size: 3.5rem; margin-bottom: 1.5rem; line-height: 1.1;">
