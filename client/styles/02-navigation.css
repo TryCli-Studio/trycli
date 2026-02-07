@@ -136,10 +136,14 @@
     transition: right 0.3s ease-in-out;
     max-height: calc(100vh - 60px);
     overflow-y: auto;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .mobile-menu.open {
     right: 0;
+    visibility: visible;
+    pointer-events: auto;
 }
 
 .mobile-menu .menu-item {

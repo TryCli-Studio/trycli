@@ -137,7 +137,7 @@
     position: fixed;
     bottom: 20px;
     right: 20px;
-    z-index: 90;
+    z-index: 1100;
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 50px;
@@ -151,6 +151,7 @@
     align-items: center;
     gap: 8px;
 }
+
 
 .docs-sidebar-toggle:hover {
     background: rgba(255, 255, 255, 0.1);
@@ -413,13 +414,20 @@
 
 /* Mobile Responsive for Docs */
 @media (max-width: 968px) {
+    .docs-container {
+        overflow-x: hidden;
+    }
+
     .docs-layout {
         flex-direction: column;
+        overflow-x: hidden;
     }
 
     /* Show toggle button on mobile */
     .docs-sidebar-toggle {
-        display: flex;
+        display: flex !important;
+        visibility: visible;
+        opacity: 1;
     }
 
     /* Hide sidebar by default on mobile */
