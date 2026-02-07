@@ -136,3 +136,4 @@ async fn logout(session: Session) -> Result<impl IntoResponse, (StatusCode, Stri
 
     Ok(Redirect::to(&redirect_url)) 
 }
+

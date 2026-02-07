@@ -7,7 +7,7 @@ edition = "2021" # Changed from 2024 (standard is 2021)
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# CORE FRAMEWORK - VERSIONS MUST MATCH
+# CORE FRAMEWORK 
 leptos = { version = "0.6", features = ["csr"] }
 leptos_router = { version = "0.6", features = ["csr"] }
 leptos_meta = { version = "0.6", features = ["csr"] } 
@@ -17,7 +17,7 @@ wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["WebSocket", "MessageEvent", "ErrorEvent", "HtmlDivElement", "console", "Window", "Navigator", "Clipboard"] }
 js-sys = "0.3"
 console_error_panic_hook = "0.1.7"
-gloo-net = "0.5"
+gloo-net = "0.5.0"
 
 # DATA & NETWORK
 reqwest = { version = "0.11", features = ["json"] }
