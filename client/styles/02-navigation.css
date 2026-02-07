@@ -46,3 +46,63 @@
     gap: 12px;
     align-items: center;
 }
+
+/* ====================================
+   SHARED NAVBAR COMPONENT
+   ==================================== */
+
+.navbar {
+    position: sticky;
+    top: 0;
+    flex-shrink: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(9, 9, 11, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: white;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+}
+
+.navbar-brand:hover {
+    color: white;
+    opacity: 0.9;
+}
+
+.navbar-logo {
+    height: 32px;
+    width: auto;
+    display: block;
+}
+
+.navbar-text {
+    margin-left: 4px;
+}
+
+.navbar-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+@media (max-width: 768px) {
+    .navbar-text {
+        display: none;
+    }
+    .navbar {
+        padding: 0 1rem;
+    }
+}

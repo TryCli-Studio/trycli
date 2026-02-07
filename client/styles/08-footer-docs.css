@@ -34,6 +34,18 @@
     gap: 0.5rem;
 }
 
+.footer-brand.flex.flex-row {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.footer-logo {
+    height: 28px;
+    width: auto;
+    display: block;
+}
+
 .brand-name {
     font-weight: 800;
     font-size: 1.2rem;
