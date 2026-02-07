@@ -67,7 +67,6 @@ pub fn DashboardPage() -> impl IntoView {
         }
     });
 
-    let navigate = leptos_router::use_navigate();
 
     // Search state and debounce logic
     let (search_input, set_search_input) = create_signal(String::new());
