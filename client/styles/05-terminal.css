@@ -20,9 +20,9 @@
     transition: opacity 0.2s;
 }
 
-.dot.red { background: #ef4444; }
-.dot.yellow { background: #eab308; }
-.dot.green { background: #22c55e; }
+.dot.red { background: #ef4444; margin: 4px;}
+.dot.yellow { background: #eab308;}
+.dot.green { background: #22c55e; margin: 4px;}
 
 .terminal-header:hover .dot {
     opacity: 1;
