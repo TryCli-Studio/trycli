@@ -1,15 +1,18 @@
 use axum::{
     extract::{Path, Query, State},
-    routing::{get, post,delete},
+    routing::{get, post, delete},
     Router, Json,
     http::StatusCode,
+    body::Bytes, // FIX: Import Bytes
 };
 use bollard::container::{CreateContainerOptions, Config};
 use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
-use bollard::image::{CommitContainerOptions, RemoveImageOptions};
+use bollard::exec::{CreateExecOptions, StartExecResults};
+use bollard::image::{CreateImageOptions, RemoveImageOptions}; 
 use tower_sessions::Session;
 use uuid::Uuid;
 use serde::Deserialize;
+use futures::StreamExt; // FIX: Import StreamExt
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest};
 
@@ -22,7 +25,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/my-projects", get(list_user_projects))
         .route("/api/project/:username/:slug", get(get_project))
-        .route("/api/project/:slug", delete(delete_project)) // < New Route
+        .route("/api/project/:slug", delete(delete_project))
         .route("/api/search-projects", get(search_projects))
         .route("/api/publish", post(publish_handler))
 }
@@ -31,7 +34,6 @@ pub async fn list_user_projects(
     State(state): State<AppState>,
     session: Session,
 ) -> Result<Json<Vec<ProjectSummary>>, (StatusCode, String)> {
-    // FIX: Safely handle session retrieval instead of unwrap()
     let user: Option<User> = session.get("user")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
@@ -65,7 +67,6 @@ pub async fn search_projects(
 
     let query_term = format!("%{}%", search.q);
     
-    // Use PostgreSQL ILIKE for case-insensitive fuzzy search
     let projects = sqlx::query_as::<_, ProjectSummary>(
         "SELECT slug, image_tag FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
     )
@@ -86,53 +87,93 @@ pub async fn publish_handler(
     session: Session, 
     Json(payload): Json<PublishRequest>
 ) -> Result<Json<String>, (StatusCode, String)> {
-    // FIX: Map error instead of unwrap
+    
     let user: Option<User> = session.get("user")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
-        
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     // 1. Get Session Info & Verify Ownership
     let (container_name, shell_path) = {
-        let map = state.lock_sessions();
-        match map.get(&payload.container_id) {
-            Some(ctx) => {
-                // STRICT CHECK: Does the user publishing own the container?
-                if ctx.owner_id != Some(user.id) {
-                     return Err((StatusCode::FORBIDDEN, "You do not own this session".to_string()));
-                }
-                // Minimize clone: only clone the strings needed for the commit options
-                (ctx.container_name.clone(), ctx.shell.clone())
-            },
-            None => return Err((StatusCode::BAD_REQUEST, "Session expired".to_string())),
+        let mut map = state.lock_sessions();
+        if let Some(ctx) = map.get_mut(&payload.container_id) {
+            if ctx.owner_id != Some(user.id) {
+                 return Err((StatusCode::FORBIDDEN, "You do not own this session".to_string()));
+            }
+            // Set flag to prevent WebSocket from deleting it
+            ctx.is_publishing = true;
+            (ctx.container_name.clone(), ctx.shell.clone())
+        } else {
+            return Err((StatusCode::BAD_REQUEST, "Session expired".to_string()));
         }
     };
 
     let safe_slug = payload.slug.trim().to_lowercase();
-    let new_image_tag = format!("trycli-studio-project-{}", safe_slug);
+    let new_image_tag = format!("trycli-studio-project-{}:latest", safe_slug);
 
-    // 2. Prepare Commit Options
-    let commit_opts = CommitContainerOptions {
-        container: container_name.clone(),
+    // 2. Prepare Internal Tar Command
+    let tar_cmd = vec![
+        "tar", "-cf", "-", "-C", "/", 
+        "bin", "etc", "home", "lib", "media", "mnt", "opt", "root", "sbin", "srv", "usr", "var"
+    ];
+
+    let exec_config = CreateExecOptions {
+        attach_stdout: Some(true),
+        attach_stderr: Some(true), 
+        cmd: Some(tar_cmd),
+        ..Default::default()
+    };
+
+    // 3. Create Exec Instance
+    let exec = state.docker.create_exec(&container_name, exec_config)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Exec Create Error: {}", e)))?;
+
+    // 4. Start Exec and Capture Stream
+    let mut tar_buffer = Vec::new();
+    
+    if let Ok(StartExecResults::Attached { mut output, .. }) = state.docker.start_exec(&exec.id, None).await {
+        while let Some(msg_result) = output.next().await {
+            match msg_result {
+                Ok(bollard::container::LogOutput::StdOut { message }) => {
+                    tar_buffer.extend_from_slice(&message);
+                },
+                Ok(bollard::container::LogOutput::StdErr { message }) => {
+                    println!("Tar Warning: {}", String::from_utf8_lossy(&message));
+                },
+                Ok(_) => {}, 
+                Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Stream Error: {}", e))),
+            }
+        }
+    } else {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to attach to tar process".to_string()));
+    }
+
+    if tar_buffer.is_empty() {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Snapshot failed: Tar archive was empty".to_string()));
+    }
+
+    // 5. IMPORT the captured tarball
+    let create_opts = CreateImageOptions {
+        from_src: "-".to_string(), 
         repo: new_image_tag.clone(),
         ..Default::default()
     };
 
-    // 3. Prepare Config
-    let config = Config {
-        cmd: Some(vec![shell_path.clone()]),
-        env: Some(vec![format!("SHELL={}", shell_path)]),
-        ..Default::default()
-    };
+    let mut create_image_stream = state.docker.create_image(
+        Some(create_opts),
+        Some(Bytes::from(tar_buffer)), 
+        None
+    );
 
-    // 4. Commit
-    state.docker.commit_container(commit_opts, config)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Commit Error: {}", e)))?;
+    while let Some(result) = create_image_stream.next().await {
+        if let Err(e) = result {
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Import Error: {}", e)));
+        }
+    }
 
-    // 5. Save to Database
-    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6)")
+    // 6. Update Database
+    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (owner_username, slug) DO UPDATE SET image_tag = $2, markdown = $3, shell = $6")
         .bind(&payload.slug)
         .bind(&new_image_tag)
         .bind(&payload.markdown)
@@ -143,7 +184,15 @@ pub async fn publish_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
-    let _ = state.docker.stop_container(&container_name, None).await;
+    // 7. Cleanup
+    {
+        let mut map = state.lock_sessions();
+        map.remove(&payload.container_id);
+    }
+    
+    let _ = state.docker.remove_container(&container_name, Some(
+        bollard::container::RemoveContainerOptions { force: true, ..Default::default() }
+    )).await;
 
     Ok(Json("Published!".to_string()))
 }
@@ -153,11 +202,11 @@ pub async fn get_project(
     State(state): State<AppState>
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
-    // 1. Fetch Project Metadata
+    // Case-insensitive lookup (Fixes 404s due to capitalization)
     let row_result = sqlx::query_as::<_, (String, String, String, i64)>(
-        "SELECT image_tag, markdown, shell, owner_id FROM projects WHERE owner_username = $1 AND slug = $2"
+        "SELECT image_tag, markdown, shell, owner_id FROM projects WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
     )
-    .bind(username).bind(slug)
+    .bind(&username).bind(&slug)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
@@ -167,20 +216,17 @@ pub async fn get_project(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
-    // 2. CHECK CONCURRENCY LIMIT
     {
         let sessions = state.lock_sessions();
         let active_viewers = sessions.values()
             .filter(|ctx| ctx.project_owner_id == Some(owner_id))
             .count();
         
-        // LIMIT: 5 Concurrent Viewers per Publisher
         if active_viewers >= 5 {
             return Err((StatusCode::TOO_MANY_REQUESTS, "Publisher limit reached".to_string()));
         }
     }
 
-    // 3. Spin up Container
     let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
     let session_id = Uuid::new_v4().to_string();
 
@@ -188,6 +234,8 @@ pub async fn get_project(
         image: Some(image_tag),
         tty: Some(true),
         user: Some("root".to_string()), 
+        // FIX: Explicit CMD needed for flattened images
+        cmd: Some(vec![shell.clone()]), 
         env: Some(vec![
             "LANG=C.UTF-8".to_string(), 
             "LC_ALL=C.UTF-8".to_string(),
@@ -196,9 +244,7 @@ pub async fn get_project(
         ]),
         host_config: Some(HostConfig { 
             runtime: Some("runsc".to_string()),
-            // ... Resource limits (same as before) ...
             memory: Some(512 * 1024 * 1024), 
-            memory_swap: Some(512 * 1024 * 1024),
             nano_cpus: Some(250_000_000),
             pids_limit: Some(64),
             network_mode: Some("bridge".to_string()), 
@@ -252,8 +298,8 @@ pub async fn get_project(
             container_name: container_name.clone(), 
             shell,
             owner_id: None,
-            // TRACKING: Associate this session with the project owner
-            project_owner_id: Some(owner_id) 
+            project_owner_id: Some(owner_id),
+            is_publishing: false // <--- INIT FLAG
         }); 
     }
     
@@ -269,15 +315,12 @@ pub async fn delete_project(
     session: Session,
     Path(slug): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    // 1. Authenticate User
     let user: Option<User> = session.get("user")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
         
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
-    // 2. Fetch Image Tag & Verify Ownership (Before Deletion)
-    // We need the image tag to clean up Docker, and we need to verify ownership strictly.
     let record: Option<(String,)> = sqlx::query_as(
         "SELECT image_tag FROM projects WHERE slug = $1 AND owner_id = $2"
     )
@@ -292,7 +335,6 @@ pub async fn delete_project(
         None => return Err((StatusCode::NOT_FOUND, "Project not found or access denied".to_string())),
     };
 
-    // 3. Delete from Database (Source of Truth)
     let db_result = sqlx::query(
         "DELETE FROM projects WHERE slug = $1 AND owner_id = $2"
     )
@@ -303,20 +345,15 @@ pub async fn delete_project(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Delete Error: {}", e)))?;
 
     if db_result.rows_affected() == 0 {
-        // This is unlikely given step 2, but handles race conditions
         return Err((StatusCode::NOT_FOUND, "Project not found".to_string()));
     }
 
-    // 4. Purge Docker Image
-    // We use force=true to kill any active containers using this image.
-    // We map errors but do NOT fail the request if Docker fails (e.g., image already manualy deleted).
     let remove_opts = RemoveImageOptions {
-        force: true, // Force removal even if containers are running
+        force: true,
         noprune: false,
     };
 
     if let Err(e) = state.docker.remove_image(&image_tag, Some(remove_opts), None).await {
-        // Log it, but don't fail the request to the client, as the DB entry is already gone.
         eprintln!("Warning: Failed to remove docker image {}: {}", image_tag, e);
     } else {
         println!("Cleaned up image: {}", image_tag);
