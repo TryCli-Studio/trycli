@@ -153,7 +153,7 @@ pub async fn get_project(
     State(state): State<AppState>
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
-    // FIX: Handle DB errors properly
+    // 1. Fetch Project Metadata
     let row_result = sqlx::query_as::<_, (String, String, String, i64)>(
         "SELECT image_tag, markdown, shell, owner_id FROM projects WHERE owner_username = $1 AND slug = $2"
     )
@@ -167,6 +167,20 @@ pub async fn get_project(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
+    // 2. CHECK CONCURRENCY LIMIT
+    {
+        let sessions = state.lock_sessions();
+        let active_viewers = sessions.values()
+            .filter(|ctx| ctx.project_owner_id == Some(owner_id))
+            .count();
+        
+        // LIMIT: 5 Concurrent Viewers per Publisher
+        if active_viewers >= 5 {
+            return Err((StatusCode::TOO_MANY_REQUESTS, "Publisher limit reached".to_string()));
+        }
+    }
+
+    // 3. Spin up Container
     let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
     let session_id = Uuid::new_v4().to_string();
 
@@ -182,18 +196,12 @@ pub async fn get_project(
         ]),
         host_config: Some(HostConfig { 
             runtime: Some("runsc".to_string()),
-            
-            // 2. RESOURCE LIMITS
-            memory: Some(512 * 1024 * 1024), // 512 MB RAM
-            memory_swap: Some(512 * 1024 * 1024), // No extra swap
-            nano_cpus: Some(250_000_000), // 0.25 CPU Core
-            pids_limit: Some(64), // Prevent Fork Bombs
-            
-            // 3. NETWORK SECURITY
-            // Viewers usually don't need internet. If they do, use "bridge".
+            // ... Resource limits (same as before) ...
+            memory: Some(512 * 1024 * 1024), 
+            memory_swap: Some(512 * 1024 * 1024),
+            nano_cpus: Some(250_000_000),
+            pids_limit: Some(64),
             network_mode: Some("bridge".to_string()), 
-            
-            // 4. KERNEL SECURITY
             cap_drop: Some(vec!["ALL".to_string()]),
             cap_add: Some(vec![
                 "NET_BIND_SERVICE".to_string(),
@@ -202,25 +210,18 @@ pub async fn get_project(
                 "SETGID".to_string(),
                 "DAC_OVERRIDE".to_string()
             ]),
-            
-            // 5. SECURITY OPT
             security_opt: Some(vec!["no-new-privileges".to_string()]),
-            
-            // 6. FILESYSTEM (Immutable Root + Tmpfs)
             readonly_rootfs: Some(true),
             mounts: Some(vec![
                 Mount {
                     target: Some("/root".to_string()), 
-                    // CHANGE 1: Field is named 'typ', not 'type_'
                     typ: Some(MountTypeEnum::TMPFS), 
-                    // CHANGE 2: Struct is named 'MountTmpfsOptions'
                     tmpfs_options: Some(MountTmpfsOptions {
-                        size_bytes: Some(50 * 1024 * 1024), // 50MB
+                        size_bytes: Some(50 * 1024 * 1024), 
                         mode: Some(0o1777),
                     }),
                     ..Default::default()
                 },
-                // Optional /tmp mount
                 Mount {
                     target: Some("/tmp".to_string()),
                     typ: Some(MountTypeEnum::TMPFS),
@@ -231,7 +232,6 @@ pub async fn get_project(
                     ..Default::default()
                 }
             ]),
-
             auto_remove: Some(true), 
             ..Default::default() 
         }),
@@ -251,7 +251,9 @@ pub async fn get_project(
         map.insert(session_id.clone(), SessionContext {
             container_name: container_name.clone(), 
             shell,
-            owner_id: None 
+            owner_id: None,
+            // TRACKING: Associate this session with the project owner
+            project_owner_id: Some(owner_id) 
         }); 
     }
     

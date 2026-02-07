@@ -7,11 +7,14 @@ use std::collections::HashMap;
 pub struct SessionContext {
     pub container_name: String,
     pub shell: String,
-    // If Some(id), only that user can access. If None, it's public (e.g., a Viewer).
+    // If Some(id), only that user can access (Private/Builder). 
+    // If None, it's public (Viewer).
     pub owner_id: Option<i64>, 
+    // NEW: The ID of the user who PUBLISHED this project (or is building it).
+    // This allows us to count total active slots per publisher.
+    pub project_owner_id: Option<i64>,
 }
 
-// Update the type definition
 pub type SessionMap = Arc<Mutex<HashMap<String, SessionContext>>>;
 
 #[derive(Clone)]

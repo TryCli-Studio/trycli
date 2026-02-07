@@ -65,7 +65,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, u
             map.insert(session_id.clone(), SessionContext {
                 container_name: "INITIALIZING".to_string(), // Marker value
                 shell: "".to_string(),
-                owner_id: user_id
+                owner_id: user_id,
+                // NEW: If this is a builder session (wizard), the user IS the project owner.
+                project_owner_id: user_id 
             });
             true
         }
@@ -246,7 +248,8 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
                 map.insert(session_id.clone(), SessionContext {
                     container_name: container_name.clone(),
                     shell: final_shell.to_string(),
-                    owner_id: user_id 
+                    owner_id: user_id,
+                    project_owner_id: user_id // Ensure we track ownership here too
                 });
             }
             let limit_config = "Acquire::http::Dl-Limit \"500\"; Acquire::https::Dl-Limit \"500\";";

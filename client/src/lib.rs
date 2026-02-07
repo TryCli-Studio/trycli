@@ -6,6 +6,7 @@ pub mod app;
 pub mod components {
     pub mod terminal;
     pub mod protected;
+    pub mod limit;
 }
 pub mod pages {
     pub mod home;

@@ -3,6 +3,16 @@ use leptos_router::*;
 use gloo_net::http::Request;
 use crate::api::api_base;
 use crate::components::terminal::TerminalView;
+use crate::components::limit::LimitReached;
+use serde::{Serialize, Deserialize};
+
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+enum ProjectState {
+    Loading,
+    NotFound,
+    LimitReached,
+    Ready(serde_json::Value),
+}
 
 #[component]
 pub fn EmbedPage() -> impl IntoView {
@@ -11,15 +21,30 @@ pub fn EmbedPage() -> impl IntoView {
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();
     let (started, set_started) = create_signal(false);
 
+    // Resource now returns ProjectState
     let project_data = create_resource(
         move || (started.get(), username(), slug()), 
         |(is_started, u, s)| async move {
-            if !is_started { return None; } 
+            if !is_started { return ProjectState::Loading; } 
+            
             let url = format!("{}/api/project/{}/{}", api_base(), u, s);
             let req = Request::get(&url).send().await;
+            
             match req {
-                Ok(resp) => resp.json::<serde_json::Value>().await.ok(),
-                Err(_) => None
+                Ok(resp) => {
+                    if resp.status() == 429 {
+                        ProjectState::LimitReached
+                    } else if resp.ok() {
+                        if let Ok(json) = resp.json::<serde_json::Value>().await {
+                            ProjectState::Ready(json)
+                        } else {
+                            ProjectState::NotFound
+                        }
+                    } else {
+                        ProjectState::NotFound
+                    }
+                },
+                Err(_) => ProjectState::NotFound
             }
         }
     );
@@ -44,15 +69,24 @@ pub fn EmbedPage() -> impl IntoView {
             } else {
                 view! {}.into_view()
             }}
+            
             {move || match project_data.get() {
-                Some(Some(data)) => {
+                Some(ProjectState::Ready(data)) => {
                     let cid = data["container_id"].as_str().unwrap_or_default().to_string();
                     view! { <TerminalView container_id=cid /> }.into_view()
                 },
-                Some(None) => view! { <div style="color:red; padding:20px;">"Project not found"</div> }.into_view(),
-                None => {
+                Some(ProjectState::LimitReached) => {
+                     // Inside embed, we remove the "Start" overlay (already gone via if logic) and show Limit
+                     view! { <LimitReached /> }.into_view()
+                },
+                Some(ProjectState::NotFound) => view! { <div style="color:red; padding:20px;">"Project not found"</div> }.into_view(),
+                Some(ProjectState::Loading) | None => {
                     if started.get() {
-                        view! { <div style="color: #666; padding: 20px;">"Booting Container..."</div> }.into_view()
+                        view! { 
+                            <div style="display:flex; justify-content:center; align-items:center; height:100%;">
+                                <div class="spinner"></div>
+                            </div> 
+                        }.into_view()
                     } else {
                         view! {}.into_view()
                     }
