@@ -67,7 +67,6 @@ pub fn DashboardPage() -> impl IntoView {
         }
     });
 
-
     // Search state and debounce logic
     let (search_input, set_search_input) = create_signal(String::new());
     let (search_results, set_search_results) = create_signal(Vec::<ProjectSummary>::new());

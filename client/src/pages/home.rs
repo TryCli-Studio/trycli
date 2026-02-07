@@ -30,9 +30,7 @@ pub fn LandingPage() -> impl IntoView {
 
     let auth_github_url = move || format!("{}/auth/github", api_base());
 
-    //  2. STRUCTURED DATA (JSON-LD) 
-    // Defines the site as a 'SoftwareApplication' for search engines[cite: 52].
-    // This allows Google to display "Free", "Web/WASM", and feature lists in snippets[cite: 53].
+    // 2. STRUCTURED DATA (JSON-LD)
     let schema_json = r#"{
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
@@ -47,24 +45,18 @@ pub fn LandingPage() -> impl IntoView {
         "featureList": "Docker Integration, In-Browser Terminal, Markdown Guides"
     }"#;
 
-
-
     view! {
         <>
-            //  4. SEO METADATA 
-            // Explicit Title and Description for correct indexing[cite: 22].
+            // 4. SEO METADATA
             <Title text="TryCLI - Interactive CLI Demos & Embeds" />
             <Meta name="description" content="Host, share, and embed fully interactive CLI demos directly in the browser. Think Replit, but purpose-built for command-line applications." />
             
-            // Canonical Link (Essential for preventing duplicate content penalties)[cite: 33].
             <Link rel="canonical" href="https://trycli.com" />
 
-            // JSON-LD Script Injection via leptos_meta[cite: 54].
             <Script type_="application/ld+json">
                 {schema_json}
             </Script>
             
-            // Open Graph & Twitter Cards (Social Sharing)[cite: 45].
             <Meta property="og:type" content="website" />
             <Meta property="og:title" content="TryCLI - Interactive CLI Demos & Embeds" />
             <Meta property="og:description" content="Instantly spin up isolated Docker containers and share your CLI projects with a single link." />
@@ -74,33 +66,54 @@ pub fn LandingPage() -> impl IntoView {
             <Meta name="twitter:title" content="TryCLI - Interactive CLI Demos" />
             <Meta name="twitter:description" content="Host, share, and embed fully interactive CLI demos directly in the browser." />
         
-            //  MAIN CONTENT 
+            // MAIN CONTENT
             <div class="landing-container">
                 
                 <Navbar>
                     <div class="nav-actions">
                         {move || {
-                            if auth_checked.get() && user.get().is_some() {
-                                view! {
-                                    <A href="/dashboard" class="btn-primary btn-lg">"Launch Dashboard"</A>
-                                }.into_view()
+                            if auth_checked.get() {
+                                if let Some(u) = user.get() {
+                                    // LOGGED IN: Show Profile + Dashboard Button
+                                    view! {
+                                        <div style="display: flex; align-items: center; gap: 20px;">
+                                            <div style="display: flex; align-items: center; gap: 12px;">
+                                                <img src=u.avatar_url 
+                                                     style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" 
+                                                     alt="User Avatar" />
+                                                <span style="color: var(--text-main); font-weight: 500; font-size: 0.95rem;">
+                                                    {u.login}
+                                                </span>
+                                            </div>
+                                            <A href="/dashboard" class="btn-primary">"Dashboard"</A>
+                                        </div>
+                                    }.into_view()
+                                } else {
+                                    // LOGGED OUT: Single "Login with GitHub" Button
+                                    let url = auth_github_url();
+                                    view! {
+                                        <a href=url class="btn-primary" rel="external" style="display: flex; align-items: center; gap: 8px;">
+                                            // GitHub Logo SVG
+                                            <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
+                                                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                                            </svg>
+                                            "Login with GitHub"
+                                        </a>
+                                    }.into_view()
+                                }
                             } else {
-                                let url = auth_github_url();
-                                view! {
-                                    <a href=url.clone() class="btn-nav" rel="external">"Login"</a>
-                                    <a href=url class="btn-primary btn-lg" rel="external">"Launch Dashboard"</a>
-                                }.into_view()
+                                // Loading Spinner
+                                view! { <div class="spinner" style="width: 20px; height: 20px; border-width: 2px;"></div> }.into_view()
                             }
                         }}
                     </div>
                 </Navbar>
 
-                // Hero Section: Uses semantic <main>[cite: 73].
+                // Hero Section
                 <main class="hero-main">
                     <div class="hero-content">
                         <div class="badge">"Run Anywhere • Embed Everywhere"</div>
                         
-                        // H1 contains primary keywords[cite: 75].
                         <h1 class="hero-title">
                             "Interactive CLI Demos"<br />
                             <span class="text-gradient">"for the Modern Web."</span>
@@ -117,15 +130,17 @@ pub fn LandingPage() -> impl IntoView {
                                 if auth_checked.get() && user.get().is_some() {
                                     view! {
                                         <A href="/dashboard" class="btn-primary btn-hero">
-                                            "Start Building"
+                                            "Go to Dashboard"
                                             <span class="arrow">"→"</span>
                                         </A>
                                     }.into_view()
                                 } else {
                                     view! {
-                                        <a href=url class="btn-primary btn-hero" rel="external">
-                                            "Start Building"
-                                            <span class="arrow">"→"</span>
+                                        <a href=url class="btn-primary btn-hero" rel="external" style="display: flex; align-items: center; gap: 10px;">
+                                            <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor" style="color: black;">
+                                                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                                            </svg>
+                                            "Login with GitHub"
                                         </a>
                                     }.into_view()
                                 }
@@ -135,10 +150,8 @@ pub fn LandingPage() -> impl IntoView {
                             </A>
                         </div>
 
-                        //  5. TERMINAL PREVIEW 
-                        // Added role="log" so search engines treat this as code output.
+                        // TERMINAL PREVIEW 
                         <div class="terminal-preview" role="log" aria-label="Terminal Preview Demo">
-                            // Hidden decorative elements to reduce screen reader noise[cite: 70].
                             <div class="terminal-header-preview" aria-hidden="true">
                                 <div class="dot red"></div>
                                 <div class="dot yellow"></div>
@@ -159,7 +172,7 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </main>
 
-                //  FEATURES 
+                // FEATURES 
                 <section class="section-features" style="background: rgba(255,255,255,0.01);">
                     <div class="container-narrow">
                         <h2 class="section-title">"What Is TryCLI?"</h2>
@@ -202,7 +215,7 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </section>
 
-                //  USE CASES 
+                // USE CASES 
                 <section class="section-usage">
                     <div class="container-narrow">
                         <h2 class="section-title">"Use Cases"</h2>
@@ -224,7 +237,7 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </section>
 
-                //  FINAL CTA 
+                // FINAL CTA 
                 <section class="section-usage" style="border-bottom: none;">
                     <div class="container-narrow">
                         <div class="final-cta">
@@ -241,7 +254,14 @@ pub fn LandingPage() -> impl IntoView {
                                     if auth_checked.get() && user.get().is_some() {
                                         view! { <A href="/dashboard" class="btn-primary btn-lg">"Start Building Now"</A> }.into_view()
                                     } else {
-                                        view! { <a href=url class="btn-primary btn-lg" rel="external">"Start Building Now"</a> }.into_view()
+                                        view! { 
+                                            <a href=url class="btn-primary btn-lg" rel="external" style="display: flex; align-items: center; gap: 10px;">
+                                                <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor" style="color: black;">
+                                                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                                                </svg>
+                                                "Login with GitHub"
+                                            </a> 
+                                        }.into_view()
                                     }
                                 }}
                             </div>
@@ -249,7 +269,7 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </section>
 
-                //  FOOTER 
+                // FOOTER 
                 <footer class="landing-footer">
                     <div class="footer-container">
                         <div class="footer-top">
@@ -258,7 +278,8 @@ pub fn LandingPage() -> impl IntoView {
                                 <span class="brand-name">"TryCLI"</span>
                             </div>
                             <div class="footer-links">
-                                <a href="https://github.com/TryCli-Studio" target="_blank" rel="noopener noreferrer">"GitHub"</a>
+                                <a href="https://ko-fi.com/V7V21TRPL5" target="_blank" rel="noopener noreferrer">"Support us"</a>
+                                <a href="/blogs" rel="noopener noreferrer">"Blogs"</a>
                                 <a href="/docs" rel="noopener noreferrer">"Documentation"</a>
                                 <a href="https://x.com/TryCliStudio" rel="noopener noreferrer">"Twitter"</a>
                             </div>
