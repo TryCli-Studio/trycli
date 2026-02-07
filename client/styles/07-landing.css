@@ -134,11 +134,13 @@
     margin-right: auto;
 }
 
-/* Features Grid */
 .features-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center; /* This centers the rows horizontally */
     gap: 24px;
+    max-width: 1200px;
+    margin: 0 auto; /* Ensure the container itself is centered */
 }
 
 .feature-card {
@@ -152,6 +154,8 @@
     align-items: flex-start;
     position: relative;
     overflow: hidden;
+    flex: 1 1 300px;
+    max-width: 380px;
 }
 
 /* Refined Hover Effect */

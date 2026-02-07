@@ -28,7 +28,7 @@ pub fn DashboardPage() -> impl IntoView {
             Ok(resp) => {
                 if resp.ok() {
                     if let Ok(u) = resp.json::<User>().await {
-                        web_sys::console::log_1(&JsValue::from_str(&format!("User authenticated: {}", u.login)));
+                        // user authenticated
                         set_user.set(Some(u.clone()));
 
                         let proj_url = format!("{}/api/my-projects", api_base());
@@ -44,14 +44,14 @@ pub fn DashboardPage() -> impl IntoView {
                                         set_projects.set(projs);
                                         set_error.set(None);
                                     } else {
-                                        set_error.set(Some("Failed to parse projects".to_string()));
+                                        set_error.set(Some("Failed to parse project list".to_string()));
                                     }
                                 } else {
-                                    set_error.set(Some("Failed to fetch projects".to_string()));
+                                    set_error.set(Some("Failed to fetch deployments".to_string()));
                                 }
                             }
                             Err(_) => {
-                                set_error.set(Some("Network error".to_string()));
+                                set_error.set(Some("Network error connecting to API".to_string()));
                             }
                         }
                         set_loading.set(false);
@@ -62,7 +62,7 @@ pub fn DashboardPage() -> impl IntoView {
             }
             Err(_) => {
                 set_loading.set(false);
-                set_error.set(Some("Failed to authenticate".to_string()));
+                set_error.set(Some("Authentication check failed".to_string()));
             }
         }
     });
@@ -84,29 +84,22 @@ pub fn DashboardPage() -> impl IntoView {
         spawn_local(async move {
             let encoded_query = js_sys::encode_uri_component(&query_clone).to_string();
             let search_url = format!("{}/api/search-projects?q={}", api_base(), encoded_query);
-            web_sys::console::log_1(&JsValue::from_str(&format!("Searching for: {}", search_url)));
+            
             match Request::get(&search_url)
                 .credentials(RequestCredentials::Include)
                 .send()
                 .await
             {
                 Ok(resp) => {
-                    web_sys::console::log_1(&JsValue::from_str(&format!("Search response status: {}", resp.status())));
                     if resp.ok() {
                         if let Ok(results) = resp.json::<Vec<ProjectSummary>>().await {
-                            web_sys::console::log_1(&JsValue::from_str(&format!("Found {} results", results.len())));
                             set_search_results.set(results);
                             set_show_suggestions.set(true);
-                        } else {
-                            web_sys::console::log_1(&JsValue::from_str("Failed to parse search results JSON"));
                         }
-                    } else {
-                        let err_text = resp.text().await.unwrap_or_default();
-                        web_sys::console::log_1(&JsValue::from_str(&format!("Search failed: {}", err_text)));
                     }
                 }
                 Err(e) => {
-                    web_sys::console::log_1(&JsValue::from_str(&format!("Search network error: {:?}", e)));
+                    web_sys::console::log_1(&JsValue::from_str(&format!("Search error: {:?}", e)));
                 }
             }
         });
@@ -151,10 +144,10 @@ pub fn DashboardPage() -> impl IntoView {
                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                         </div>
                         <a href=format!("{}/auth/logout", api_base()) 
-                            class="btn-primary btn-logout" 
-                            rel="external"  
-                            style="text-decoration: none; font-size: 0.9rem;">
-                            "Logout"
+                           class="btn-primary btn-logout" 
+                           rel="external"  
+                           style="text-decoration: none; font-size: 0.9rem;">
+                           "Logout"
                         </a>
                     }.into_view(),
                     None => view! {
@@ -175,8 +168,8 @@ pub fn DashboardPage() -> impl IntoView {
                             <div class="dashboard-container">
                                 <div class="dashboard-hero">
                                     <div class="hero-content">
-                                        <h1 class="hero-title">"Dream it, Build it."</h1>
-                                        <p class="hero-subtitle">"Create and manage your interactive CLI projects"</p>
+                                        <h1 class="hero-title">"Workspace Overview"</h1>
+                                        <p class="hero-subtitle">"Manage your interactive sandboxes, monitor deployments, and publish new snapshots."</p>
                                         <DashboardSearch 
                                             search_input=search_input
                                             set_search_input=set_search_input
@@ -191,9 +184,9 @@ pub fn DashboardPage() -> impl IntoView {
 
                                 <div class="dashboard-section">
                                    <div class="section-header">
-                                        <h2>"Your Projects"</h2>
+                                        <h2>"Active Deployments"</h2>
                                         <A href="/new" class="btn-primary">
-                                            "+ New Project"
+                                            "+ Initialize Environment"
                                         </A>
                                     </div>
 
@@ -211,8 +204,8 @@ pub fn DashboardPage() -> impl IntoView {
                     },
                     (None, false) => view! {
                         <div style="display: flex; height: calc(100vh - 60px); justify-content: center; align-items: center; flex-direction: column; gap: 20px;">
-                            <h2 style="color: var(--text-main);">"Welcome to TryCli Studio"</h2>
-                            <p style="color: var(--text-muted);">"Please sign in to start creating interactive demos."</p>
+                            <h2 style="color: var(--text-main);">"TryCli Studio Session Expired"</h2>
+                            <p style="color: var(--text-muted);">"Please authenticate via GitHub to access your workspace."</p>
                         </div>
                     }.into_view(),
                     _ => view! {
@@ -241,7 +234,7 @@ fn DashboardSearch(
         <div class="input-hero-wrapper" style="position: relative;">
             <input type="text" 
                    class="input-hero" 
-                   placeholder="Search or create a new project..."
+                   placeholder="Search repositories or initialize a new sandbox..."
                    value=search_input.get()
                    on:input=handle_search_input
                    on:focus=move |_| {
@@ -265,22 +258,22 @@ fn DashboardSearch(
                     let navigate_fn = nav.clone();
                     
                     view! {
-                        <div style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-main); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 10;">
+                        <div style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-panel); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 10; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);">
                             {if results.is_empty() && !input_val.is_empty() {
                                 let input_val_copy = input_val.clone();
                                 let input_val_display = input_val.clone();
                                 view! {
                                     <div style="padding: 16px; color: var(--text-muted);">
-                                        <p style="margin: 0 0 8px 0;">"No project found."</p>
+                                        <p style="margin: 0 0 8px 0; font-size: 0.9rem;">"No existing environment found."</p>
                                         <button class="btn-primary" 
                                                 style="font-size: 0.9rem; padding: 8px 12px; width: 100%; text-align: left;"
                                                 on:click=move |_| {
-                                            set_show_suggestions.set(false);
-                                            set_search_input.set(String::new());
-                                            let encoded_name = js_sys::encode_uri_component(&input_val_copy).to_string();
-                                            navigate_fn(&format!("/new?name={}", encoded_name), Default::default());
-                                        }>
-                                            {format!("Create project '{}'?", input_val_display)}
+                                                    set_show_suggestions.set(false);
+                                                    set_search_input.set(String::new());
+                                                    let encoded_name = js_sys::encode_uri_component(&input_val_copy).to_string();
+                                                    navigate_fn(&format!("/new?name={}", encoded_name), Default::default());
+                                                }>
+                                                {format!("Initialize repository '{}'?", input_val_display)}
                                         </button>
                                     </div>
                                 }.into_view()
@@ -296,13 +289,13 @@ fn DashboardSearch(
                                             let proj_image = proj.image_tag.clone();
                                             view! {
                                                 <a href=format!("/{}/{}", login, proj_slug.clone())
-                                                   style="display: block; padding: 12px 16px; color: var(--text-main); text-decoration: none; border-bottom: 1px solid var(--bg-dark); cursor: pointer;"
+                                                   style="display: block; padding: 12px 16px; color: var(--text-main); text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; transition: background 0.2s;"
                                                    on:click=move |_| {
                                                        set_show_suggestions.set(false);
                                                        set_search_input.set(String::new());
                                                    }>
-                                                    <div style="font-weight: 500;">{proj_slug}</div>
-                                                    <div style="font-size: 0.85rem; color: var(--text-muted);">{proj_image}</div>
+                                                    <div style="font-weight: 600; font-size: 0.95rem;">{proj_slug}</div>
+                                                    <div style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;">{proj_image}</div>
                                                 </a>
                                             }
                                         }
@@ -326,18 +319,17 @@ fn DashboardProjectList(
     set_error: WriteSignal<Option<String>>,
     set_loading: WriteSignal<bool>,
     projects: ReadSignal<Vec<ProjectSummary>>,
-    set_projects: WriteSignal<Vec<ProjectSummary>>, // < Receive Setter
+    set_projects: WriteSignal<Vec<ProjectSummary>>, 
     user_login: Rc<String>,
 ) -> impl IntoView {
 
     // Handler for deletion logic
     let handle_delete = move |slug: String| {
         let prompt_text = format!(
-            "⚠️ DESTRUCTIVE ACTION\n\nThis will permanently delete the project '{}' and its Docker image.\n\nPlease type the project name to confirm:", 
+            "⚠️ TERMINATE ENVIRONMENT\n\nThis will permanently delete the snapshot '{}'. This action cannot be undone.\n\nPlease type the environment name to confirm:", 
             slug
         );
 
-        // FIX: Match against Ok(Some(input)) to handle the Result wrapper
         if let Ok(Some(input)) = window().prompt_with_message(&prompt_text) {
             if input == slug {
                 let slug_clone = slug.clone();
@@ -356,9 +348,9 @@ fn DashboardProjectList(
                                 set_projects.update(|list| {
                                     list.retain(|p| p.slug != slug_clone);
                                 });
-                                let _ = window().alert_with_message("Project and Docker image deleted.");
+                                let _ = window().alert_with_message("Environment terminated and image removed.");
                             } else {
-                                let _ = window().alert_with_message("Failed to delete project. Check server logs.");
+                                let _ = window().alert_with_message("Failed to terminate environment.");
                             }
                         },
                         Err(_) => {
@@ -367,7 +359,7 @@ fn DashboardProjectList(
                     }
                 });
             } else {
-                let _ = window().alert_with_message("Project name mismatch. Deletion cancelled.");
+                let _ = window().alert_with_message("Name mismatch. Termination cancelled.");
             }
         }
     };
@@ -381,7 +373,7 @@ fn DashboardProjectList(
                         set_error.set(None);
                         set_loading.set(true);
                     }>
-                        "Retry"
+                        "Retry Connection"
                     </button>
                 </div>
             }.into_view(),
@@ -390,9 +382,9 @@ fn DashboardProjectList(
                 if proj_list.is_empty() {
                     view! {
                         <div class="empty-state">
-                            <p class="empty-message">"No projects yet. Create your first one!"</p>
+                            <p class="empty-message">"No active environments. Initialize a new sandbox to start building."</p>
                             <A href="/new" class="btn-primary">
-                                "Create Project"
+                                "Initialize Environment"
                             </A>
                         </div>
                     }.into_view()
@@ -413,17 +405,17 @@ fn DashboardProjectList(
                                                 <h3 class="card-title">{proj.slug.clone()}</h3>
                                             </div>
                                             <div class="card-body">
-                                                <p class="card-meta">"Image: "<code>{proj.image_tag.clone()}</code></p>
+                                                <p class="card-meta">"Base Image: "<code>{proj.image_tag.clone()}</code></p>
                                             </div>
                                             <div class="card-footer" style="display: flex;">
                                                 <A href=format!("/{}/{}", login, proj.slug)
                                                    class="btn-card">
-                                                    "View"
+                                                    "Launch Studio"
                                                 </A>
                                                 <button 
                                                     class="btn-danger"
                                                     on:click=move |_| handle_delete(delete_slug.clone())>
-                                                    "Delete"
+                                                    "Terminate"
                                                 </button>
                                             </div>
                                         </div>
