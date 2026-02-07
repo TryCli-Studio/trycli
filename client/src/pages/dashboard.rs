@@ -410,7 +410,7 @@ fn DashboardProjectList(
                                             <div class="card-footer" style="display: flex;">
                                                 <A href=format!("/{}/{}", login, proj.slug)
                                                    class="btn-card">
-                                                    "Launch Studio"
+                                                    "Launch Viewer"
                                                 </A>
                                                 <button 
                                                     class="btn-danger"
