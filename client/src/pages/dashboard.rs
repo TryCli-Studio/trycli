@@ -7,6 +7,7 @@ use wasm_bindgen::prelude::*;
 use std::rc::Rc;
 use crate::types::{User, ProjectSummary};
 use crate::api::api_base;
+use crate::components::navbar::Navbar;
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
@@ -142,17 +143,7 @@ pub fn DashboardPage() -> impl IntoView {
     };
 
     view! {
-        <div class="nav">
-            <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
-                if user.get().is_some() {
-                    navigate("/dashboard", Default::default());
-                } else {
-                    navigate("/", Default::default());
-                }
-            }>
-                <span class="logo-icon">">_"</span>
-                <span>"TryCli Studio"</span>
-            </div>
+        <Navbar>
             <div class="controls">
                 {move || match user.get() {
                     Some(u) => view! {
@@ -174,7 +165,7 @@ pub fn DashboardPage() -> impl IntoView {
                     }.into_view()
                 }}
             </div>
-        </div>
+        </Navbar>
 
         {
             let user_signal = user.clone();

@@ -1,10 +1,35 @@
 use leptos::*;
 use leptos_router::A;
 use leptos_meta::{Title, Meta, Link, Script};
-
+use gloo_net::http::Request;
+use web_sys::RequestCredentials;
+use crate::components::navbar::Navbar;
+use crate::api::api_base;
+use crate::types::User;
 
 #[component]
 pub fn LandingPage() -> impl IntoView {
+    let (user, set_user) = create_signal(None::<User>);
+    let (auth_checked, set_auth_checked) = create_signal(false);
+
+    create_resource(|| (), move |_| async move {
+        let url = format!("{}/api/me", api_base());
+        if let Ok(resp) = Request::get(&url)
+            .credentials(RequestCredentials::Include)
+            .send()
+            .await
+        {
+            if resp.ok() {
+                if let Ok(u) = resp.json::<User>().await {
+                    set_user.set(Some(u));
+                }
+            }
+        }
+        set_auth_checked.set(true);
+    });
+
+    let auth_github_url = move || format!("{}/auth/github", api_base());
+
     //  2. STRUCTURED DATA (JSON-LD) 
     // Defines the site as a 'SoftwareApplication' for search engines[cite: 52].
     // This allows Google to display "Free", "Web/WASM", and feature lists in snippets[cite: 53].
@@ -52,17 +77,23 @@ pub fn LandingPage() -> impl IntoView {
             //  MAIN CONTENT 
             <div class="landing-container">
                 
-                // Navigation: Added aria-label for accessibility[cite: 75].
-                <nav class="landing-nav" aria-label="Main Navigation">
-                    <div class="nav-brand">
-                        <span class="logo-icon">">_"</span>
-                        <span class="logo-text">"TryCLI"</span>
-                    </div>
+                <Navbar>
                     <div class="nav-actions">
-                        <A href="/dashboard" class="btn-nav">"Login"</A>
-                        <A href="/dashboard" class="btn-primary btn-lg">"Launch Dashboard"</A>
+                        {move || {
+                            if auth_checked.get() && user.get().is_some() {
+                                view! {
+                                    <A href="/dashboard" class="btn-primary btn-lg">"Launch Dashboard"</A>
+                                }.into_view()
+                            } else {
+                                let url = auth_github_url();
+                                view! {
+                                    <a href=url.clone() class="btn-nav" rel="external">"Login"</a>
+                                    <a href=url class="btn-primary btn-lg" rel="external">"Launch Dashboard"</a>
+                                }.into_view()
+                            }
+                        }}
                     </div>
-                </nav>
+                </Navbar>
 
                 // Hero Section: Uses semantic <main>[cite: 73].
                 <main class="hero-main">
@@ -81,12 +112,24 @@ pub fn LandingPage() -> impl IntoView {
                         </p>
 
                         <div class="cta-group">
-                            <A href="/dashboard" class="btn-primary btn-hero">
-                                "Start Building"
-                                <span class="arrow">"→"</span>
-                            </A>
-                            
-                            // Docs button - navigate to documentation page.
+                            {move || {
+                                let url = auth_github_url();
+                                if auth_checked.get() && user.get().is_some() {
+                                    view! {
+                                        <A href="/dashboard" class="btn-primary btn-hero">
+                                            "Start Building"
+                                            <span class="arrow">"→"</span>
+                                        </A>
+                                    }.into_view()
+                                } else {
+                                    view! {
+                                        <a href=url class="btn-primary btn-hero" rel="external">
+                                            "Start Building"
+                                            <span class="arrow">"→"</span>
+                                        </a>
+                                    }.into_view()
+                                }
+                            }}
                             <A href="/docs" class="btn-secondary">
                                 "View Docs"
                             </A>
@@ -193,7 +236,14 @@ pub fn LandingPage() -> impl IntoView {
                                 "TryCLI removes that barrier by turning CLI tools into embeddable, interactive experiences that run instantly in the browser."
                             </p>
                             <div style="margin-top: 2rem;">
-                                <A href="/dashboard" class="btn-primary btn-lg">"Start Building Now"</A>
+                                {move || {
+                                    let url = auth_github_url();
+                                    if auth_checked.get() && user.get().is_some() {
+                                        view! { <A href="/dashboard" class="btn-primary btn-lg">"Start Building Now"</A> }.into_view()
+                                    } else {
+                                        view! { <a href=url class="btn-primary btn-lg" rel="external">"Start Building Now"</a> }.into_view()
+                                    }
+                                }}
                             </div>
                         </div>
                     </div>
@@ -204,7 +254,7 @@ pub fn LandingPage() -> impl IntoView {
                     <div class="footer-container">
                         <div class="footer-top">
                             <div class="footer-brand flex flex-row">
-                                <span class="logo-icon">">_"</span>
+                                <img src="/octopus_terminal_opt.png" alt="TryCLI" class="footer-logo" />
                                 <span class="brand-name">"TryCLI"</span>
                             </div>
                             <div class="footer-links">
