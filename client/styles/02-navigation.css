@@ -98,11 +98,87 @@
     align-items: center;
 }
 
+/* Hamburger Menu Button */
+.hamburger-menu {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    align-items: center;
+    justify-content: center;
+}
+
+.hamburger-menu:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.hamburger-menu svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* Mobile Menu Dropdown */
+.mobile-menu {
+    position: fixed;
+    top: 60px;
+    right: -100%;
+    width: 280px;
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.3);
+    z-index: 99;
+    display: flex;
+    flex-direction: column;
+    transition: right 0.3s ease-in-out;
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
+}
+
+.mobile-menu.open {
+    right: 0;
+}
+
+.mobile-menu .menu-item {
+    padding: 16px 24px;
+    color: var(--text-main);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+    display: block;
+}
+
+.mobile-menu .menu-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #3b82f6;
+}
+
+.mobile-menu .menu-item:last-child {
+    border-bottom: none;
+}
+
 @media (max-width: 768px) {
     .navbar-text {
         display: none;
     }
     .navbar {
         padding: 0 1rem;
+    }
+    .nav-actions > div > div:first-child > span {
+        display: none;
+    }
+
+    /* Hide desktop buttons on mobile */
+    .btn-dashboard,
+    .btn-login {
+        display: none !important;
+    }
+
+    /* Show hamburger menu on mobile */
+    .hamburger-menu {
+        display: flex !important;
     }
 }
