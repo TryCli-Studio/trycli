@@ -10,9 +10,10 @@ pub struct SessionContext {
     // If Some(id), only that user can access (Private/Builder). 
     // If None, it's public (Viewer).
     pub owner_id: Option<i64>, 
-    // NEW: The ID of the user who PUBLISHED this project (or is building it).
-    // This allows us to count total active slots per publisher.
+    // The ID of the user who PUBLISHED this project.
     pub project_owner_id: Option<i64>,
+    // NEW: Signals that the Publish Handler has taken over responsibility
+    pub is_publishing: bool, 
 }
 
 pub type SessionMap = Arc<Mutex<HashMap<String, SessionContext>>>;
