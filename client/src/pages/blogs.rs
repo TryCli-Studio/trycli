@@ -5,18 +5,30 @@ use crate::components::navbar::Navbar;
 #[component]
 pub fn BlogsPage() -> impl IntoView {
     view! {
-         <Navbar>
-                <A href="/" class="btn-nav">"Home"</A>
-                <A href="/dashboard" class="btn-primary">"Dashboard"</A>
-            </Navbar>
-            <div class="container mx-auto px-4 py-8">
-                <h1 class="text-4xl font-bold mb-6">"TryCLI Blogs"</h1>
-                <p class="text-lg mb-4">"Welcome to the TryCLI blog section! Here you'll find the latest news, updates, and insights about TryCLI, as well as tips and tricks for getting the most out of our platform."</p>
-                <p class="text-lg mb-4">"Stay tuned for upcoming blog posts where we'll share exciting developments, feature releases, and behind-the-scenes looks at how we're building TryCLI. In the meantime, feel free to explore our documentation and join our community on Twitter and Discord for the latest updates!"</p>
-                <div class="mt-6">  
-                    <A href="/docs" class="text-blue-500 hover:underline">"Explore Documentation"</A>
+        <div style="min-height: 100vh; background: var(--bg-dark); display: flex; flex-direction: column;">
+            <Navbar>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <A href="/" class="btn-nav">"Home"</A>
+                    <A href="/dashboard" class="btn-primary">"Dashboard"</A>
                 </div>
-            </div>
-        
+            </Navbar>
+
+            <main style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center;">
+                <div class="badge">"Under Construction"</div>
+
+                <h1 class="hero-title" style="font-size: 3.5rem; margin-bottom: 1.5rem; line-height: 1.1;">
+                    "Engineering" <br />
+                    <span class="text-gradient">"Insights"</span>
+                </h1>
+
+                <p class="hero-subtitle" style="max-width: 500px; margin: 0 auto 2.5rem auto;">
+                    "We are currently writing deep dives on how we built TryCLI using Rust, WebAssembly, and Docker. Stay tuned."
+                </p>
+
+                <div style="display: flex; gap: 1rem; justify-content: center;">
+                    <A href="/" class="btn-secondary">"← Back Home"</A>
+                </div>
+            </main>
+        </div>
     }
 }
