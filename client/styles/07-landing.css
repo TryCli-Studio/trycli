@@ -56,9 +56,11 @@
     align-items: center;
     text-align: center;
     padding: 2rem;
+    padding-top: calc(60px + 2rem); /* navbar height + padding so content never sits under navbar */
     position: relative;
     z-index: 5;
-    min-height: calc(100vh - 80px);
+    min-height: calc(100vh - 60px); /* match navbar height */
+    box-sizing: border-box;
 }
 
 .hero-content {
@@ -221,8 +223,26 @@
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+    .hero-main {
+        justify-content: flex-start; /* don't center so content can't be pulled under navbar */
+        padding-top: 5rem; /* 80px – clear space below 60px navbar on all small screens */
+        padding-left: 1rem;
+        padding-right: 1rem;
+        min-height: auto;
+    }
+
+    .hero-content {
+        margin-top: 0;
+    }
+
+    .hero-content .badge {
+        margin-top: 0;
+        margin-bottom: 1.25rem;
+    }
+
     .hero-title {
         font-size: 2.5rem;
+        margin-top: 0;
     }
 
     .landing-nav {
@@ -245,5 +265,12 @@
     .btn-hero, .btn-secondary {
         width: 100%;
         justify-content: center;
+    }
+}
+
+/* Extra small screens – more top clearance for notch/safe area */
+@media (max-width: 480px) {
+    .hero-main {
+        padding-top: 5.5rem; /* 88px */
     }
 }
