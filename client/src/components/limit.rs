@@ -27,8 +27,8 @@ pub fn LimitReached() -> impl IntoView {
                        target="_blank" 
                        rel="noopener noreferrer"
                        class="btn-secondary"
-                       style="width: 100%; max-width: 300px; justify-content: center; color: #FFDD00; border-color: #FFDD00;">
-                        "☕ Support Us (Buy Me a Coffee)"
+                       style="width: 100%; max-width: 300px; justify-content: center; color: #ffdd00; border-color: #FFDD00;">
+                        "Support Us"
                     </a>
                 </div>
             </div>
