@@ -4,6 +4,8 @@ use crate::components::navbar::Navbar;
 
 #[component]
 pub fn DocsPage() -> impl IntoView {
+    let (sidebar_open, set_sidebar_open) = create_signal(false);
+
     view! {
         <div class="docs-container">
             <Navbar>
@@ -12,11 +14,35 @@ pub fn DocsPage() -> impl IntoView {
             </Navbar>
 
             <div class="docs-layout">
+                // Mobile menu toggle button
+                <button
+                    class="docs-sidebar-toggle"
+                    on:click=move |_| set_sidebar_open.update(|open| *open = !*open)
+                    aria-label="Toggle sidebar"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                    <span>"Contents"</span>
+                </button>
+
                 // Sidebar Navigation
-                <aside class="docs-sidebar">
+                <aside class="docs-sidebar" class:open=move || sidebar_open.get()>
+                    <button
+                        class="docs-sidebar-close"
+                        on:click=move |_| set_sidebar_open.set(false)
+                        aria-label="Close sidebar"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                     <div class="docs-toc">
                         <h3 class="toc-title">"Contents"</h3>
-                        <ul class="toc-list">
+                        <ul class="toc-list" on:click=move |_| set_sidebar_open.set(false)>
                             <li><a href="#introduction">"Introduction"</a></li>
                             <li><a href="#getting-started">"Getting Started"</a>
                                 <ul>
