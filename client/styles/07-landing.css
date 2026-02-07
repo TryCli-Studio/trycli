@@ -13,6 +13,7 @@
     position: relative;
 }
 
+/* Subtle background grid */
 .landing-container::before {
     content: "";
     position: absolute;
@@ -21,12 +22,12 @@
     width: 100%;
     height: 100%;
     background-image:
-        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 50px 50px;
     z-index: -1;
-    mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
-    -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+    mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
+    -webkit-mask-image: radial-gradient(circle at center, black 30%, transparent 80%);
 }
 
 .landing-nav {
@@ -79,9 +80,10 @@
 }
 
 .text-gradient {
-    background: linear-gradient(to right, #ffffff, #888888);
+    background: linear-gradient(to right, #ffffff, #9ca3af);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .hero-subtitle {
@@ -103,17 +105,17 @@
 
 /* Section Styles */
 .section-features,
-.section-tech,
 .section-usage {
-    padding: 80px 0;
+    padding: 100px 0;
     border-bottom: 1px solid var(--border);
     position: relative;
+    background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.2));
 }
 
 .section-title {
     font-size: 2.5rem;
     font-weight: 800;
-    margin-bottom: 3rem;
+    margin-bottom: 1rem;
     text-align: center;
     color: var(--text-main);
     letter-spacing: -0.03em;
@@ -132,12 +134,12 @@
 /* Features Grid */
 .features-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 24px;
 }
 
 .feature-card {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-panel);
     border: 1px solid var(--border);
     padding: 2rem;
     border-radius: 12px;
@@ -145,19 +147,35 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    position: relative;
+    overflow: hidden;
 }
 
+/* Refined Hover Effect */
 .feature-card:hover {
     transform: translateY(-5px);
-    border-color: var(--accent);
-    background: rgba(255, 255, 255, 0.04);
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    border-color: #52525b; /* Zinc-600 */
+    background: #27272a;   /* Zinc-800 */
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
 }
 
+/* Icon Box for SVGs */
 .icon-box {
-    font-size: 2rem;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
     margin-bottom: 1.25rem;
-    line-height: 1;
+    color: var(--text-main);
+}
+
+.feature-card:hover .icon-box {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
 }
 
 .feature-card h3 {
@@ -172,6 +190,23 @@
     font-size: 0.95rem;
     line-height: 1.6;
     margin: 0;
+}
+
+/* Usage Cases Specifics */
+.case-card {
+    background: transparent;
+}
+
+.case-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.case-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
 }
 
 /* Final CTA */
@@ -209,9 +244,5 @@
     .btn-hero, .btn-secondary {
         width: 100%;
         justify-content: center;
-    }
-
-    .section-title {
-        font-size: 2rem;
     }
 }

@@ -5,7 +5,6 @@ pub fn LimitReached() -> impl IntoView {
     view! {
         <div class="limit-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; width: 100%; padding: 20px; text-align: center; background: var(--bg-dark);">
             <div style="max-width: 600px; padding: 40px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-panel); box-shadow: 0 20px 50px -10px rgba(0,0,0,0.5);">
-                <div style="font-size: 4rem; margin-bottom: 20px;">"🛑"</div>
                 <h1 style="font-size: 2rem; font-weight: 800; margin-bottom: 1rem; color: var(--text-main);">
                     "Compute Limit Reached"
                 </h1>

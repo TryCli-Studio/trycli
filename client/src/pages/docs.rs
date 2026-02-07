@@ -236,10 +236,6 @@ curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
                             <li><strong>"Ephemeral:"</strong>" All viewer sessions are temporary. As soon as the user closes the tab or the session times out, the container is destroyed and all data is wiped."</li>
                         </ul>
                     </section>
-
-                    <div class="docs-footer">
-                        <p>"Need help? "<a href="https://github.com/TryCli-Studio/trycli/issues" target="_blank" rel="noopener noreferrer">"Open an issue on GitHub"</a>" or join our community."</p>
-                    </div>
                 </main>
             </div>
         </div>

@@ -135,17 +135,23 @@ pub fn LandingPage() -> impl IntoView {
                         <h2 class="section-title"><span class="text-gradient">"Key Features"</span></h2>
                         <div class="features-grid">
                             <article class="feature-card">
-                                <div class="icon-box">"🚀"</div>
+                                <div class="icon-box">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                </div>
                                 <h3>"Instant Sandboxes"</h3>
                                 <p>"Every session launches a fresh, isolated Ubuntu container. No shared state, no conflicts, and automatic teardown."</p>
                             </article>
                             <article class="feature-card">
-                                <div class="icon-box">"📸"</div>
+                                <div class="icon-box">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                                </div>
                                 <h3>"Embed Everywhere"</h3>
                                 <p>"Snapshot your environment and embed it in docs, blogs, or wikis. Each embed launches a new isolated session per viewer."</p>
                             </article>
                             <article class="feature-card">
-                                <div class="icon-box">"📘"</div>
+                                <div class="icon-box">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                                </div>
                                 <h3>"Interactive Guides"</h3>
                                 <p>"Split-pane interface pairs a real-time terminal with a GitHub-flavored Markdown editor for step-by-step walkthroughs."</p>
                             </article>
@@ -208,7 +214,7 @@ pub fn LandingPage() -> impl IntoView {
                             </div>
                         </div>
                         <div class="footer-bottom">
-                            <span class="copyright">"© 2025 TryCLI Studio. All rights reserved."</span><br/>
+                            <span class="copyright">"© 2026 TryCLI Studio. All rights reserved."</span><br/>
                             <span class="copyright">"Built with ❤️"</span>
                         </div>
                     </div>
