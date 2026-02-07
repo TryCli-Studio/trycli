@@ -120,14 +120,68 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    background: rgba(9, 9, 11, 0.95);
+    backdrop-filter: blur(10px);
 }
 
 .docs-layout {
     display: flex;
     flex: 1;
-    /* max-width: 1400px;
-    margin: 0 auto; */
     width: 100%;
+    position: relative;
+}
+
+/* Mobile Toggle Button */
+.docs-sidebar-toggle {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 90;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 12px 20px;
+    color: var(--text-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    align-items: center;
+    gap: 8px;
+}
+
+.docs-sidebar-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.docs-sidebar-toggle svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Close button inside sidebar */
+.docs-sidebar-close {
+    display: none;
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    z-index: 10;
+}
+
+.docs-sidebar-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
 }
 
 /* Documentation Sidebar */
@@ -140,6 +194,26 @@
     height: calc(100vh - 60px);
     overflow-y: auto;
     padding: 32px 0;
+    flex-shrink: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.docs-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.docs-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.docs-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.docs-sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 .docs-toc {
@@ -259,6 +333,7 @@
     border: 1px solid var(--border);
     overflow-x: auto;
     margin: 24px 0;
+    max-width: 100%;
 }
 
 .docs-content pre code {
@@ -276,6 +351,20 @@
 .docs-content strong {
     color: var(--text-main);
     font-weight: 600;
+}
+
+/* Ensure all content respects container width */
+.docs-content img,
+.docs-content video,
+.docs-content iframe {
+    max-width: 100%;
+    height: auto;
+}
+
+.docs-content table {
+    width: 100%;
+    overflow-x: auto;
+    display: block;
 }
 
 /* Special callout boxes */
@@ -328,25 +417,154 @@
         flex-direction: column;
     }
 
+    /* Show toggle button on mobile */
+    .docs-sidebar-toggle {
+        display: flex;
+    }
+
+    /* Hide sidebar by default on mobile */
     .docs-sidebar {
-        position: relative;
-        width: 100%;
-        height: auto;
+        position: fixed;
+        left: -100%;
         top: 0;
-        border-right: none;
-        border-bottom: 1px solid var(--border);
+        width: 85%;
+        max-width: 320px;
+        height: 100vh;
+        z-index: 999;
+        border-right: 1px solid var(--border);
+        box-shadow: 4px 0 12px rgba(0, 0, 0, 0.3);
+        transition: left 0.3s ease-in-out;
+        padding-top: 60px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    }
+
+    .docs-sidebar::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .docs-sidebar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .docs-sidebar::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+    }
+
+    .docs-sidebar::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Show sidebar when open */
+    .docs-sidebar.open {
+        left: 0;
+    }
+
+    /* Show close button on mobile */
+    .docs-sidebar-close {
+        display: block;
+    }
+
+    /* Add overlay backdrop when sidebar is open */
+    .docs-sidebar.open::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: -1;
+        animation: fadeIn 0.3s;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
     }
 
     .docs-content {
         padding: 32px 20px;
+        max-width: 100%;
+        overflow-x: hidden;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     .docs-content h1 {
         font-size: 2rem;
+        margin-bottom: 32px;
     }
 
     .docs-content h2 {
         font-size: 1.5rem;
+    }
+
+    .docs-content h3 {
+        font-size: 1.25rem;
+    }
+
+    .docs-content p,
+    .docs-content li {
+        font-size: 1rem;
+    }
+
+    .docs-content ul,
+    .docs-content ol {
+        padding-left: 24px;
+    }
+
+    .docs-content pre {
+        padding: 16px;
+        margin: 16px -4px;
+    }
+
+    .docs-content pre code {
+        word-break: break-word;
+        white-space: pre-wrap;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    .docs-sidebar-toggle {
+        bottom: 16px;
+        right: 16px;
+        padding: 10px 16px;
+        font-size: 0.85rem;
+    }
+
+    .docs-sidebar {
+        width: 90%;
+    }
+
+    .docs-content {
+        padding: 24px 16px;
+    }
+
+    .docs-content h1 {
+        font-size: 1.75rem;
+    }
+
+    .docs-content h2 {
+        font-size: 1.35rem;
+    }
+
+    .docs-content h3 {
+        font-size: 1.15rem;
+    }
+
+    .docs-content .note,
+    .docs-content .tip,
+    .docs-content .warning {
+        padding: 12px 16px;
+        margin: 16px 0;
     }
 }
 
