@@ -8,7 +8,9 @@ use std::cell::RefCell;
 use pulldown_cmark::{Parser, Options, html};
 use crate::api::api_base;
 use crate::components::terminal::TerminalView;
+use crate::components::limit::LimitReached;
 use crate::types::User;
+use serde::{Serialize, Deserialize};
 
 pub fn render_markdown(text: &str) -> String {
     let mut options = Options::empty();
@@ -88,6 +90,14 @@ fn setup_resize_divider() {
     }
 }
 
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+enum ProjectState {
+    Loading,
+    NotFound,
+    LimitReached,
+    Ready(serde_json::Value),
+}
+
 #[component]
 pub fn ViewPage() -> impl IntoView {
     let params = use_params_map();
@@ -95,24 +105,23 @@ pub fn ViewPage() -> impl IntoView {
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();
     let (user, set_user) = create_signal(None::<User>);
     
-create_resource(|| (), move |_| async move {
+    // Auth Check
+    create_resource(|| (), move |_| async move {
         let auth_req = Request::get(&format!("{}/api/me", api_base()))
             .credentials(RequestCredentials::Include)
             .send()
             .await;
 
-        match auth_req {
-            Ok(resp) => {
-                if resp.ok() {
-                    if let Ok(u) = resp.json::<User>().await {
-                        set_user.set(Some(u));
-                    }
-                }
+        if let Ok(resp) = auth_req {
+            if resp.ok() {
+                 if let Ok(u) = resp.json::<User>().await {
+                     set_user.set(Some(u));
+                 }
             }
-            Err(_) => {}
         }
     });
-let navigate = leptos_router::use_navigate();
+
+    let navigate = leptos_router::use_navigate();
     
     let copy_embed_code = move |u: String, s: String| {
         let origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
@@ -124,94 +133,90 @@ let navigate = leptos_router::use_navigate();
         let _ = window().alert_with_message("Embed code copied to clipboard!");
     };
 
-    // 2. Fetch Project Data
-    let project_data = create_resource(
+    let project_resource = create_resource(
         move || (username(), slug()), 
         |(u, s)| async move {
             let url = format!("{}/api/project/{}/{}", api_base(), u, s);
             let req = Request::get(&url).send().await;
+            
             match req {
-                Ok(resp) => resp.json::<serde_json::Value>().await.ok(),
-                Err(_) => None
+                Ok(resp) => {
+                    if resp.status() == 429 {
+                        ProjectState::LimitReached
+                    } else if resp.ok() {
+                        if let Ok(json) = resp.json::<serde_json::Value>().await {
+                            ProjectState::Ready(json)
+                        } else {
+                            ProjectState::NotFound
+                        }
+                    } else {
+                        ProjectState::NotFound
+                    }
+                },
+                Err(_) => ProjectState::NotFound
             }
         }
     );
-    // 3. Ownership Logic Signal
+
+    // 3. Ownership Logic
     let is_owner = move || {
         let current_user = user.get();
-        let project_json = project_data.get().flatten(); // Flatten Option<Option<Value>> to Option<Value>
-
-        match (current_user, project_json) {
-            (Some(u), Some(p)) => {
-                // Extract owner_id from project JSON (it comes as a Number/i64)
-                let project_owner_id = p.get("owner_id").and_then(|id| id.as_i64());
-                
-                // Compare IDs
-                Some(u.id) == project_owner_id
-            },
-            _ => false
+        if let Some(ProjectState::Ready(p)) = project_resource.get() {
+             let project_owner_id = p.get("owner_id").and_then(|id| id.as_i64());
+             match current_user {
+                 Some(u) => Some(u.id) == project_owner_id,
+                 None => false
+             }
+        } else {
+            false
         }
     };
 
-view! {
+    view! {
         <>
             <div class="nav">
-                <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
-                    if user.get().is_some() {
-                        navigate("/dashboard", Default::default());
-                    } else {
-                        navigate("/", Default::default());
-                    }
+                // ... Nav content same as before ...
+                 <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
+                    if user.get().is_some() { navigate("/dashboard", Default::default()); } 
+                    else { navigate("/", Default::default()); }
                 }>
                     <span class="logo-icon">">_"</span>
                     <span>"TryCli Studio"</span>
                 </div>
                 <div class="controls">
+                    // ... User/Login controls same as before ...
                     {move || match user.get() {
                         Some(u) => view! {
-                            <div style="display: flex; align-items: center; gap: 16px;">
+                             <div style="display: flex; align-items: center; gap: 16px;">
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <img src=u.avatar_url 
-                                         style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                                    <img src=u.avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
                                     <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                                 </div>
-
-                                // 4. Conditionally Render Button
                                 <Show when=is_owner fallback=|| ()>
-                                    <button class="btn-primary btn-success" 
-                                            on:click=move |_| {
-                                                let u_val = username();
-                                                let s_val = slug();
-                                                copy_embed_code(u_val, s_val);
-                                            }>
+                                    <button class="btn-primary btn-success" on:click=move |_| {
+                                        copy_embed_code(username(), slug());
+                                    }>
                                         "Share / Embed"
                                     </button>
                                 </Show>
-
-                                <a href=format!("{}/auth/logout", api_base()) 
-                                   class="btn-primary btn-logout" 
-                                   rel="external" 
-                                   style="text-decoration: none; font-size: 0.9rem;">
-                                    "Logout"
-                                </a>
+                                <a href=format!("{}/auth/logout", api_base()) class="btn-primary btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
                             </div>
                         }.into_view(),
                         None => view! {
-                             // Optional: Login button if not authenticated
-                             <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">
-                                "Login"
-                            </a>
+                             <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">"Login"</a>
                         }.into_view()
                     }}
                 </div>
             </div>
-            {move || match project_data.get() {
-                Some(Some(data)) => {
+
+            // MAIN CONTENT SWITCH
+            {move || match project_resource.get() {
+                Some(ProjectState::Ready(data)) => {
                     let cid = data["container_id"].as_str().unwrap_or_default().to_string();
                     let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                     let html_output = render_markdown(&md_raw);
                     
-                    // Setup resize divider once component mounts
+                    // Trigger resize logic
                     let mounted = create_signal(false);
                     create_effect(move |_| {
                         if !mounted.0.get() {
@@ -246,8 +251,16 @@ view! {
                         </div>
                     }.into_view()
                 },
-                Some(None) => view! { <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">"Project not found."</div> }.into_view(),
-                None => view! { <div style="padding: 50px; text-align: center;">"Loading Project..."</div> }.into_view()
+                Some(ProjectState::LimitReached) => view! { <LimitReached /> }.into_view(),
+                Some(ProjectState::NotFound) => view! { 
+                    <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">"Project not found."</div> 
+                }.into_view(),
+                Some(ProjectState::Loading) | None => view! { 
+                    <div style="padding: 50px; text-align: center;">
+                         <div class="spinner" style="margin: 0 auto;"></div>
+                         <p style="margin-top: 1rem; color: var(--text-muted);">"Loading Environment..."</p>
+                    </div> 
+                }.into_view()
             }}
         </>
     }

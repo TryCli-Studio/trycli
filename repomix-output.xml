@@ -1,0 +1,4970 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.github/
+  workflows/
+    deploy.yml
+client/
+  src/
+    components/
+      protected.rs
+      terminal.rs
+    pages/
+      create.rs
+      dashboard.rs
+      docs.rs
+      embed.rs
+      home.rs
+      view.rs
+    api.rs
+    app.rs
+    lib.rs
+    types.rs
+  styles/
+    01-base.css
+    02-navigation.css
+    03-buttons-inputs.css
+    04-layout.css
+    05-terminal.css
+    06-dashboard.css
+    07-landing.css
+    08-footer-docs.css
+    09-utilities.css
+  Cargo.toml
+  index.html
+  octopus_terminal_opt.png
+  robots.txt
+  sitemap.xml
+server/
+  migrations/
+    20260201173010_initial_setup.down.sql
+    20260201173010_initial_setup.up.sql
+  src/
+    handlers/
+      auth.rs
+      project.rs
+      spawn.rs
+    services/
+      docker.rs
+      websocket.rs
+    auth.rs
+    config.rs
+    main.rs
+    models.rs
+    router.rs
+    state.rs
+  Cargo.toml
+.gitignore
+Cargo.toml
+README.md
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".gitignore">
+target/
+.env
+Cargo.lock
+dist/
+</file>
+
+<file path="Cargo.toml">
+[workspace]
+members = ["server", "client"]
+resolver = "2"
+</file>
+
+<file path="client/styles/01-base.css">
+/* ====================================
+   BASE & VARIABLES
+   ==================================== */
+
+:root {
+    --bg-dark: #09090b;
+    --bg-panel: #18181b;
+    --border: #27272a;
+    --accent: #3f3f46; /* Dark Gray */
+    --accent-glow: rgba(63, 63, 70, 0.5);
+    --text-main: #e4e4e7;
+    --text-muted: #a1a1aa;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, .brand, .logo-text {
+    letter-spacing: -0.03em;
+}
+</file>
+
+<file path="client/styles/02-navigation.css">
+/* ====================================
+   NAVIGATION BAR
+   ==================================== */
+
+.nav {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(9, 9, 11, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+}
+
+.brand {
+    font-weight: 800;
+    font-size: 1.2rem;
+    background: linear-gradient(to right, #ffffff, #71717a);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: white;
+    letter-spacing: -0.02em;
+}
+
+.logo-icon {
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(255,255,255,0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+</file>
+
+<file path="client/styles/03-buttons-inputs.css">
+/* ====================================
+   BUTTONS & INPUTS
+   ==================================== */
+
+.input-slug {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    outline: none;
+    transition: all 0.2s;
+}
+
+.input-slug:focus {
+    background: rgba(0, 0, 0, 0.5);
+    border-color: var(--text-muted);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.input-hero {
+    width: 100%;
+    padding: 16px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    border-radius: 8px;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    outline: none;
+    transition: all 0.3s;
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0);
+}
+
+.input-hero:focus {
+    background: rgba(0, 0, 0, 0.5);
+    border-color: var(--text-muted);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.input-hero::placeholder {
+    color: var(--text-muted);
+}
+
+/* Primary Button */
+.btn-primary {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.2s;
+    text-decoration: none;
+}
+
+.btn-primary:hover {
+    box-shadow: 0 0 15px var(--accent-glow);
+    transform: translateY(-1px);
+}
+
+/* Card Button */
+.btn-card {
+    flex: 1;
+    padding: 8px 16px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-block;
+    text-align: center;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.btn-card:hover {
+    border-color: var(--text-main);
+    color: var(--text-main);
+    background: var(--bg-panel);
+}
+
+/* Logout Button */
+.btn-logout {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-logout:hover {
+    background: rgba(239, 68, 68, 0.05);
+    border-color: #ef4444;
+    color: #ef4444;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+    transform: translateY(-1px);
+}
+
+/* Success Button */
+.btn-success {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-success:hover:not(:disabled) {
+    background: rgba(34, 197, 94, 0.05);
+    border-color: #22c55e;
+    color: #22c55e;
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
+    transform: translateY(-1px);
+}
+
+.btn-success:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--bg-panel);
+    border-color: var(--border);
+    box-shadow: none;
+}
+
+/* Danger Button */
+.btn-danger {
+    padding: 8px 16px;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.9rem;
+    text-decoration: none;
+    margin-left: 8px;
+}
+
+.btn-danger:hover {
+    background: rgba(220, 38, 38, 0.1);
+    border-color: #dc2626;
+    color: #dc2626;
+    box-shadow: 0 0 15px rgba(220, 38, 38, 0.2);
+    transform: translateY(-1px);
+}
+
+/* Large Hero Button */
+.btn-hero {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: white;
+    color: black;
+    font-weight: 700;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-hero:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+/* Secondary Button */
+.btn-secondary {
+    display: flex;
+    align-items: center;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.05);
+    transition: background 0.2s;
+    cursor: pointer;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Navigation Button */
+.btn-nav {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-nav:hover {
+    color: white;
+}
+
+.btn-lg {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+}
+
+.arrow {
+    transition: transform 0.2s;
+}
+
+.btn-hero:hover .arrow {
+    transform: translateX(4px);
+}
+
+/* Badge */
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.05em;
+}
+
+/* Input Hero Wrapper */
+.input-hero-wrapper {
+    position: relative;
+}
+</file>
+
+<file path="client/styles/04-layout.css">
+/* ====================================
+   LAYOUT & WORKSPACE
+   ==================================== */
+
+/* Workspace Layout */
+.workspace {
+    display: flex;
+    height: calc(100vh - 65px);
+}
+
+.pane {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+}
+
+.resize-divider {
+    width: 6px;
+    background: var(--border);
+    cursor: col-resize;
+    transition: background-color 0.2s ease;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.resize-divider:hover {
+    background-color: #50c878;
+    box-shadow: inset 0 0 8px rgba(80, 200, 120, 0.4);
+}
+
+/* Editor Textarea */
+.editor-textarea {
+    width: 100%;
+    height: 100%;
+    background: var(--bg-dark);
+    color: var(--text-main);
+    border: none;
+    resize: none;
+    padding: 20px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.6;
+    outline: none;
+}
+
+/* Containers & Common Layout */
+.container-narrow {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.dashboard-container {
+    min-height: 100vh;
+    background: var(--bg-dark);
+}
+
+.embed-container {
+    font-family: var(--font-mono);
+}
+
+.embed-overlay {
+    backdrop-filter: blur(5px);
+}
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--bg-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+/* Grid Utilities */
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+</file>
+
+<file path="client/styles/05-terminal.css">
+/* ====================================
+   TERMINAL STYLES
+   ==================================== */
+
+.terminal-header {
+    height: 32px;
+    background: #1e1e20;
+    border-bottom: 1px solid #2a2a2c;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.dot.red { background: #ef4444; }
+.dot.yellow { background: #eab308; }
+.dot.green { background: #22c55e; }
+
+.terminal-header:hover .dot {
+    opacity: 1;
+}
+
+.terminal-title {
+    font-size: 13px;
+    font-weight: 500;
+    opacity: 0.7;
+    margin-left: 8px;
+}
+
+.terminal-body {
+    flex: 1;
+    background: #000;
+    padding: 4px 0 8px 4px;
+    overflow: hidden;
+}
+
+/* Terminal Preview */
+.terminal-preview {
+    width: 100%;
+    max-width: 700px;
+    background: #000;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
+    margin: 0 auto;
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    animation: slideUp 1s ease-out 0.2s backwards;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.terminal-header-preview {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.terminal-title-preview {
+    margin-left: 12px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.terminal-body-preview {
+    padding: 1.5rem;
+    font-size: 0.9rem;
+}
+
+.line {
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.prompt {
+    color: #4ade80;
+    margin-right: 0.75rem;
+}
+
+.cmd {
+    color: #e5e7eb;
+}
+
+.output {
+    color: #6b7280;
+}
+
+.success {
+    color: #22c55e;
+}
+
+.cursor {
+    display: inline-block;
+    width: 8px;
+    height: 18px;
+    background: #e5e7eb;
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}
+</file>
+
+<file path="client/styles/06-dashboard.css">
+/* ====================================
+   DASHBOARD & PROJECT CARDS
+   ==================================== */
+
+.glass-header {
+    position: sticky;
+    top: 0;
+    backdrop-filter: blur(12px);
+    background: rgba(9, 9, 11, 0.8);
+    border-bottom: 1px solid var(--border);
+    z-index: 10;
+}
+
+.dashboard-hero {
+    padding: 60px 40px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(113, 113, 122, 0.01) 100%);
+    border-bottom: 1px solid var(--border);
+}
+
+.hero-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.hero-title {
+    font-size: 3rem;
+    font-weight: 800;
+    margin: 0 0 16px 0;
+    color: var(--text-main);
+    letter-spacing: -1px;
+}
+
+.hero-subtitle {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin: 0 0 32px 0;
+    line-height: 1.6;
+}
+
+/* Dashboard Section */
+.dashboard-section {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 60px 40px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.section-header h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-main);
+}
+
+/* Project Cards Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+}
+
+.project-card {
+    background: linear-gradient(180deg, var(--bg-panel) 0%, rgba(24, 24, 27, 0.6) 100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.project-card:hover {
+    border-color: var(--text-muted);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.card-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-main);
+    word-break: break-word;
+}
+
+.card-body {
+    flex: 1;
+    padding: 16px 20px;
+}
+
+.card-meta {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-meta code {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    color: #e4e4e7;
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+.card-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+}
+
+/* Empty & Error States */
+.empty-state {
+    text-align: center;
+    padding: 80px 40px;
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+}
+
+.empty-message {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    margin: 0 0 24px 0;
+}
+
+.error-state {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+}
+
+.error-message {
+    color: #fca5a5;
+    font-size: 1rem;
+    margin: 0 0 16px 0;
+}
+</file>
+
+<file path="client/styles/07-landing.css">
+/* ====================================
+   LANDING PAGE
+   ==================================== */
+
+.landing-container {
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    overflow-y: auto;
+    position: relative;
+}
+
+.landing-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    z-index: -1;
+    mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+    -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+}
+
+.landing-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 3rem;
+    width: 100%;
+    box-sizing: border-box;
+    z-index: 10;
+}
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Hero Section */
+.hero-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 2rem;
+    position: relative;
+    z-index: 5;
+    min-height: calc(100vh - 80px);
+}
+
+.hero-content {
+    max-width: 900px;
+    animation: fadeIn 0.8s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.hero-title {
+    font-size: 4.5rem;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+    color: white;
+    letter-spacing: -0.03em;
+}
+
+.text-gradient {
+    background: linear-gradient(to right, #ffffff, #888888);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero-subtitle {
+    font-size: 1.25rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+    margin-bottom: 2.5rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.cta-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 4rem;
+}
+
+/* Section Styles */
+.section-features,
+.section-tech,
+.section-usage {
+    padding: 80px 0;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+}
+
+.section-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 3rem;
+    text-align: center;
+    color: var(--text-main);
+    letter-spacing: -0.03em;
+}
+
+.section-subtitle {
+    text-align: center;
+    color: var(--text-muted);
+    margin-bottom: 4rem;
+    font-size: 1.1rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Features Grid */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
+}
+
+.feature-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.feature-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.icon-box {
+    font-size: 2rem;
+    margin-bottom: 1.25rem;
+    line-height: 1;
+}
+
+.feature-card h3 {
+    font-size: 1.25rem;
+    margin: 0 0 0.75rem 0;
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.feature-card p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Final CTA */
+.final-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2.5rem;
+    }
+
+    .landing-nav {
+        padding: 1rem;
+    }
+
+    .nav-actions .btn-nav {
+        display: none;
+    }
+
+    .hero-subtitle {
+        font-size: 1rem;
+    }
+
+    .cta-group {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .btn-hero, .btn-secondary {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .section-title {
+        font-size: 2rem;
+    }
+}
+</file>
+
+<file path="client/robots.txt">
+User-agent: *
+Allow: /
+
+Sitemap: https://trycli.com/sitemap.xml
+</file>
+
+<file path="client/sitemap.xml">
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://trycli.com/</loc>
+    <lastmod>2026-02-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <url>
+    <loc>https://trycli.com/docs</loc>
+    <lastmod>2026-02-06</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://trycli.com/dashboard</loc>
+    <lastmod>2026-02-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+</urlset>
+</file>
+
+<file path="server/migrations/20260201173010_initial_setup.down.sql">
+-- Add down migration script here
+DROP TABLE IF EXISTS projects;
+</file>
+
+<file path="server/migrations/20260201173010_initial_setup.up.sql">
+-- Add up migration script here
+CREATE TABLE IF NOT EXISTS projects (
+    owner_username TEXT NOT NULL, 
+    slug TEXT NOT NULL,
+    image_tag TEXT NOT NULL, 
+    markdown TEXT NOT NULL,
+    shell TEXT NOT NULL DEFAULT '/bin/bash', 
+    owner_id BIGINT, 
+    PRIMARY KEY (owner_username, slug)
+);
+</file>
+
+<file path="server/src/handlers/spawn.rs">
+use axum::{
+    routing::post,
+    Router, Json,
+    http::StatusCode,
+};
+use tower_sessions::Session;
+use uuid::Uuid;
+use crate::state::AppState;
+use crate::models::User;
+
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/api/spawn", post(spawn_handler))
+}
+
+pub async fn spawn_handler(
+    session: Session, 
+) -> Result<Json<String>, (StatusCode, String)> {
+    // FIX: Map error instead of unwrap
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
+    if user.is_none() {
+        return Err((StatusCode::UNAUTHORIZED, "Please login first".to_string()));
+    }
+    Ok(Json(Uuid::new_v4().to_string()))
+}
+</file>
+
+<file path="server/src/models.rs">
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ProjectSummary {
+    pub slug: String,
+    pub image_tag: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct User {
+    pub id: i64,
+    pub login: String,
+    pub avatar_url: String,
+}
+
+#[derive(Deserialize)]
+pub struct PublishRequest {
+    pub container_id: String,
+    pub slug: String,
+    pub markdown: String,
+}
+</file>
+
+<file path="client/src/components/protected.rs">
+use leptos::*;
+use gloo_net::http::Request;
+use web_sys::RequestCredentials;
+use crate::api::api_base;
+use crate::types::User;
+
+#[component]
+pub fn ProtectedRoute(children: Children) -> impl IntoView {
+    let (user, set_user) = create_signal(None::<User>);
+    let (checked, set_checked) = create_signal(false);
+
+    create_resource(|| (), move |_| async move {
+        // FIX: Use dynamic API URL
+        let url = format!("{}/api/me", api_base());
+        let auth_req = Request::get(&url)
+            .credentials(RequestCredentials::Include)
+            .send()
+            .await;
+
+        match auth_req {
+            Ok(resp) => {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        set_user.set(Some(u));
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+        set_checked.set(true);
+    });
+
+    let children_view = children();
+
+    view! {
+        {move || {
+            if !checked.get() {
+                return view! {
+                    <div style="display: flex; height: 100vh; justify-content: center; align-items: center;">
+                        <div class="spinner"></div>
+                    </div>
+                }.into_view();
+            }
+
+            if user.get().is_some() {
+                children_view.clone().into_view()
+            } else {
+                view! {
+                    <div style="display: flex; height: 100vh; justify-content: center; align-items: center; flex-direction: column; gap: 20px; background: var(--bg-dark);">
+                        <h2 style="color: var(--text-main);">"Authentication Required"</h2>
+                        <p style="color: var(--text-muted);">"Please log in to access this page"</p>
+                        <a href=format!("{}/auth/github", api_base()) 
+                           class="btn-primary" 
+                           rel="external" 
+                           style="text-decoration: none;">
+                            "Login with GitHub"
+                        </a>
+                    </div>
+                }.into_view()
+            }
+        }}
+    }
+}
+</file>
+
+<file path="client/src/pages/embed.rs">
+use leptos::*;
+use leptos_router::*;
+use gloo_net::http::Request;
+use crate::api::api_base;
+use crate::components::terminal::TerminalView;
+
+#[component]
+pub fn EmbedPage() -> impl IntoView {
+    let params = use_params_map();
+    let username = move || params.get().get("username").cloned().unwrap_or_default();
+    let slug = move || params.get().get("slug").cloned().unwrap_or_default();
+    let (started, set_started) = create_signal(false);
+
+    let project_data = create_resource(
+        move || (started.get(), username(), slug()), 
+        |(is_started, u, s)| async move {
+            if !is_started { return None; } 
+            let url = format!("{}/api/project/{}/{}", api_base(), u, s);
+            let req = Request::get(&url).send().await;
+            match req {
+                Ok(resp) => resp.json::<serde_json::Value>().await.ok(),
+                Err(_) => None
+            }
+        }
+    );
+
+    view! {
+        <div class="embed-container" style="width: 100vw; height: 100vh; background: #000; overflow: hidden; position: relative;">
+            {move || if !started.get() {
+                view! {
+                    <div class="embed-overlay" 
+                         style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); z-index: 10;">
+                        <div style="text-align: center; color: white;">
+                            <h3 style="margin-bottom: 1rem; font-family: var(--font-sans);">"TryCli Studio Demo"</h3>
+                            <button class="btn-primary" 
+                                    style="padding: 12px 24px; font-size: 1.1rem;"
+                                    on:click=move |_| set_started.set(true)>
+                                "▶ Start Terminal"
+                            </button>
+                            <p style="margin-top: 1rem; color: #666; font-size: 0.8rem;">"Powered by TryCli Studio"</p>
+                        </div>
+                    </div>
+                }.into_view()
+            } else {
+                view! {}.into_view()
+            }}
+            {move || match project_data.get() {
+                Some(Some(data)) => {
+                    let cid = data["container_id"].as_str().unwrap_or_default().to_string();
+                    view! { <TerminalView container_id=cid /> }.into_view()
+                },
+                Some(None) => view! { <div style="color:red; padding:20px;">"Project not found"</div> }.into_view(),
+                None => {
+                    if started.get() {
+                        view! { <div style="color: #666; padding: 20px;">"Booting Container..."</div> }.into_view()
+                    } else {
+                        view! {}.into_view()
+                    }
+                }
+            }}
+        </div>
+    }
+}
+</file>
+
+<file path="client/src/api.rs">
+//  CONFIGURATION HELPERS 
+pub fn api_base() -> &'static str {
+    option_env!("API_URL").unwrap_or("http://localhost:3000")
+}
+
+pub fn ws_base() -> &'static str {
+    option_env!("WS_URL").unwrap_or("ws://localhost:3000")
+}
+</file>
+
+<file path="client/src/app.rs">
+use leptos::*;
+use leptos_router::*;
+use crate::components::protected::ProtectedRoute;
+use crate::pages::{home::LandingPage, dashboard::DashboardPage, create::CreatePage, view::ViewPage, embed::EmbedPage, docs::DocsPage};
+
+#[component]
+pub fn App() -> impl IntoView {
+    view! {
+        <Router>
+            <Routes>
+                <Route path="/" view=LandingPage />
+                <Route path="/docs" view=DocsPage />
+                <Route path="/dashboard" view=move || view! {
+                    <ProtectedRoute>
+                        <DashboardPage />
+                    </ProtectedRoute>
+                } />
+                
+                <Route path="/new" view=move || view! {
+                    <ProtectedRoute>
+                        <CreatePage />
+                    </ProtectedRoute>
+                } />
+                <Route path="/:username/:slug" view=ViewPage />
+                <Route path="/embed/:username/:slug" view=EmbedPage />
+            </Routes>
+        </Router>
+    }
+}
+</file>
+
+<file path="client/src/types.rs">
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, serde::Deserialize, PartialEq)]
+pub struct ProjectSummary {
+    pub slug: String,
+    pub image_tag: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct User {
+    pub id: i64,
+    pub login: String,
+    pub avatar_url: String,
+}
+</file>
+
+<file path="client/styles/09-utilities.css">
+/* ====================================
+   UTILITIES & SHARED STYLES
+   ==================================== */
+
+/* Smooth Scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+</file>
+
+<file path="server/src/config.rs">
+use bollard::Docker;
+use sqlx::postgres::PgPoolOptions;
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use crate::state::AppState;
+
+pub async fn setup_database_and_docker() -> Result<AppState, Box<dyn std::error::Error>> {
+    // 1. Docker setup 
+    let docker = Arc::new(Docker::connect_with_local_defaults()?);
+    
+    // 2. DB Connection 
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let db = PgPoolOptions::new().connect(&database_url).await?;
+
+    sqlx::migrate!("./migrations")
+        .run(&db)
+        .await?;
+
+    let state = AppState { 
+        docker, 
+        db,
+        github_id: std::env::var("GITHUB_CLIENT_ID").expect("Missing GITHUB_CLIENT_ID"),
+        github_secret: std::env::var("GITHUB_CLIENT_SECRET").expect("Missing GITHUB_CLIENT_SECRET"),
+        sessions: Arc::new(Mutex::new(HashMap::new())),
+    };
+
+    Ok(state)
+}
+</file>
+
+<file path="server/src/state.rs">
+use bollard::Docker;
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::collections::HashMap;
+
+// New Struct to track container details AND ownership
+#[derive(Clone, Debug)]
+pub struct SessionContext {
+    pub container_name: String,
+    pub shell: String,
+    // If Some(id), only that user can access. If None, it's public (e.g., a Viewer).
+    pub owner_id: Option<i64>, 
+}
+
+// Update the type definition
+pub type SessionMap = Arc<Mutex<HashMap<String, SessionContext>>>;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub docker: Arc<Docker>,
+    pub db: sqlx::PgPool,
+    pub github_id: String,
+    pub github_secret: String,
+    pub sessions: SessionMap,
+}
+
+impl AppState {
+    pub fn lock_sessions(&self) -> MutexGuard<'_, HashMap<String, SessionContext>> {
+        match self.sessions.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!("Session mutex poisoned. Recovering state.");
+                poisoned.into_inner()
+            }
+        }
+    }
+}
+</file>
+
+<file path="client/src/components/terminal.rs">
+use leptos::*;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::{WebSocket, MessageEvent, ErrorEvent};
+use crate::api::ws_base;
+
+// BINDING 1: FitAddon 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = FitAddon)]
+    type XtermFitAddon;
+    #[wasm_bindgen(constructor, js_namespace = FitAddon, js_class = "FitAddon")]
+    fn new() -> XtermFitAddon;
+    #[wasm_bindgen(method)]
+    fn fit(this: &XtermFitAddon);
+}
+
+//  BINDING 2: Terminal 
+#[wasm_bindgen]
+extern "C" {
+    type Terminal;
+    #[wasm_bindgen(constructor, js_namespace = window)]
+    fn new() -> Terminal;
+    #[wasm_bindgen(method)]
+    fn open(this: &Terminal, parent: &web_sys::HtmlDivElement);
+    #[wasm_bindgen(method)]
+    fn write(this: &Terminal, data: &str);
+    #[wasm_bindgen(method, js_name = onData)]
+    fn on_data(this: &Terminal, callback: &Closure<dyn FnMut(String)>);
+    #[wasm_bindgen(method, js_name = loadAddon)]
+    fn load_addon(this: &Terminal, addon: &XtermFitAddon);
+}
+
+#[component]
+pub fn TerminalView(container_id: String) -> impl IntoView {
+    let terminal_div_ref = create_node_ref::<leptos::html::Div>();
+    let id_for_effect = container_id.clone();
+
+    create_effect(move |_| {
+        if let Some(div) = terminal_div_ref.get() {
+            let term = Terminal::new();
+            
+            let fit_addon = XtermFitAddon::new();
+            term.load_addon(&fit_addon);
+            term.open(&div);
+            
+            fit_addon.fit(); 
+            let fit_addon_clone = fit_addon.clone().unchecked_into::<XtermFitAddon>();
+            let on_resize = Closure::<dyn FnMut()>::new(move || {
+                fit_addon_clone.fit();
+            });
+            window().set_onresize(Some(on_resize.as_ref().unchecked_ref()));
+            on_resize.forget();
+            on_cleanup(move || {
+                window().set_onresize(None);
+            });
+            term.write(&format!("Connecting to session {}...\r\n", id_for_effect));
+            
+            let term_clone: Terminal = term.clone().unchecked_into();
+            let ws_url = format!("{}/ws/{}", ws_base(), id_for_effect);
+            
+            // FIX: Removed unwrap() on WebSocket::new
+            match WebSocket::new(&ws_url) {
+                Ok(ws) => {
+                    let ws_cleanup = ws.clone();
+                    
+                    on_cleanup(move || {
+                        let _ = ws_cleanup.close();
+                    });
+                    let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+                        if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
+                            term_clone.write(&String::from(txt));
+                        }
+                    });
+                    ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+                    onmessage.forget();
+
+                    let ws_clone = ws.clone();
+                    let on_data_callback = Closure::<dyn FnMut(String)>::new(move |data: String| {
+                        let _ = ws_clone.send_with_str(&data);
+                    });
+                    term.on_data(&on_data_callback);
+                    on_data_callback.forget();
+
+                    let term_err = term.clone().unchecked_into::<Terminal>();
+                    let onerror = Closure::<dyn FnMut(ErrorEvent)>::new(move |_| {
+                         term_err.write("\r\n\x1b[31m[!] Connection Error.\x1b[0m\r\n");
+                    });
+                    ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
+                    onerror.forget();
+
+                    let term_close = term.clone().unchecked_into::<Terminal>();
+                    let onclose = Closure::<dyn FnMut()>::new(move || {
+                         term_close.write("\r\n\x1b[33m[!] Connection Closed.\x1b[0m\r\n");
+                    });
+                    ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
+                    onclose.forget();
+                },
+                Err(_) => {
+                    term.write("\r\n\x1b[31m[!] Failed to initialize WebSocket connection.\x1b[0m\r\n");
+                }
+            }
+        }
+    });
+
+    view! { <div _ref=terminal_div_ref class="terminal" style="height: 100%; width: 100%; padding: 8px"></div> }
+}
+</file>
+
+<file path="client/src/pages/docs.rs">
+use leptos::*;
+use leptos_router::A;
+
+#[component]
+pub fn DocsPage() -> impl IntoView {
+    view! {
+        <div class="docs-container">
+            // Top Navigation Bar
+            <nav class="nav">
+                <div class="nav-brand">
+                    <span class="logo-icon">">_"</span>
+                    <A href="/" class="brand-link">"TryCli Studio"</A>
+                </div>
+                <div class="controls">
+                    <A href="/" class="btn-nav">"Home"</A>
+                    <A href="/dashboard" class="btn-primary">"Dashboard"</A>
+                </div>
+            </nav>
+
+            <div class="docs-layout">
+                // Sidebar Navigation
+                <aside class="docs-sidebar">
+                    <div class="docs-toc">
+                        <h3 class="toc-title">"Contents"</h3>
+                        <ul class="toc-list">
+                            <li><a href="#introduction">"Introduction"</a></li>
+                            <li><a href="#getting-started">"Getting Started"</a>
+                                <ul>
+                                    <li><a href="#authentication">"Authentication"</a></li>
+                                    <li><a href="#dashboard">"The Dashboard"</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="#creating-project">"Creating a Project"</a>
+                                <ul>
+                                    <li><a href="#studio-interface">"Studio Interface"</a></li>
+                                    <li><a href="#setup-wizard">"Setup Wizard"</a></li>
+                                    <li><a href="#installing-tool">"Installing Your CLI Tool"</a></li>
+                                    <li><a href="#writing-guide">"Writing the Guide"</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="#publishing">"Publishing Your Demo"</a></li>
+                            <li><a href="#managing">"Managing Your Projects"</a>
+                                <ul>
+                                    <li><a href="#viewing-projects">"Viewing Your Projects"</a></li>
+                                    <li><a href="#deleting-projects">"Deleting Projects"</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="#sharing">"Sharing & Embedding"</a>
+                                <ul>
+                                    <li><a href="#public-links">"Public Project Links"</a></li>
+                                    <li><a href="#embedding">"Embedding on Websites"</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="#security">"Security & Sandbox"</a></li>
+                        </ul>
+                    </div>
+                </aside>
+
+                // Main Documentation Content
+                <main class="docs-content">
+                    <h1>"TryCli Studio User Documentation"</h1>
+                    
+                    <section id="introduction">
+                        <h2>"1. Introduction"</h2>
+                        <p>"TryCli Studio is a platform for developers to build, host, and share interactive Command Line Interface (CLI) demos directly in the browser. It removes the need for users to install dependencies locally by spinning up isolated, ephemeral Docker containers on demand."</p>
+                        <p><strong>"Core Philosophy:"</strong>" \"Dream it, Build it.\" We provide a split-pane interface: one side for a live Linux terminal, the other for a rich Markdown guide, allowing you to walk users through your tool step-by-step."</p>
+                    </section>
+
+                    <section id="getting-started">
+                        <h2>"2. Getting Started"</h2>
+                        
+                        <h3 id="authentication">"Authentication"</h3>
+                        <p>"To create projects, you must be logged in. We use GitHub OAuth for secure and quick authentication."</p>
+                        <ol>
+                            <li>"Click the \"Login with GitHub\" button on the home page or navigation bar."</li>
+                            <li>"Grant TryCli Studio permission to read your public profile (we only store your Username, ID, and Avatar)."</li>
+                            <li>"Once authenticated, you will be redirected to your personal Dashboard."</li>
+                        </ol>
+
+                        <h3 id="dashboard">"The Dashboard"</h3>
+                        <p>"Your Dashboard is the command center for your projects."</p>
+                        <ul>
+                            <li><strong>"Your Projects:"</strong>" Displays a grid of all the demos you have created. Each card shows the project slug and the base Docker image used."</li>
+                            <li><strong>"Search:"</strong>" Use the search bar at the top to filter your projects by name. It supports fuzzy search logic."</li>
+                            <li><strong>"New Project:"</strong>" Click the \"+ New Project\" button to enter the Studio."</li>
+                        </ul>
+                    </section>
+
+                    <section id="creating-project">
+                        <h2>"3. Creating a Project"</h2>
+                        <p>"The Studio is where the magic happens. It features a responsive split-pane layout."</p>
+
+                        <h3 id="studio-interface">"The Studio Interface"</h3>
+                        <ul>
+                            <li><strong>"Left Pane (Terminal):"</strong>" A fully functional xterm.js terminal connected to a live container via WebSockets."</li>
+                            <li><strong>"Right Pane (Editor):"</strong>" A Markdown editor where you write the tutorial or documentation for your tool."</li>
+                            <li><strong>"Resize:"</strong>" You can drag the divider between the panes to adjust their width."</li>
+                        </ul>
+
+                        <h3 id="setup-wizard">"The Setup Wizard"</h3>
+                        <p>"When you first load the Studio, the terminal will automatically launch the Setup Wizard. You will be prompted to configure your environment using your keyboard:"</p>
+                        
+                        <p><strong>"Select Base Image:"</strong></p>
+                        <ul>
+                            <li><strong>"Ubuntu 22.04:"</strong>" Best for general compatibility and heavier tools."</li>
+                            <li><strong>"Alpine Linux:"</strong>" Lightweight and fast, ideal for simple binaries."</li>
+                            <li><strong>"Debian Bookworm:"</strong>" Stable and widely supported."</li>
+                        </ul>
+
+                        <p><strong>"Select Shell:"</strong></p>
+                        <ul>
+                            <li><strong>"Bash:"</strong>" The standard shell."</li>
+                            <li><strong>"Zsh:"</strong>" Feature-rich, often preferred by developers."</li>
+                            <li><strong>"Fish:"</strong>" User-friendly interactive shell."</li>
+                        </ul>
+
+                        <p class="note">"Note: The system will automatically provision the container and install the selected shell for you."</p>
+
+                        <h3 id="installing-tool">"Installing Your CLI Tool"</h3>
+                        <p>"Once the wizard completes, you have full root access (or pseudo-root capabilities depending on configuration) inside the container."</p>
+                        <ul>
+                            <li>"Run standard Linux commands: "<code>"apt-get update"</code>", "<code>"curl"</code>", "<code>"wget"</code>", "<code>"git clone"</code>"."</li>
+                            <li>"Install your specific CLI tool."</li>
+                        </ul>
+                        
+                        <p><strong>"Example:"</strong></p>
+                        <pre><code>"apt-get update && apt-get install -y curl
+curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
+                        
+                        <p class="tip"><strong>"Tip:"</strong>" Clean up temporary files (like downloaded zips) to keep your project image small."</p>
+
+                        <h3 id="writing-guide">"Writing the Guide"</h3>
+                        <p>"In the right-hand pane, document your tool using Markdown."</p>
+                        <ul>
+                            <li><strong>"Headers:"</strong>" "<code>"# My Tool"</code>", "<code>"## Installation"</code>"."</li>
+                            <li><strong>"Code Blocks:"</strong>" Use triple backticks (```) for code snippets."</li>
+                            <li><strong>"Lists & Formatting:"</strong>" Standard bold, italics, and lists are supported."</li>
+                        </ul>
+                        <p>"This text will be rendered into beautiful HTML for your viewers."</p>
+                    </section>
+
+                    <section id="publishing">
+                        <h2>"4. Publishing Your Demo"</h2>
+                        <p>"Once your environment is set up and your guide is written:"</p>
+                        
+                        <ol>
+                            <li>
+                                <strong>"Set a Slug:"</strong>" Enter a unique URL identifier for your project in the top navigation bar (e.g., "<code>"my-awesome-cli"</code>")."
+                                <ul>
+                                    <li><strong>"Validation:"</strong>" Only letters, numbers, and hyphens are allowed."</li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>"Click \"Publish\":"</strong>
+                                <ul>
+                                    <li>"The system will pause your running container."</li>
+                                    <li>"It creates a Docker Snapshot (Image) of the exact state of your file system."</li>
+                                    <li>"It saves your Markdown guide and links it to this new image."</li>
+                                    <li>"It generates a permanent link to your project."</li>
+                                </ul>
+                            </li>
+                        </ol>
+
+                        <p class="warning"><strong>"Warning:"</strong>" Publishing creates a static image. Any changes made afterwards requires re-publishing."</p>
+                    </section>
+
+                    <section id="managing">
+                        <h2>"5. Managing Your Projects"</h2>
+
+                        <h3 id="viewing-projects">"Viewing Your Projects"</h3>
+                        <p>"All your published projects are accessible from your Dashboard. Each project card displays:"</p>
+                        <ul>
+                            <li>"The project slug (URL identifier)"</li>
+                            <li>"The base Docker image used"</li>
+                            <li>"Quick action buttons (View and Delete)"</li>
+                        </ul>
+
+                        <h3 id="deleting-projects">"Deleting Projects"</h3>
+                        <p>"You can permanently delete any of your projects from the Dashboard."</p>
+                        
+                        <p><strong>"To delete a project:"</strong></p>
+                        <ol>
+                            <li>"Navigate to your Dashboard."</li>
+                            <li>"Find the project card you want to remove."</li>
+                            <li>"Click the red \"Delete\" button on the project card."</li>
+                            <li>"Confirm the deletion when prompted."</li>
+                        </ol>
+
+                        <p class="warning"><strong>"Warning:"</strong>" Deleting a project is permanent and cannot be undone. This will:"</p>
+                        <ul>
+                            <li>"Remove the project from your dashboard"</li>
+                            <li>"Delete the Docker image snapshot from our servers"</li>
+                            <li>"Make the public URL ("<code>"/<username>/<slug>"</code>") inaccessible"</li>
+                            <li>"Break any existing embeds of this project"</li>
+                        </ul>
+                        
+                        <p class="tip"><strong>"Tip:"</strong>" If you just want to update your project, use the \"Re-publish\" feature instead of deleting and recreating it. This preserves your project's URL."</p>
+                    </section>
+
+                    <section id="sharing">
+                        <h2>"6. Sharing & Embedding"</h2>
+
+                        <h3 id="public-links">"Public Project Links"</h3>
+                        <p>"Share your project using the URL format: "<code>"https://trycli.com/<your-username>/<project-slug>"</code></p>
+                        <p>"Viewers who visit this link will:"</p>
+                        <ul>
+                            <li>"See your Markdown guide rendered on the left."</li>
+                            <li>"Get a fresh, isolated copy of your container on the right."</li>
+                            <li>"Have full interactive access to try the tool you installed."</li>
+                        </ul>
+
+                        <h3 id="embedding">"Embedding on Websites"</h3>
+                        <p>"You can embed your CLI demo directly into your own documentation, blog, or landing page."</p>
+                        <ol>
+                            <li>"Go to your Project Page."</li>
+                            <li>"Click the \"Share / Embed\" button in the top right."</li>
+                            <li>"Copy the generated "<code>"<iframe>"</code>" code."</li>
+                            <li>"Paste it into your website's HTML."</li>
+                        </ol>
+
+                        <p><strong>"Embed Features:"</strong></p>
+                        <ul>
+                            <li><strong>"Lazy Loading:"</strong>" The terminal only boots up when the user clicks \"Start Terminal\" to save resources."</li>
+                            <li><strong>"Responsive:"</strong>" The embed adapts to the container width."</li>
+                        </ul>
+                    </section>
+
+                    <section id="security">
+                        <h2>"7. Security & Sandbox"</h2>
+                        <p>"We take security seriously. While you (the creator) have broad permissions during the setup phase, the Viewer Containers (what your users see) are strictly sandboxed:"</p>
+                        
+                        <ul>
+                            <li><strong>"Network Isolation:"</strong>" Viewer containers run on a restricted bridge network. They cannot access internal services or other user containers."</li>
+                            <li><strong>"Resource Limits:"</strong>" Each session is capped at 512MB RAM and 1.0 CPU Core to prevent abuse."</li>
+                            <li><strong>"Anti-Abuse:"</strong>" We drop dangerous Linux capabilities (like CAP_SYS_ADMIN) and limit process counts (PIDs) to prevent \"fork bombs\"."</li>
+                            <li><strong>"Ephemeral:"</strong>" All viewer sessions are temporary. As soon as the user closes the tab or the session times out, the container is destroyed and all data is wiped."</li>
+                        </ul>
+                    </section>
+
+                    <div class="docs-footer">
+                        <p>"Need help? "<a href="https://github.com/TryCli-Studio/trycli/issues" target="_blank" rel="noopener noreferrer">"Open an issue on GitHub"</a>" or join our community."</p>
+                    </div>
+                </main>
+            </div>
+        </div>
+    }
+}
+</file>
+
+<file path="server/src/router.rs">
+use axum::{
+    routing::get,
+    Router,
+    http::Method,
+};
+use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
+use axum::http::header::{CONTENT_TYPE, AUTHORIZATION};
+use crate::state::AppState;
+use crate::handlers::{auth, project, spawn};
+use crate::services::websocket;
+
+pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Error>> {
+    let session_store = MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(false) 
+        .with_same_site(tower_sessions::cookie::SameSite::Lax)
+        .with_expiry(Expiry::OnInactivity(time::Duration::minutes(60)));
+
+    // 1. DYNAMIC ORIGIN: Reads from env, defaults to localhost for dev
+    let frontend_url = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+    let app = Router::new()
+        .merge(auth::routes())
+        .merge(spawn::routes())
+        .merge(project::routes())
+        .route("/ws/:session_id", get(websocket::ws_handler))
+        .layer(tower_http::cors::CorsLayer::new()
+            .allow_origin(frontend_url.parse::<axum::http::HeaderValue>()?)
+            // 2. ALLOW DELETE METHOD
+            .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+            .allow_headers([CONTENT_TYPE, AUTHORIZATION])
+            .allow_credentials(true) 
+        )
+        .layer(session_layer) 
+        .with_state(state);
+
+    Ok(app)
+}
+</file>
+
+<file path="README.md">
+# TryCli Studio
+
+**TryCli Studio** is an open-source, full-stack platform that enables developers to host, demo, and share Command Line Interface (CLI) tools directly in the browser.
+
+It orchestrates isolated Docker environments on-demand, providing a seamless "Repl.it-like" experience specifically optimized for terminal applications.
+
+## Features
+
+* **Instant Sandboxes:** Spawns a fresh, isolated Ubuntu container for every user session.
+* **Snapshot & Publish:** Commits the live container state to a Docker image and generates a shareable URL.
+* **Interactive Guides:** Split-pane interface with a rich Markdown editor (GitHub-flavored) and a real-time terminal.
+* **Modern UI:** A "Cyberpunk/VS Code" aesthetic with glassmorphism, dark mode, and responsive layout.
+* **100% Rust:** Built with a high-performance Rust stack from the kernel to the browser.
+
+## Tech Stack
+
+### Backend (The Orchestrator)
+
+* **Framework:** [Axum](https://github.com/tokio-rs/axum) (Async Web Framework)
+* **Runtime:** [Tokio](https://tokio.rs/)
+* **Container Engine:** Docker (via [Bollard](https://github.com/fussybeaver/bollard))
+* **Database:** PostgreSQL (via [SQLx](https://github.com/launchbadge/sqlx))
+* **WebSocket:** Real-time STDIN/STDOUT streaming via `axum::ws`.
+
+### Frontend (The Client)
+
+* **Framework:** [Leptos](https://leptos.dev/) (WASM)
+* **Routing:** Leptos Router
+* **Terminal:** [xterm.js](https://xtermjs.org/) (via `wasm-bindgen`)
+* **Markdown:** `pulldown-cmark` (Rust-based parsing)
+* **Styling:** CSS Variables, Glassmorphism, Google Fonts (Inter + JetBrains Mono).
+
+## Prerequisites
+
+* **Rust & Cargo:** (Latest Stable)
+* **Docker:** (Daemon must be running)
+* **PostgreSQL:** (Running locally or via Docker)
+* **WASM Target:** `rustup target add wasm32-unknown-unknown`
+* **Trunk:** `cargo install trunk`
+
+## Quick Start
+
+### 1. Database Setup
+
+Start a PostgreSQL container on port **5433** to avoid conflicts:
+
+```bash
+docker run --name trycli-db -e POSTGRES_PASSWORD=password -p 5433:5432 -d postgres
+```
+
+### 2. Backend Setup
+
+Navigate to the server directory and run the API:
+
+```bash
+cd server
+cargo run
+```
+
+*Server will listen on `0.0.0.0:3000`*
+
+### 3. Frontend Setup
+
+Navigate to the client directory and start the dev server:
+
+```bash
+cd client
+trunk serve --open
+```
+
+*Browser will open at `http://localhost:8080`*
+
+## Usage Guide
+
+1. **Create a Demo:**
+    * Go to `/new`.
+    * Wait for the "Initializing Environment..." message to clear.
+    * Install your CLI tool in the terminal (e.g., `apt update && apt install ...`).
+    * Write instructions in the Markdown editor.
+    * Enter a unique **Slug** (e.g., `my-cool-tool`).
+    * Click **Publish Demo**.
+
+2. **Share:**
+    * Copy the URL (e.g., `http://localhost:8080/project/my-cool-tool`).
+    * Send it to users. They will get a fresh clone of the environment you set up!
+
+## Troubleshooting
+
+* **"Container ID not found":** Ensure you wait for the terminal to initialize before clicking Publish.
+* **"RowNotFound":** The project slug does not exist in the database.
+* **Database Connection Refused:** Ensure your Docker container is running on port **5433**, or update the connection string in `server/src/main.rs`.
+</file>
+
+<file path="client/styles/08-footer-docs.css">
+/* ====================================
+   FOOTER
+   ==================================== */
+
+.landing-footer {
+    background: #020202;
+    padding: 3rem 0;
+    margin-top: auto;
+    border-top: 1px solid #1f1f22;
+    width: 100%;
+}
+
+.footer-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.footer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.brand-name {
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: white;
+}
+
+.footer-brand p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.footer-links {
+    display: flex;
+    gap: 24px;
+}
+
+.footer-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: color 0.2s;
+}
+
+.footer-links a:hover {
+    color: var(--text-main);
+}
+
+.footer-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 1.5rem;
+    text-align: center;
+}
+
+.copyright {
+    color: #52525b;
+    font-size: 0.85rem;
+}
+
+.brand-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .footer-top {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .footer-brand {
+        align-items: center;
+    }
+}
+
+/* ====================================
+   FOOTER
+   ==================================== */
+
+.landing-footer {
+    background: #020202;
+    padding: 3rem 0;
+    margin-top: auto;
+    border-top: 1px solid #1f1f22;
+    width: 100%;
+}
+
+.footer-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.footer-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.brand-name {
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: white;
+}
+
+.footer-brand p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.footer-links {
+    display: flex;
+    gap: 24px;
+}
+
+.footer-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.95rem;
+    transition: color 0.2s;
+}
+
+.footer-links a:hover {
+    color: var(--text-main);
+}
+
+.footer-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 1.5rem;
+    text-align: center;
+}
+
+.copyright {
+    color: #52525b;
+    font-size: 0.85rem;
+}
+
+.brand-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .footer-top {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .footer-brand {
+        align-items: center;
+    }
+}
+
+/* ====================================
+   DOCUMENTATION PAGE
+   ==================================== */
+
+.docs-container {
+    min-height: 100vh;
+    background: var(--bg-dark);
+    color: var(--text-main);
+    display: flex;
+    flex-direction: column;
+    scroll-padding-top: 80px;
+}
+
+.docs-container .nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.docs-layout {
+    display: flex;
+    flex: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Documentation Sidebar */
+.docs-sidebar {
+    width: 280px;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 60px;
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+    padding: 32px 0;
+}
+
+.docs-toc {
+    padding: 0 24px;
+}
+
+.toc-title {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin: 0 0 16px 0;
+    font-weight: 600;
+}
+
+.toc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.toc-list li {
+    margin-bottom: 4px;
+}
+
+.toc-list a {
+    display: block;
+    padding: 8px 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+}
+
+.toc-list a:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+}
+
+.toc-list ul {
+    list-style: none;
+    padding-left: 16px;
+    margin: 4px 0;
+}
+
+.toc-list ul a {
+    font-size: 0.875rem;
+    padding: 6px 12px;
+}
+
+/* Documentation Content */
+.docs-content {
+    flex: 1;
+    max-width: 900px;
+    padding: 60px 40px;
+    line-height: 1.7;
+}
+
+.docs-content h1 {
+    font-size: 2.75rem;
+    font-weight: 800;
+    margin: 0 0 48px 0;
+    padding-bottom: 24px;
+    border-bottom: 2px solid var(--border);
+    letter-spacing: -0.02em;
+}
+
+.docs-content h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 56px 0 24px 0;
+    color: var(--text-main);
+    padding-top: 16px;
+    scroll-margin-top: 80px;
+}
+
+.docs-content h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 40px 0 16px 0;
+    color: var(--text-main);
+    scroll-margin-top: 80px;
+}
+
+.docs-content p {
+    margin: 16px 0;
+    font-size: 1.05rem;
+}
+
+.docs-content ul,
+.docs-content ol {
+    margin: 16px 0;
+    padding-left: 32px;
+}
+
+.docs-content li {
+    margin: 8px 0;
+    line-height: 1.7;
+}
+
+.docs-content code {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    color: #e4e4e7;
+    border: 1px solid var(--border);
+}
+
+.docs-content pre {
+    background: #000;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+    margin: 24px 0;
+}
+
+.docs-content pre code {
+    background: none;
+    padding: 0;
+    border: none;
+    font-size: 0.95rem;
+}
+
+.docs-content section {
+    margin-bottom: 48px;
+    scroll-margin-top: 80px;
+}
+
+.docs-content strong {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+/* Special callout boxes */
+.docs-content .note,
+.docs-content .tip,
+.docs-content .warning {
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin: 24px 0;
+    border-left: 4px solid;
+}
+
+.docs-content .note {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: #3b82f6;
+}
+
+.docs-content .tip {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: #22c55e;
+}
+
+.docs-content .warning {
+    background: rgba(234, 179, 8, 0.1);
+    border-color: #eab308;
+}
+
+.docs-footer {
+    margin-top: 64px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.docs-footer a {
+    color: var(--text-main);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s;
+}
+
+.docs-footer a:hover {
+    color: #3b82f6;
+}
+
+/* Mobile Responsive for Docs */
+@media (max-width: 968px) {
+    .docs-layout {
+        flex-direction: column;
+    }
+
+    .docs-sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+        top: 0;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .docs-content {
+        padding: 32px 20px;
+    }
+
+    .docs-content h1 {
+        font-size: 2rem;
+    }
+
+    .docs-content h2 {
+        font-size: 1.5rem;
+    }
+}
+
+/* Markdown Preview */
+.markdown-body {
+    padding: 30px;
+    overflow-y: auto;
+    background-color: var(--bg-dark) !important;
+    color: var(--text-main) !important;
+}
+</file>
+
+<file path="client/Cargo.toml">
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021" # Changed from 2024 (standard is 2021)
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# CORE FRAMEWORK - VERSIONS MUST MATCH
+leptos = { version = "0.6", features = ["csr"] }
+leptos_router = { version = "0.6", features = ["csr"] }
+leptos_meta = { version = "0.6", features = ["csr"] } 
+
+# WEB UTILITIES
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["WebSocket", "MessageEvent", "ErrorEvent", "HtmlDivElement", "console", "Window", "Navigator", "Clipboard"] }
+js-sys = "0.3"
+console_error_panic_hook = "0.1.7"
+gloo-net = "0.5"
+
+# DATA & NETWORK
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.149"
+
+# MARKDOWN
+pulldown-cmark = "0.13.0"
+</file>
+
+<file path=".github/workflows/deploy.yml">
+name: Deploy Production
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  BINARY_NAME: server
+
+jobs:
+  build_and_deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment: SSH_PRIVATE_KEY
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      # This fixes the "pkg-config" error for the frontend build on the host runner.
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      #  FRONTEND BUILD (Leptos) 
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown, x86_64-unknown-linux-musl
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.4.0
+
+      - name: Build Frontend
+        working-directory: ./client
+        env:
+          API_URL: "https://trycli.com"
+          WS_URL: "wss://trycli.com"
+        run: trunk build --release
+
+      #  BACKEND BUILD (Axum) 
+      - name: Install Cross
+        run: cargo install cross
+
+      - name: Build Backend (Static Binary)
+        # ⚠️ CHANGE: Run from root to ensure workspace lockfile is respected
+        # and point to the server binary explicitly.
+        run: cross build --release --target x86_64-unknown-linux-musl --bin server
+
+      #  DEPLOYMENT 
+      - name: Prepare Deployment Package
+        run: |
+          mkdir deploy_package
+          
+          # ⚠️ FIX: Path is now 'target/...' not 'server/target/...'
+          cp target/x86_64-unknown-linux-musl/release/${{ env.BINARY_NAME }} deploy_package/server_bin
+          
+          # Frontend 'dist' is still inside client/ because trunk ran there
+          cp -r client/dist deploy_package/dist
+
+      - name: Deploy to DigitalOcean
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deploy_package/*"
+          target: "/home/deploy/app"
+          strip_components: 1
+
+      - name: Restart Application
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            chmod +x /home/deploy/app/server_bin
+            
+            # Ensure your systemd file points to /home/deploy/app/server_bin
+            # and Environment="LEPTOS_SITE_ROOT=./dist"
+            sudo systemctl restart trycli
+</file>
+
+<file path="client/index.html">
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <title>TryCli Studio</title>
+    <meta name="description" content="Host, share, and embed fully interactive CLI demos in your browser. A zero-config Rust & Docker sandbox for documenting and testing command-line tools." />
+    <meta name="author" content="TryCli Studio" />
+
+    <link data-trunk rel="copy-file" href="octopus_terminal_opt.png" />
+    
+    <link rel="icon" type="image/png" href="octopus_terminal_opt.png">
+    <link rel="apple-touch-icon" href="octopus_terminal_opt.png">
+    <link data-trunk rel="copy-file" href="sitemap.xml" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "TryCli Studio",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "WebBrowser",
+      "hasPart": [
+        {
+          "@type": "WebPage",
+          "name": "Documentation",
+          "url": "https://trycli.com/docs",
+          "description": "Learn how to host and embed your first CLI demo."
+        },
+        {
+          "@type": "WebPage",
+          "name": "Dashboard",
+          "url": "https://trycli.com/dashboard",
+          "description": "Manage your CLI demos and view analytics."
+        }
+      ],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "Host, share, and embed fully interactive CLI demos directly in the browser.",
+      "image": "https://trycli.com/octopus_terminal_opt.png",
+      "author": {
+          "@type": "Organization",
+          "name": "TryCli Studio",
+          "logo": "https://trycli.com/octopus_terminal_opt.png"
+      }
+    }
+    </script>
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://trycli.com/" />
+    <meta property="og:title" content="TryCLI Studio - Interactive CLI Demos" />
+    <meta property="og:description" content="Instantly spin up isolated Docker containers and share your CLI projects with a single link." />
+    <meta property="og:image" content="https://trycli.com/octopus_terminal_opt.png" /> 
+    
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:title" content="TryCLI Studio" />
+    <meta property="twitter:description" content="Host, share, and embed fully interactive CLI demos." />
+    <meta property="twitter:image" content="https://trycli.com/octopus_terminal_opt.png" />
+    
+    <link data-trunk rel="rust" href="Cargo.toml" />
+    
+    <link data-trunk rel="css" href="styles/01-base.css" />
+    <link data-trunk rel="css" href="styles/02-navigation.css" />
+    <link data-trunk rel="css" href="styles/03-buttons-inputs.css" />
+    <link data-trunk rel="css" href="styles/04-layout.css" />
+    <link data-trunk rel="css" href="styles/05-terminal.css" />
+    <link data-trunk rel="css" href="styles/06-dashboard.css" />
+    <link data-trunk rel="css" href="styles/07-landing.css" />
+    <link data-trunk rel="css" href="styles/08-footer-docs.css" />
+    <link data-trunk rel="css" href="styles/09-utilities.css" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown-dark.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+    
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  </head>
+  <body></body>
+</html>
+</file>
+
+<file path="server/src/handlers/auth.rs">
+use axum::{
+    extract::{Query, State},
+    response::{Redirect, IntoResponse},
+    http::StatusCode,
+    routing::get,
+    Router,
+};
+use oauth2::{
+    basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, 
+    RedirectUrl, Scope, TokenUrl, TokenResponse,
+};
+use serde::Deserialize;
+use tower_sessions::Session;
+use crate::state::AppState;
+use crate::models::User;
+
+pub const AUTH_URL: &str = "https://github.com/login/oauth/authorize";
+pub const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
+
+// Routes for Auth
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/auth/github", get(github_login))
+        .route("/auth/callback", get(github_callback))
+        .route("/auth/logout", get(logout))
+        .route("/api/me", get(get_me))
+}
+
+// 1. Redirect user to GitHub
+async fn github_login(State(state): State<AppState>) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // FIX: Handle config errors gracefully
+    let client = make_client(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    let (auth_url, _csrf_token) = client
+        .authorize_url(CsrfToken::new_random)
+        .add_scope(Scope::new("read:user".to_string()))
+        .url();
+    Ok(Redirect::to(auth_url.as_str()))
+}
+
+// 2. Handle callback from GitHub
+#[derive(Deserialize)]
+struct AuthRequest { code: String }
+
+async fn github_callback(
+    Query(query): Query<AuthRequest>,
+    State(state): State<AppState>,
+    session: Session,
+) -> Result<Redirect, (StatusCode, String)> { 
+    // FIX: Handle config errors gracefully
+    let client = make_client(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    // 1. Exchange Code
+    let token = client
+        .exchange_code(oauth2::AuthorizationCode::new(query.code))
+        .request_async(oauth2::reqwest::async_http_client)
+        .await
+        .map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Token Error: {}", e))
+        })?;
+
+    // 2. Fetch Profile
+    let http_client = reqwest::Client::new();
+    let user_data: User = http_client
+        .get("https://api.github.com/user")
+        .header("User-Agent", "TryCli Studio")
+        .bearer_auth(token.access_token().secret())
+        .send()
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Reqwest Error".into()))?
+        .json()
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "JSON Error".into()))?;
+
+    // 3. Save Session
+    session.insert("user", &user_data)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Session Insert Error".into()))?;
+
+    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+
+    let dashboard_url = if api_url.contains("localhost") {
+        "http://localhost:8080/dashboard".to_string()
+    } else {
+        format!("{}/dashboard", api_url)
+    };
+    
+    // 4. Redirect
+    Ok(Redirect::to(&dashboard_url))
+}
+
+// 3. Helper to check session
+async fn get_me(session: Session) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Read Error: {}", e)))?;
+    
+    Ok(axum::Json(user))
+}
+
+// 4. Helper to create OAuth client (Now returns Result)
+fn make_client(state: &AppState) -> Result<BasicClient, String> {
+    let auth_url = AuthUrl::new(AUTH_URL.to_string())
+        .map_err(|e| format!("Invalid Auth URL: {}", e))?;
+    
+    let token_url = TokenUrl::new(TOKEN_URL.to_string())
+        .map_err(|e| format!("Invalid Token URL: {}", e))?;
+
+    let api_url = std::env::var("API_URL")
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+        
+    let redirect_url = RedirectUrl::new(format!("{}/auth/callback", api_url))
+        .map_err(|e| format!("Invalid Redirect URL: {}", e))?;
+
+    Ok(BasicClient::new(
+        ClientId::new(state.github_id.clone()),
+        Some(ClientSecret::new(state.github_secret.clone())),
+        auth_url,
+        Some(token_url),
+    )
+    .set_redirect_uri(redirect_url))
+}
+
+async fn logout(session: Session) -> Result<impl IntoResponse, (StatusCode, String)> {
+    session.delete().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    
+    // Check for a specific Frontend URL, fallback to logic if not found
+    let redirect_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| {
+        let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+        if api_url.contains("localhost") {
+            "http://localhost:8080/".to_string()
+        } else {
+            api_url
+        }
+    });
+
+    Ok(Redirect::to(&redirect_url)) 
+}
+</file>
+
+<file path="server/src/services/docker.rs">
+use bollard::Docker;
+use bollard::container::{ListContainersOptions, RemoveContainerOptions, StatsOptions};
+use std::sync::Arc;
+use std::collections::HashMap;
+use futures::StreamExt; // <--- CRITICAL FIX: This enables .next() on streams
+use crate::state::SessionMap;
+
+pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
+    // Check every 30 seconds
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(30)); 
+    
+    loop {
+        interval.tick().await;
+        
+        // --- 1. CLEANUP ZOMBIE CONTAINERS ---
+        
+        let active_container_names: Vec<String> = match sessions.lock() {
+            Ok(guard) => guard.values().map(|ctx| ctx.container_name.clone()).collect(),
+            Err(e) => {
+                eprintln!("!! Reaper Mutex Poisoned: {}", e);
+                continue; 
+            }
+        };
+        
+        let filters = HashMap::from([
+            ("label".to_string(), vec!["managed_by=TryCli Studio".to_string()])
+        ]);
+        
+        let opts = ListContainersOptions {
+            all: true, 
+            filters,
+            ..Default::default()
+        };
+
+        if let Ok(containers) = docker.list_containers(Some(opts)).await {
+            for container in containers {
+                // Check if this container is known to our SessionMap
+                let is_active = container.names.as_ref().map_or(false, |names| {
+                    names.iter().any(|n| {
+                        let clean = n.trim_start_matches('/'); 
+                        active_container_names.contains(&clean.to_string())
+                    })
+                });
+
+                // If not active in our map, kill it
+                if !is_active {
+                    if let Some(id) = container.id {
+                        println!("Reaper: Killing Zombie Container {}", id);
+                        let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
+                            force: true, 
+                            ..Default::default()
+                        })).await;
+                    }
+                } 
+                // --- 2. MINING DETECTION (CPU MONITORING) ---
+                else {
+                    // It is active, but is it misbehaving?
+                    if let Some(id) = container.id {
+                       check_resource_usage(&docker, &id).await;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Helper function to check CPU usage
+async fn check_resource_usage(docker: &Docker, container_id: &str) {
+    let options = StatsOptions {
+        stream: false,
+        ..Default::default()
+    };
+
+    let mut stats_stream = docker.stats(container_id, Some(options));
+
+    if let Some(Ok(stats)) = stats_stream.next().await {
+        // --- EXISTING CPU CHECK ---
+        let cpu_delta = stats.cpu_stats.cpu_usage.total_usage as f64 - stats.precpu_stats.cpu_usage.total_usage as f64;
+        let system_cpu_usage = stats.cpu_stats.system_cpu_usage.unwrap_or(0);
+        let pre_system_cpu_usage = stats.precpu_stats.system_cpu_usage.unwrap_or(0);
+        let system_delta = system_cpu_usage as f64 - pre_system_cpu_usage as f64;
+
+        if system_delta > 0.0 && cpu_delta > 0.0 {
+            let cpu_percent = (cpu_delta / system_delta) * 100.0;
+            if cpu_percent > 90.0 {
+                println!("ABUSE: CPU Hog {} ({:.2}%). Killing.", container_id, cpu_percent);
+                let _ = docker.remove_container(container_id, Some(RemoveContainerOptions { force: true, ..Default::default() })).await;
+                return; // Container killed, exit
+            }
+        }
+
+        // --- NEW NETWORK CHECK ---
+        // Sum up Rx (Received) and Tx (Transmitted) across all interfaces
+        let mut total_network_bytes = 0;
+        if let Some(networks) = stats.networks {
+            for (_, net_stats) in networks {
+                total_network_bytes += net_stats.rx_bytes + net_stats.tx_bytes;
+            }
+        }
+
+        // LIMIT: 1 GB (1024 * 1024 * 1024)
+        // If they download/upload more than 1GB total, kill them.
+        const NETWORK_LIMIT_BYTES: u64 = 1024 * 1024 * 1024; 
+
+        if total_network_bytes > NETWORK_LIMIT_BYTES {
+            println!("ABUSE: Network Limit Exceeded {} ({} bytes). Killing.", container_id, total_network_bytes);
+            let _ = docker.remove_container(container_id, Some(RemoveContainerOptions {
+                force: true,
+                ..Default::default()
+            })).await;
+        }
+    }
+}
+</file>
+
+<file path="server/Cargo.toml">
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.7", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+bollard = "0.17" # The Docker Client
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+oauth2 = "4.4"
+tower-sessions = "0.10"
+axum-extra = { version = "0.9", features = ["cookie"] }
+dotenvy = "0.15" # To load client secrets
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+time = "0.3.46"
+openssl = { version = "0.10", features = ["vendored"] }
+openssl-sys = { version = "0.9", features = ["vendored"] }
+</file>
+
+<file path="server/src/auth.rs">
+use axum::{
+    extract::{Query, State},
+    response::{Redirect, IntoResponse},
+    http::StatusCode,
+    routing::get,
+    Router,
+};
+use oauth2::{
+    basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, 
+    RedirectUrl, Scope, TokenUrl, TokenResponse,
+};
+use serde::Deserialize;
+use tower_sessions::Session;
+use crate::state::AppState;
+use crate::models::User;
+
+pub const AUTH_URL: &str = "https://github.com/login/oauth/authorize";
+pub const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
+
+// Routes for Auth
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/auth/github", get(github_login))
+        .route("/auth/callback", get(github_callback))
+        .route("/auth/logout", get(logout))
+        .route("/api/me", get(get_me))
+}
+
+// 1. Redirect user to GitHub
+async fn github_login(State(state): State<AppState>) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // FIX: Handle config errors gracefully
+    let client = make_client(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    let (auth_url, _csrf_token) = client
+        .authorize_url(CsrfToken::new_random)
+        .add_scope(Scope::new("read:user".to_string()))
+        .url();
+    Ok(Redirect::to(auth_url.as_str()))
+}
+
+// 2. Handle callback from GitHub
+#[derive(Deserialize)]
+struct AuthRequest { code: String }
+
+async fn github_callback(
+    Query(query): Query<AuthRequest>,
+    State(state): State<AppState>,
+    session: Session,
+) -> Result<Redirect, (StatusCode, String)> { 
+    // FIX: Handle config errors gracefully
+    let client = make_client(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    // 1. Exchange Code
+    let token = client
+        .exchange_code(oauth2::AuthorizationCode::new(query.code))
+        .request_async(oauth2::reqwest::async_http_client)
+        .await
+        .map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Token Error: {}", e))
+        })?;
+
+    // 2. Fetch Profile
+    let http_client = reqwest::Client::new();
+    let user_data: User = http_client
+        .get("https://api.github.com/user")
+        .header("User-Agent", "TryCli Studio")
+        .bearer_auth(token.access_token().secret())
+        .send()
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Reqwest Error".into()))?
+        .json()
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "JSON Error".into()))?;
+
+    // 3. Save Session
+    session.insert("user", &user_data)
+        .await
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Session Insert Error".into()))?;
+    
+    // 4. Redirect
+    Ok(Redirect::to("http://localhost:8080/dashboard"))
+}
+
+// 3. Helper to check session
+async fn get_me(session: Session) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Read Error: {}", e)))?;
+    
+    Ok(axum::Json(user))
+}
+
+// 4. Helper to create OAuth client (Now returns Result)
+fn make_client(state: &AppState) -> Result<BasicClient, String> {
+    let auth_url = AuthUrl::new(AUTH_URL.to_string())
+        .map_err(|e| format!("Invalid Auth URL: {}", e))?;
+    
+    let token_url = TokenUrl::new(TOKEN_URL.to_string())
+        .map_err(|e| format!("Invalid Token URL: {}", e))?;
+
+    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+        
+    let redirect_url = RedirectUrl::new(format!("{}/auth/callback", api_url))
+        .map_err(|e| format!("Invalid Redirect URL: {}", e))?;
+
+    Ok(BasicClient::new(
+        ClientId::new(state.github_id.clone()),
+        Some(ClientSecret::new(state.github_secret.clone())),
+        auth_url,
+        Some(token_url),
+    )
+    .set_redirect_uri(redirect_url))
+}
+
+async fn logout(session: Session) -> Result<impl IntoResponse, (StatusCode, String)> {
+    session.delete().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Redirect::to("http://localhost:8080/")) 
+}
+</file>
+
+<file path="client/src/pages/home.rs">
+use leptos::*;
+use leptos_router::A;
+use leptos_meta::{Title, Meta, Link, Script};
+
+
+#[component]
+pub fn LandingPage() -> impl IntoView {
+    //  2. STRUCTURED DATA (JSON-LD) 
+    // Defines the site as a 'SoftwareApplication' for search engines[cite: 52].
+    // This allows Google to display "Free", "Web/WASM", and feature lists in snippets[cite: 53].
+    let schema_json = r#"{
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TryCLI Studio",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "WebBrowser, WASM",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "featureList": "Docker Integration, In-Browser Terminal, Markdown Guides"
+    }"#;
+
+
+
+    view! {
+        <>
+            //  4. SEO METADATA 
+            // Explicit Title and Description for correct indexing[cite: 22].
+            <Title text="TryCLI - Interactive CLI Demos & Embeds" />
+            <Meta name="description" content="Host, share, and embed fully interactive CLI demos directly in the browser. Think Replit, but purpose-built for command-line applications." />
+            
+            // Canonical Link (Essential for preventing duplicate content penalties)[cite: 33].
+            <Link rel="canonical" href="https://trycli.com" />
+
+            // JSON-LD Script Injection via leptos_meta[cite: 54].
+            <Script type_="application/ld+json">
+                {schema_json}
+            </Script>
+            
+            // Open Graph & Twitter Cards (Social Sharing)[cite: 45].
+            <Meta property="og:type" content="website" />
+            <Meta property="og:title" content="TryCLI - Interactive CLI Demos & Embeds" />
+            <Meta property="og:description" content="Instantly spin up isolated Docker containers and share your CLI projects with a single link." />
+            <Meta property="og:url" content="https://trycli.com" />
+            
+            <Meta name="twitter:card" content="summary_large_image" />
+            <Meta name="twitter:title" content="TryCLI - Interactive CLI Demos" />
+            <Meta name="twitter:description" content="Host, share, and embed fully interactive CLI demos directly in the browser." />
+        
+            //  MAIN CONTENT 
+            <div class="landing-container">
+                
+                // Navigation: Added aria-label for accessibility[cite: 75].
+                <nav class="landing-nav" aria-label="Main Navigation">
+                    <div class="nav-brand">
+                        <span class="logo-icon">">_"</span>
+                        <span class="logo-text">"TryCLI"</span>
+                    </div>
+                    <div class="nav-actions">
+                        <A href="/dashboard" class="btn-nav">"Login"</A>
+                        <A href="/dashboard" class="btn-primary btn-lg">"Launch Dashboard"</A>
+                    </div>
+                </nav>
+
+                // Hero Section: Uses semantic <main>[cite: 73].
+                <main class="hero-main">
+                    <div class="hero-content">
+                        <div class="badge">"Run Anywhere • Embed Everywhere"</div>
+                        
+                        // H1 contains primary keywords[cite: 75].
+                        <h1 class="hero-title">
+                            "Interactive CLI Demos"<br />
+                            <span class="text-gradient">"for the Modern Web."</span>
+                        </h1>
+                        
+                        <p class="hero-subtitle">
+                            "Host, share, and embed fully interactive CLI demos directly in the browser. "
+                            "Think Replit, but purpose-built for command-line applications."
+                        </p>
+
+                        <div class="cta-group">
+                            <A href="/dashboard" class="btn-primary btn-hero">
+                                "Start Building"
+                                <span class="arrow">"→"</span>
+                            </A>
+                            
+                            // Docs button - navigate to documentation page.
+                            <A href="/docs" class="btn-secondary">
+                                "View Docs"
+                            </A>
+                        </div>
+
+                        //  5. TERMINAL PREVIEW 
+                        // Added role="log" so search engines treat this as code output.
+                        <div class="terminal-preview" role="log" aria-label="Terminal Preview Demo">
+                            // Hidden decorative elements to reduce screen reader noise[cite: 70].
+                            <div class="terminal-header-preview" aria-hidden="true">
+                                <div class="dot red"></div>
+                                <div class="dot yellow"></div>
+                                <div class="dot green"></div>
+                                <span class="terminal-title-preview">"guest@tryCLI-demo:~"</span>
+                            </div>
+                            <div class="terminal-body-preview">
+                                <div class="line">
+                                    <span class="prompt">"$"</span> 
+                                    <span class="cmd">" TryCLI embed --target documentation"</span>
+                                </div>
+                                <div class="line output"><span>"✔ Snapshotting environment state..."</span></div>
+                                <div class="line output"><span>"✔ Generating embed code..."</span></div>
+                                <div class="line output"><span class="success">"✓ Live Demo Ready: https://trycli.com/e/xyz123"</span></div>
+                                <div class="line"><span class="prompt">"$"</span> <span class="cursor">"_"</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+
+                //  FEATURES 
+                <section class="section-features" style="background: rgba(255,255,255,0.01);">
+                    <div class="container-narrow">
+                        <h2 class="section-title">"What Is TryCLI?"</h2>
+                        <p class="section-subtitle" style="text-align: left; margin-bottom: 2rem;">
+                            "TryCLI orchestrates on-demand, isolated Docker environments that run real Linux terminals in the browser. "
+                            "Each user gets a fresh Ubuntu sandbox where they can execute commands, explore tools, and follow guided instructions — without installing anything locally."
+                        </p>
+                        <p class="section-subtitle" style="text-align: left;">
+                            "Once published, a terminal session can be shared as a URL or embedded directly into external sites as a fully interactive component."
+                        </p>
+                    </div>
+                </section>
+
+                <section class="section-features">
+                    <div class="container-narrow">
+                        <h2 class="section-title"><span class="text-gradient">"Key Features"</span></h2>
+                        <div class="features-grid">
+                            <article class="feature-card">
+                                <div class="icon-box">"🚀"</div>
+                                <h3>"Instant Sandboxes"</h3>
+                                <p>"Every session launches a fresh, isolated Ubuntu container. No shared state, no conflicts, and automatic teardown."</p>
+                            </article>
+                            <article class="feature-card">
+                                <div class="icon-box">"📸"</div>
+                                <h3>"Embed Everywhere"</h3>
+                                <p>"Snapshot your environment and embed it in docs, blogs, or wikis. Each embed launches a new isolated session per viewer."</p>
+                            </article>
+                            <article class="feature-card">
+                                <div class="icon-box">"📘"</div>
+                                <h3>"Interactive Guides"</h3>
+                                <p>"Split-pane interface pairs a real-time terminal with a GitHub-flavored Markdown editor for step-by-step walkthroughs."</p>
+                            </article>
+                        </div>
+                    </div>
+                </section>
+
+                //  USE CASES 
+                <section class="section-usage">
+                    <div class="container-narrow">
+                        <h2 class="section-title">"Use Cases"</h2>
+                        <p class="section-subtitle">"If it runs in a terminal, it runs — and embeds — on TryCLI."</p>
+                        <div class="features-grid">
+                            <div class="feature-card" style="border-left: 3px solid #22c55e;">
+                                <h3>"Documentation"</h3>
+                                <p>"Embed live CLI demos in docs instead of static screenshots."</p>
+                            </div>
+                            <div class="feature-card" style="border-left: 3px solid #3b82f6;">
+                                <h3>"Open Source"</h3>
+                                <p>"Showcase tools instantly without forcing users to install dependencies."</p>
+                            </div>
+                            <div class="feature-card" style="border-left: 3px solid #a855f7;">
+                                <h3>"DevRel"</h3>
+                                <p>"Create interactive tutorials, workshops, and hands-on content."</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                //  FINAL CTA 
+                <section class="section-usage" style="border-bottom: none;">
+                    <div class="container-narrow">
+                        <div class="final-cta">
+                            <h2 class="section-title" style="margin-bottom: 1rem;">
+                                <span class="text-gradient">"Why TryCLI?"</span>
+                            </h2>
+                            <p style="font-size: 1.2rem; color: #a1a1aa; max-width: 700px; margin: 0 auto 2rem auto; line-height: 1.6;">
+                                "Most CLI tools fail at the first step: getting users to try them. "
+                                "TryCLI removes that barrier by turning CLI tools into embeddable, interactive experiences that run instantly in the browser."
+                            </p>
+                            <div style="margin-top: 2rem;">
+                                <A href="/dashboard" class="btn-primary btn-lg">"Start Building Now"</A>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                //  FOOTER 
+                <footer class="landing-footer">
+                    <div class="footer-container">
+                        <div class="footer-top">
+                            <div class="footer-brand flex flex-row">
+                                <span class="logo-icon">">_"</span>
+                                <span class="brand-name">"TryCLI"</span>
+                            </div>
+                            <div class="footer-links">
+                                <a href="https://github.com/TryCli-Studio" target="_blank" rel="noopener noreferrer">"GitHub"</a>
+                                <a href="/docs" rel="noopener noreferrer">"Documentation"</a>
+                                <a href="https://x.com/TryCliStudio" rel="noopener noreferrer">"Twitter"</a>
+                            </div>
+                        </div>
+                        <div class="footer-bottom">
+                            <span class="copyright">"© 2025 TryCLI Studio. All rights reserved."</span><br/>
+                            <span class="copyright">"Built with ❤️"</span>
+                        </div>
+                    </div>
+                </footer>
+            </div>
+        </>
+    }
+}
+</file>
+
+<file path="server/src/main.rs">
+mod models;
+mod state;
+mod config;
+mod router;
+mod services {
+    pub mod docker;
+    pub mod websocket;
+}
+mod handlers {
+    pub mod auth;
+    pub mod project;
+    pub mod spawn;
+}
+
+use services::docker::start_background_reaper;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok(); 
+    
+    // Setup database and Docker
+    let state = config::setup_database_and_docker().await?;
+
+    // Spawn background reaper
+    let docker_reaper = state.docker.clone();
+    let sessions_reaper = state.sessions.clone();
+    tokio::spawn(async move {
+        start_background_reaper(docker_reaper, sessions_reaper).await;
+    });
+
+    // Create router with all routes
+    let app = router::create_router(state)?;
+
+    // Start server
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+    println!("Server listening on port 3000...");
+    axum::serve(listener, app).await?;
+    
+    Ok(())
+}
+</file>
+
+<file path="server/src/services/websocket.rs">
+use axum::{
+    extract::{Path, State, ws::{Message, WebSocket, WebSocketUpgrade}},
+    response::Response,
+    http::StatusCode,
+};
+use bollard::container::{CreateContainerOptions, Config};
+use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
+use bollard::image::CreateImageOptions;
+use bollard::exec::{CreateExecOptions, StartExecResults};
+use futures::{stream::StreamExt, SinkExt};
+use std::collections::HashMap;
+use tokio::io::AsyncWriteExt;
+use uuid::Uuid;
+use tower_sessions::Session; // Added
+use crate::state::{AppState, SessionContext}; // Added SessionContext
+use crate::models::User; // Added User
+
+pub async fn ws_handler(
+    ws: WebSocketUpgrade, 
+    Path(session_id): Path<String>, 
+    State(state): State<AppState>,
+    session: Session, 
+) -> Result<Response, StatusCode> {
+    // 1. Extract User ID (No unwrap)
+    let user: Option<User> = session.get("user").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user_id = user.map(|u| u.id);
+
+    // 2. Validate Permissions BEFORE Upgrade
+    {
+        let map = state.lock_sessions();
+        
+        match map.get(&session_id) {
+            Some(ctx) => {
+                // Scenario A: Connecting to existing session
+                if let Some(owner) = ctx.owner_id {
+                    // If session has an owner, user MUST match
+                    if Some(owner) != user_id {
+                        return Err(StatusCode::FORBIDDEN);
+                    }
+                }
+                // If owner_id is None, it's a public viewer; allow access.
+            },
+            None => {
+                // Scenario B: Spawning a new session
+                // User MUST be logged in to spawn resources
+                if user_id.is_none() {
+                    return Err(StatusCode::UNAUTHORIZED);
+                }
+            }
+        }
+    }
+
+    // 3. Upgrade Connection
+    Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, session_id, user_id)))
+}
+
+async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
+    // 1. Attempt to CLAIM the session immediately
+    let is_claimed_by_us = {
+        let mut map = state.lock_sessions();
+        if map.contains_key(&session_id) {
+            false
+        } else {
+            // Insert a placeholder to block other connections
+            map.insert(session_id.clone(), SessionContext {
+                container_name: "INITIALIZING".to_string(), // Marker value
+                shell: "".to_string(),
+                owner_id: user_id
+            });
+            true
+        }
+    };
+
+    if is_claimed_by_us {
+        // We won the race -> Run the wizard
+        run_setup_wizard(socket, state, session_id, user_id).await;
+    } else {
+        // Session exists (or is being initialized by another socket)
+        let existing_session = {
+            let map = state.lock_sessions();
+            map.get(&session_id).cloned()
+        };
+
+        if let Some(ctx) = existing_session {
+            if ctx.container_name == "INITIALIZING" {
+                // Another connection is currently setting this up. 
+                // Close this duplicate connection to prevent the race.
+                let _ = socket.close().await;
+                return;
+            }
+            // Normal attach logic
+            attach_to_container(socket, state, session_id, ctx.container_name, ctx.shell, None).await;
+        }
+    }
+}
+
+async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
+    async fn send_txt(ws: &mut WebSocket, txt: &str) {
+        let _ = ws.send(Message::Text(txt.to_string())).await;
+    }
+    
+    let green = "\x1b[32m";
+    let cyan = "\x1b[36m";
+    let reset = "\x1b[0m";
+    let red = "\x1b[31m";
+    let clear = "\x1b[2J\x1b[1;1H";
+
+    send_txt(&mut socket, clear).await;
+    send_txt(&mut socket, &format!("{}Welcome to TryCli Studio Setup!{}\r\n\r\n", green, reset)).await;
+    
+    send_txt(&mut socket, &format!("{}Select Base Image:{}\r\n", cyan, reset)).await;
+    send_txt(&mut socket, "1. Ubuntu 22.04 (Heavy, Full-featured)\r\n").await;
+    send_txt(&mut socket, "2. Alpine Linux (Lightweight, Fast)\r\n").await;
+    send_txt(&mut socket, "3. Debian Bookworm (Stable)\r\n").await;
+    send_txt(&mut socket, "Choice [1-3]: ").await;
+
+    let mut distro_choice = 0;
+    while let Some(Ok(Message::Text(txt))) = socket.recv().await {
+        let input = txt.trim();
+        if input == "1" { distro_choice = 1; break; }
+        if input == "2" { distro_choice = 2; break; }
+        if input == "3" { distro_choice = 3; break; }
+    }
+
+    send_txt(&mut socket, "\r\n\r\n").await;
+    send_txt(&mut socket, &format!("{}Select Shell (will be installed):{}\r\n", cyan, reset)).await;
+    send_txt(&mut socket, "1. Bash (Default)\r\n").await;
+    send_txt(&mut socket, "2. Zsh (Oh-My-Zsh ready)\r\n").await;
+    send_txt(&mut socket, "3. Fish (Friendly Interactive Shell)\r\n").await;
+    send_txt(&mut socket, "Choice [1-3]: ").await;
+
+    let mut shell_choice = 0;
+    while let Some(Ok(Message::Text(txt))) = socket.recv().await {
+        let input = txt.trim();
+        if input == "1" { shell_choice = 1; break; }
+        if input == "2" { shell_choice = 2; break; }
+        if input == "3" { shell_choice = 3; break; }
+    }
+    
+    send_txt(&mut socket, &format!("\r\n\r\n{}Provisioning Container... Please wait...{}\r\n", green, reset)).await;
+
+    let (image, install_script, final_shell) = match (distro_choice, shell_choice) {
+        (2, 1) => ("alpine:latest", "apk add --no-cache bash", "/bin/bash"),
+        (2, 2) => ("alpine:latest", "apk add --no-cache zsh", "/bin/zsh"),
+        (2, 3) => ("alpine:latest", "apk add --no-cache fish", "/usr/bin/fish"),
+        (1, 2) | (3, 2) => (if distro_choice == 1 { "ubuntu:22.04" } else { "debian:bookworm-slim" }, "export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y zsh", "/usr/bin/zsh"),
+        (1, 3) | (3, 3) => (if distro_choice == 1 { "ubuntu:22.04" } else { "debian:bookworm-slim" }, "export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y fish", "/usr/bin/fish"),
+        (1, _) => ("ubuntu:22.04", "true", "/bin/bash"),
+        (3, _) => ("debian:bookworm-slim", "true", "/bin/bash"),
+        _ => ("debian:bookworm-slim", "true", "/bin/bash"),
+    };
+
+    let _ = state.docker.create_image(Some(CreateImageOptions { from_image: image, ..Default::default() }), None, None).collect::<Vec<_>>().await;
+
+    let container_name = format!("trycli-studio-session-{}", Uuid::new_v4());
+    let config = Config {
+        image: Some(image.to_string()),
+        tty: Some(true),
+        open_stdin: Some(true),
+        cmd: Some(vec!["tail".to_string(), "-f".to_string(), "/dev/null".to_string()]),
+        env: Some(vec![
+            "LANG=C.UTF-8".to_string(),
+            "LC_ALL=C.UTF-8".to_string(),
+            "TERM=xterm-256color".to_string()
+        ]),
+        labels: Some(HashMap::from([
+            ("managed_by".to_string(), "TryCli Studio".to_string())
+        ])),
+        host_config: Some(HostConfig {
+            runtime: Some("runsc".to_string()),
+            // 1. RESOURCE QUOTAS (Stop the "Noisy Neighbor")
+            // Give builders more RAM/CPU than viewers, but still cap them.
+            memory: Some(512 * 1024 * 1024), // 512 MB RAM (Publishers need to compile/install)
+            memory_swap: Some(1024 * 1024 * 1024), // No extra swap to thrash disk
+            nano_cpus: Some(500_000_000),   // 0.5 CPUs (Installers are CPU heavy)
+
+            ulimits: Some(vec![
+            bollard::models::ResourcesUlimits {
+                name: Some("fsize".to_string()),
+                soft: Some(100 * 1024 * 1024), // 100 MB Soft Limit
+                hard: Some(100 * 1024 * 1024), // 100 MB Hard Limit
+            }
+            ]),
+
+            mounts: Some(vec![
+            Mount {
+                target: Some("/tmp".to_string()),
+                typ: Some(MountTypeEnum::TMPFS),
+                tmpfs_options: Some(MountTmpfsOptions {
+                    size_bytes: Some(256 * 1024 * 1024), // 256 MB Limit for /tmp
+                    mode: Some(0o1777),
+                }),
+                ..Default::default()
+            }
+            ]),
+            
+            // 2. FORK BOMB PROTECTION
+            // 128 processes is enough for 'apt-get' and 'make', but stops a fork bomb script
+            pids_limit: Some(128), 
+
+            // 3. CAPABILITY DROPPING (The "Root" protection)
+            // We cannot drop "ALL" because apt-get/apk need to change file owners.
+            // But we explicitly DROP the dangerous ones used for hacking/escaping.
+            cap_drop: Some(vec![
+                "SYS_ADMIN".to_string(),   // Prevents mounting filesystems / container escape
+                "NET_RAW".to_string(),     // Prevents packet sniffing/spoofing (nmap/arp)
+                "SYS_MODULE".to_string(),  // Prevents loading kernel modules (rootkits)
+                "SYS_PTRACE".to_string(),  // Prevents inspecting other processes
+                "AUDIT_CONTROL".to_string(), // Prevents messing with audit logs
+                "MAC_ADMIN".to_string(),     // Prevents messing with security modules
+                "SYS_TIME".to_string(),      // Prevents changing system time
+            ]),
+
+            // 4. PRIVILEGE ESCALATION PREVENTION
+            // This ensures that even if they download a binary with the SUID bit set,
+            // it cannot grant them more privileges than they already have.
+            security_opt: Some(vec!["no-new-privileges".to_string()]),
+
+            // 5. NETWORK SECURITY
+            // Keeps them on the bridge network but isolated
+            network_mode: Some("bridge".to_string()),
+
+            auto_remove: Some(true),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    match state.docker.create_container(
+        Some(CreateContainerOptions { name: container_name.clone(), platform: None }), config
+    ).await {
+        Ok(_) => {
+            if let Err(e) = state.docker.start_container::<String>(&container_name, None).await {
+                // ERROR HANDLER: If start fails, remove the "INITIALIZING" lock
+                {
+                    let mut map = state.lock_sessions();
+                    map.remove(&session_id);
+                }
+                send_txt(&mut socket, &format!("{}Fatal Error: Could not start container: {}{}", red, e, reset)).await;
+                return;
+            }
+
+            {
+                let mut map = state.lock_sessions();
+                // UPDATE the placeholder with the REAL container details
+                map.insert(session_id.clone(), SessionContext {
+                    container_name: container_name.clone(),
+                    shell: final_shell.to_string(),
+                    owner_id: user_id 
+                });
+            }
+            let limit_config = "Acquire::http::Dl-Limit \"500\"; Acquire::https::Dl-Limit \"500\";";
+            let inject_limit_cmd = format!(
+            "echo '{}' > /etc/apt/apt.conf.d/99limit", 
+            limit_config
+            );
+
+            let auto_type_cmd = format!(
+                "mkdir -p /etc/apt/apt.conf.d && {} && {} && echo '\r\n\r\n READY ' && exec {}\n", 
+                inject_limit_cmd,
+                install_script, 
+                final_shell
+            );
+            attach_to_container(socket, state, session_id, container_name, "/bin/sh".to_string(), Some(auto_type_cmd)).await;
+        },
+        Err(e) => {
+            // ERROR HANDLER: If create fails, remove the "INITIALIZING" lock
+            {
+                let mut map = state.lock_sessions();
+                map.remove(&session_id);
+            }
+            send_txt(&mut socket, &format!("Error creating container: {}", e)).await;
+        }
+    }
+}
+
+async fn attach_to_container(
+    socket: WebSocket, 
+    state: AppState,
+    session_id: String,
+    container_name: String, 
+    shell_path: String,
+    initial_input: Option<String>
+) {
+    let config = CreateExecOptions {
+        attach_stdout: Some(true), attach_stderr: Some(true), attach_stdin: Some(true),
+        tty: Some(true), 
+        cmd: Some(vec![shell_path]), 
+        ..Default::default()
+    };
+
+    let exec = match state.docker.create_exec(&container_name, config).await {
+        Ok(e) => e,
+        Err(e) => {
+            println!("Exec Create Error: {}", e);
+            return;
+        }
+    };
+
+    if let Ok(StartExecResults::Attached { mut output, mut input }) = state.docker.start_exec(&exec.id, None).await {
+        let (mut sender, mut receiver) = socket.split();
+
+        if let Some(script) = initial_input {
+            let _ = input.write_all(script.as_bytes()).await;
+        }
+
+        let mut send_task = tokio::spawn(async move {
+            while let Some(Ok(Message::Text(text))) = receiver.next().await {
+                let _ = input.write_all(text.as_bytes()).await;
+            }
+        });
+
+        let mut recv_task = tokio::spawn(async move {
+            while let Some(Ok(msg)) = output.next().await {
+                let _ = sender.send(Message::Text(msg.to_string().into())).await;
+            }
+        });
+
+        let _ = tokio::select! {
+            _ = &mut send_task => {},
+            _ = &mut recv_task => {},
+        };
+
+        println!("Cleaning up session: {}", session_id);
+        {
+            // FIX: Safe lock helper
+            let mut map = state.lock_sessions();
+            map.remove(&session_id);
+        }
+        let _ = state.docker.stop_container(&container_name, None).await;
+    }
+}
+</file>
+
+<file path="client/src/pages/dashboard.rs">
+use leptos::*;
+use leptos_router::*;
+use gloo_net::http::Request;
+use web_sys::RequestCredentials;
+use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::*;
+use std::rc::Rc;
+use crate::types::{User, ProjectSummary};
+use crate::api::api_base;
+
+#[component]
+pub fn DashboardPage() -> impl IntoView {
+    let (user, set_user) = create_signal(None::<User>);
+    let (projects, set_projects) = create_signal(Vec::<ProjectSummary>::new());
+    let (loading, set_loading) = create_signal(true);
+    let (error, set_error) = create_signal(None::<String>);
+
+    create_resource(|| (), move |_| async move {
+
+        let url = format!("{}/api/me", api_base());
+        let auth_req = Request::get(&url)
+            .credentials(RequestCredentials::Include)
+            .send()
+            .await;
+
+        match auth_req {
+            Ok(resp) => {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        web_sys::console::log_1(&JsValue::from_str(&format!("User authenticated: {}", u.login)));
+                        set_user.set(Some(u.clone()));
+
+                        let proj_url = format!("{}/api/my-projects", api_base());
+                        let projects_req = Request::get(&proj_url)
+                            .credentials(RequestCredentials::Include)
+                            .send()
+                            .await;
+
+                        match projects_req {
+                            Ok(p_resp) => {
+                                if p_resp.ok() {
+                                    if let Ok(projs) = p_resp.json::<Vec<ProjectSummary>>().await {
+                                        set_projects.set(projs);
+                                        set_error.set(None);
+                                    } else {
+                                        set_error.set(Some("Failed to parse projects".to_string()));
+                                    }
+                                } else {
+                                    set_error.set(Some("Failed to fetch projects".to_string()));
+                                }
+                            }
+                            Err(_) => {
+                                set_error.set(Some("Network error".to_string()));
+                            }
+                        }
+                        set_loading.set(false);
+                    }
+                } else {
+                    set_loading.set(false);
+                }
+            }
+            Err(_) => {
+                set_loading.set(false);
+                set_error.set(Some("Failed to authenticate".to_string()));
+            }
+        }
+    });
+
+    let navigate = leptos_router::use_navigate();
+
+    // Search state and debounce logic
+    let (search_input, set_search_input) = create_signal(String::new());
+    let (search_results, set_search_results) = create_signal(Vec::<ProjectSummary>::new());
+    let (show_suggestions, set_show_suggestions) = create_signal(false);
+    let (debounce_timer, set_debounce_timer) = create_signal::<Option<i32>>(None);
+
+    let perform_search = move |query: String| {
+        if query.is_empty() {
+            set_search_results.set(Vec::new());
+            set_show_suggestions.set(false);
+            return;
+        }
+
+        let query_clone = query.clone();
+        spawn_local(async move {
+            let encoded_query = js_sys::encode_uri_component(&query_clone).to_string();
+            let search_url = format!("{}/api/search-projects?q={}", api_base(), encoded_query);
+            web_sys::console::log_1(&JsValue::from_str(&format!("Searching for: {}", search_url)));
+            match Request::get(&search_url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    web_sys::console::log_1(&JsValue::from_str(&format!("Search response status: {}", resp.status())));
+                    if resp.ok() {
+                        if let Ok(results) = resp.json::<Vec<ProjectSummary>>().await {
+                            web_sys::console::log_1(&JsValue::from_str(&format!("Found {} results", results.len())));
+                            set_search_results.set(results);
+                            set_show_suggestions.set(true);
+                        } else {
+                            web_sys::console::log_1(&JsValue::from_str("Failed to parse search results JSON"));
+                        }
+                    } else {
+                        let err_text = resp.text().await.unwrap_or_default();
+                        web_sys::console::log_1(&JsValue::from_str(&format!("Search failed: {}", err_text)));
+                    }
+                }
+                Err(e) => {
+                    web_sys::console::log_1(&JsValue::from_str(&format!("Search network error: {:?}", e)));
+                }
+            }
+        });
+    };
+
+    let handle_search_input = move |ev: ev::Event| {
+        let input_value = event_target_value(&ev);
+        set_search_input.set(input_value.clone());
+        set_show_suggestions.set(true);
+
+        // Clear previous timer
+        if let Some(timer_id) = debounce_timer.get() {
+            if let Some(window) = web_sys::window() {
+                window.clear_timeout_with_handle(timer_id);
+            }
+        }
+
+        // Set new debounce timer (300ms)
+        if let Some(window) = web_sys::window() {
+            let input_clone = input_value.clone();
+            let closure = Closure::once(move || {
+                perform_search(input_clone);
+            });
+            if let Ok(timer_id) = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                closure.as_ref().unchecked_ref(),
+                300
+            ) {
+                set_debounce_timer.set(Some(timer_id));
+                closure.forget();
+            }
+        }
+    };
+
+    view! {
+        <div class="nav">
+            <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
+                if user.get().is_some() {
+                    navigate("/dashboard", Default::default());
+                } else {
+                    navigate("/", Default::default());
+                }
+            }>
+                <span class="logo-icon">">_"</span>
+                <span>"TryCli Studio"</span>
+            </div>
+            <div class="controls">
+                {move || match user.get() {
+                    Some(u) => view! {
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <img src=u.avatar_url 
+                                 style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                            <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
+                        </div>
+                        <a href=format!("{}/auth/logout", api_base()) 
+                            class="btn-primary btn-logout" 
+                            rel="external"  
+                            style="text-decoration: none; font-size: 0.9rem;">
+                            "Logout"
+                        </a>
+                    }.into_view(),
+                    None => view! {
+                        <a href=format!("{}/auth/github", api_base()) class="btn-primary" rel="external" style="text-decoration: none;">                            "Login with GitHub"
+                        </a>
+                    }.into_view()
+                }}
+            </div>
+        </div>
+
+        {
+            let user_signal = user.clone();
+            move || {
+                match (user_signal.get(), loading.get()) {
+                    (Some(u), false) => {
+                        let user_login_rc = Rc::new(u.login.clone());
+                        view! {
+                            <div class="dashboard-container">
+                                <div class="dashboard-hero">
+                                    <div class="hero-content">
+                                        <h1 class="hero-title">"Dream it, Build it."</h1>
+                                        <p class="hero-subtitle">"Create and manage your interactive CLI projects"</p>
+                                        <DashboardSearch 
+                                            search_input=search_input
+                                            set_search_input=set_search_input
+                                            show_suggestions=show_suggestions
+                                            set_show_suggestions=set_show_suggestions
+                                            search_results=search_results
+                                            handle_search_input=handle_search_input
+                                            user_login=user_login_rc.clone()
+                                        />
+                                    </div>
+                                </div>
+
+                                <div class="dashboard-section">
+                                   <div class="section-header">
+                                        <h2>"Your Projects"</h2>
+                                        <A href="/new" class="btn-primary">
+                                            "+ New Project"
+                                        </A>
+                                    </div>
+
+                                    <DashboardProjectList
+                                        error=error
+                                        set_error=set_error
+                                        set_loading=set_loading
+                                        projects=projects
+                                        set_projects=set_projects 
+                                        user_login=user_login_rc.clone()
+                                    />
+                                </div>
+                            </div>
+                        }.into_view()
+                    },
+                    (None, false) => view! {
+                        <div style="display: flex; height: calc(100vh - 60px); justify-content: center; align-items: center; flex-direction: column; gap: 20px;">
+                            <h2 style="color: var(--text-main);">"Welcome to TryCli Studio"</h2>
+                            <p style="color: var(--text-muted);">"Please sign in to start creating interactive demos."</p>
+                        </div>
+                    }.into_view(),
+                    _ => view! {
+                        <div style="display: flex; height: calc(100vh - 60px); justify-content: center; align-items: center;">
+                            <div class="spinner"></div>
+                        </div>
+                    }.into_view()
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn DashboardSearch(
+    search_input: ReadSignal<String>,
+    set_search_input: WriteSignal<String>,
+    show_suggestions: ReadSignal<bool>,
+    set_show_suggestions: WriteSignal<bool>,
+    search_results: ReadSignal<Vec<ProjectSummary>>,
+    handle_search_input: impl Fn(ev::Event) + 'static,
+    user_login: Rc<String>,
+) -> impl IntoView {
+    let navigate = leptos_router::use_navigate();
+    view! {
+        <div class="input-hero-wrapper" style="position: relative;">
+            <input type="text" 
+                   class="input-hero" 
+                   placeholder="Search or create a new project..."
+                   value=search_input.get()
+                   on:input=handle_search_input
+                   on:focus=move |_| {
+                       if !search_input.get().is_empty() {
+                           set_show_suggestions.set(true);
+                       }
+                   }
+                   on:blur=move |_| {
+                       set_timeout(move || {
+                           set_show_suggestions.set(false);
+                       }, std::time::Duration::from_millis(200));
+                   } />
+            
+            {
+                let nav = navigate.clone();
+                move || {
+                if show_suggestions.get() {
+                    let results = search_results.get();
+                    let input_val = search_input.get();
+                    let user_login_clone = user_login.clone();
+                    let navigate_fn = nav.clone();
+                    
+                    view! {
+                        <div style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-main); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 10;">
+                            {if results.is_empty() && !input_val.is_empty() {
+                                let input_val_copy = input_val.clone();
+                                let input_val_display = input_val.clone();
+                                view! {
+                                    <div style="padding: 16px; color: var(--text-muted);">
+                                        <p style="margin: 0 0 8px 0;">"No project found."</p>
+                                        <button class="btn-primary" 
+                                                style="font-size: 0.9rem; padding: 8px 12px; width: 100%; text-align: left;"
+                                                on:click=move |_| {
+                                            set_show_suggestions.set(false);
+                                            set_search_input.set(String::new());
+                                            let encoded_name = js_sys::encode_uri_component(&input_val_copy).to_string();
+                                            navigate_fn(&format!("/new?name={}", encoded_name), Default::default());
+                                        }>
+                                            {format!("Create project '{}'?", input_val_display)}
+                                        </button>
+                                    </div>
+                                }.into_view()
+                            } else {
+                                let login_str = user_login_clone.as_ref().clone();
+                                view! {
+                                    <For
+                                        each=move || results.clone()
+                                        key=|p| p.slug.clone()
+                                        children=move |proj| {
+                                            let login = login_str.clone();
+                                            let proj_slug = proj.slug.clone();
+                                            let proj_image = proj.image_tag.clone();
+                                            view! {
+                                                <a href=format!("/{}/{}", login, proj_slug.clone())
+                                                   style="display: block; padding: 12px 16px; color: var(--text-main); text-decoration: none; border-bottom: 1px solid var(--bg-dark); cursor: pointer;"
+                                                   on:click=move |_| {
+                                                       set_show_suggestions.set(false);
+                                                       set_search_input.set(String::new());
+                                                   }>
+                                                    <div style="font-weight: 500;">{proj_slug}</div>
+                                                    <div style="font-size: 0.85rem; color: var(--text-muted);">{proj_image}</div>
+                                                </a>
+                                            }
+                                        }
+                                    />
+                                }.into_view()
+                            }}
+                        </div>
+                    }.into_view()
+                } else {
+                    view! { <></> }.into_view()
+                }
+            }
+            }
+        </div>
+    }
+}
+
+#[component]
+fn DashboardProjectList(
+    error: ReadSignal<Option<String>>,
+    set_error: WriteSignal<Option<String>>,
+    set_loading: WriteSignal<bool>,
+    projects: ReadSignal<Vec<ProjectSummary>>,
+    set_projects: WriteSignal<Vec<ProjectSummary>>, // < Receive Setter
+    user_login: Rc<String>,
+) -> impl IntoView {
+
+    // Handler for deletion logic
+    let handle_delete = move |slug: String| {
+        let prompt_text = format!(
+            "⚠️ DESTRUCTIVE ACTION\n\nThis will permanently delete the project '{}' and its Docker image.\n\nPlease type the project name to confirm:", 
+            slug
+        );
+
+        // FIX: Match against Ok(Some(input)) to handle the Result wrapper
+        if let Ok(Some(input)) = window().prompt_with_message(&prompt_text) {
+            if input == slug {
+                let slug_clone = slug.clone();
+                
+                spawn_local(async move {
+                    let url = format!("{}/api/project/{}", api_base(), slug_clone);
+                    
+                    let req = Request::delete(&url)
+                        .credentials(RequestCredentials::Include)
+                        .send()
+                        .await;
+
+                    match req {
+                        Ok(resp) => {
+                            if resp.ok() {
+                                set_projects.update(|list| {
+                                    list.retain(|p| p.slug != slug_clone);
+                                });
+                                let _ = window().alert_with_message("Project and Docker image deleted.");
+                            } else {
+                                let _ = window().alert_with_message("Failed to delete project. Check server logs.");
+                            }
+                        },
+                        Err(_) => {
+                            let _ = window().alert_with_message("Network error occurred.");
+                        }
+                    }
+                });
+            } else {
+                let _ = window().alert_with_message("Project name mismatch. Deletion cancelled.");
+            }
+        }
+    };
+
+    view! {
+        {move || match error.get() {
+            Some(err) => view! {
+                <div class="error-state">
+                    <p class="error-message">{err}</p>
+                    <button class="btn-primary" on:click=move |_| {
+                        set_error.set(None);
+                        set_loading.set(true);
+                    }>
+                        "Retry"
+                    </button>
+                </div>
+            }.into_view(),
+            None => {
+                let proj_list = projects.get();
+                if proj_list.is_empty() {
+                    view! {
+                        <div class="empty-state">
+                            <p class="empty-message">"No projects yet. Create your first one!"</p>
+                            <A href="/new" class="btn-primary">
+                                "Create Project"
+                            </A>
+                        </div>
+                    }.into_view()
+                } else {
+                    let user_login_clone = user_login.clone();
+                    view! {
+                        <div class="dashboard-grid">
+                            <For
+                                each=move || projects.get()
+                                key=|p| p.slug.clone()
+                                children=move |proj| {
+                                    let login = user_login_clone.as_ref().clone();
+                                    let delete_slug = proj.slug.clone();
+                                    
+                                    view! {
+                                        <div class="project-card">
+                                            <div class="card-header">
+                                                <h3 class="card-title">{proj.slug.clone()}</h3>
+                                            </div>
+                                            <div class="card-body">
+                                                <p class="card-meta">"Image: "<code>{proj.image_tag.clone()}</code></p>
+                                            </div>
+                                            <div class="card-footer" style="display: flex;">
+                                                <A href=format!("/{}/{}", login, proj.slug)
+                                                   class="btn-card">
+                                                    "View"
+                                                </A>
+                                                <button 
+                                                    class="btn-danger"
+                                                    on:click=move |_| handle_delete(delete_slug.clone())>
+                                                    "Delete"
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            />
+                        </div>
+                    }.into_view()
+                }
+            }
+        }}
+    }
+}
+</file>
+
+<file path="client/src/lib.rs">
+use leptos::*;
+
+pub mod types;
+pub mod api;
+pub mod app;
+pub mod components {
+    pub mod terminal;
+    pub mod protected;
+}
+pub mod pages {
+    pub mod home;
+    pub mod dashboard;
+    pub mod create;
+    pub mod view;
+    pub mod embed;
+    pub mod docs;
+}
+
+pub use app::App;
+
+#[wasm_bindgen::prelude::wasm_bindgen(start)]
+pub fn main() {
+    console_error_panic_hook::set_once();
+    leptos::mount_to_body(|| view! { <App /> })
+}
+</file>
+
+<file path="server/src/handlers/project.rs">
+use axum::{
+    extract::{Path, Query, State},
+    routing::{get, post,delete},
+    Router, Json,
+    http::StatusCode,
+};
+use bollard::container::{CreateContainerOptions, Config};
+use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
+use bollard::image::{CommitContainerOptions, RemoveImageOptions};
+use tower_sessions::Session;
+use uuid::Uuid;
+use serde::Deserialize;
+use crate::state::{AppState, SessionContext};
+use crate::models::{User, ProjectSummary, PublishRequest};
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    q: String,
+}
+
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/api/my-projects", get(list_user_projects))
+        .route("/api/project/:username/:slug", get(get_project))
+        .route("/api/project/:slug", delete(delete_project)) // < New Route
+        .route("/api/search-projects", get(search_projects))
+        .route("/api/publish", post(publish_handler))
+}
+
+pub async fn list_user_projects(
+    State(state): State<AppState>,
+    session: Session,
+) -> Result<Json<Vec<ProjectSummary>>, (StatusCode, String)> {
+    // FIX: Safely handle session retrieval instead of unwrap()
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    let projects = sqlx::query_as::<_, ProjectSummary>(
+        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
+    )
+    .bind(user.id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error fetching projects: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch projects".to_string())
+    })?;
+
+    Ok(Json(projects))
+}
+
+pub async fn search_projects(
+    State(state): State<AppState>,
+    session: Session,
+    Query(search): Query<SearchQuery>,
+) -> Result<Json<Vec<ProjectSummary>>, (StatusCode, String)> {
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    let query_term = format!("%{}%", search.q);
+    
+    // Use PostgreSQL ILIKE for case-insensitive fuzzy search
+    let projects = sqlx::query_as::<_, ProjectSummary>(
+        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
+    )
+    .bind(user.id)
+    .bind(query_term)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| {
+        eprintln!("Database error searching projects: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "Failed to search projects".to_string())
+    })?;
+
+    Ok(Json(projects))
+}
+
+pub async fn publish_handler(
+    State(state): State<AppState>,
+    session: Session, 
+    Json(payload): Json<PublishRequest>
+) -> Result<Json<String>, (StatusCode, String)> {
+    // FIX: Map error instead of unwrap
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    // 1. Get Session Info & Verify Ownership
+    let (container_name, shell_path) = {
+        let map = state.lock_sessions();
+        match map.get(&payload.container_id) {
+            Some(ctx) => {
+                // STRICT CHECK: Does the user publishing own the container?
+                if ctx.owner_id != Some(user.id) {
+                     return Err((StatusCode::FORBIDDEN, "You do not own this session".to_string()));
+                }
+                // Minimize clone: only clone the strings needed for the commit options
+                (ctx.container_name.clone(), ctx.shell.clone())
+            },
+            None => return Err((StatusCode::BAD_REQUEST, "Session expired".to_string())),
+        }
+    };
+
+    let safe_slug = payload.slug.trim().to_lowercase();
+    let new_image_tag = format!("trycli-studio-project-{}", safe_slug);
+
+    // 2. Prepare Commit Options
+    let commit_opts = CommitContainerOptions {
+        container: container_name.clone(),
+        repo: new_image_tag.clone(),
+        ..Default::default()
+    };
+
+    // 3. Prepare Config
+    let config = Config {
+        cmd: Some(vec![shell_path.clone()]),
+        env: Some(vec![format!("SHELL={}", shell_path)]),
+        ..Default::default()
+    };
+
+    // 4. Commit
+    state.docker.commit_container(commit_opts, config)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Commit Error: {}", e)))?;
+
+    // 5. Save to Database
+    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6)")
+        .bind(&payload.slug)
+        .bind(&new_image_tag)
+        .bind(&payload.markdown)
+        .bind(user.id)          
+        .bind(&user.login)
+        .bind(&shell_path) 
+        .execute(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    let _ = state.docker.stop_container(&container_name, None).await;
+
+    Ok(Json("Published!".to_string()))
+}
+
+pub async fn get_project(
+    Path((username, slug)): Path<(String, String)>, 
+    State(state): State<AppState>
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    
+    // FIX: Handle DB errors properly
+    let row_result = sqlx::query_as::<_, (String, String, String, i64)>(
+        "SELECT image_tag, markdown, shell, owner_id FROM projects WHERE owner_username = $1 AND slug = $2"
+    )
+    .bind(username).bind(slug)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
+
+    let (image_tag, markdown, shell, owner_id) = match row_result {
+        Some(r) => r,
+        None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
+    };
+
+    let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
+    let session_id = Uuid::new_v4().to_string();
+
+    let config = Config {
+        image: Some(image_tag),
+        tty: Some(true),
+        user: Some("root".to_string()), 
+        env: Some(vec![
+            "LANG=C.UTF-8".to_string(), 
+            "LC_ALL=C.UTF-8".to_string(),
+            "TERM=xterm-256color".to_string(),
+            format!("SHELL={}", shell) 
+        ]),
+        host_config: Some(HostConfig { 
+            runtime: Some("runsc".to_string()),
+            
+            // 2. RESOURCE LIMITS
+            memory: Some(512 * 1024 * 1024), // 512 MB RAM
+            memory_swap: Some(512 * 1024 * 1024), // No extra swap
+            nano_cpus: Some(250_000_000), // 0.25 CPU Core
+            pids_limit: Some(64), // Prevent Fork Bombs
+            
+            // 3. NETWORK SECURITY
+            // Viewers usually don't need internet. If they do, use "bridge".
+            network_mode: Some("bridge".to_string()), 
+            
+            // 4. KERNEL SECURITY
+            cap_drop: Some(vec!["ALL".to_string()]),
+            cap_add: Some(vec![
+                "NET_BIND_SERVICE".to_string(),
+                "CHOWN".to_string(),
+                "SETUID".to_string(),
+                "SETGID".to_string(),
+                "DAC_OVERRIDE".to_string()
+            ]),
+            
+            // 5. SECURITY OPT
+            security_opt: Some(vec!["no-new-privileges".to_string()]),
+            
+            // 6. FILESYSTEM (Immutable Root + Tmpfs)
+            readonly_rootfs: Some(true),
+            mounts: Some(vec![
+                Mount {
+                    target: Some("/root".to_string()), 
+                    // CHANGE 1: Field is named 'typ', not 'type_'
+                    typ: Some(MountTypeEnum::TMPFS), 
+                    // CHANGE 2: Struct is named 'MountTmpfsOptions'
+                    tmpfs_options: Some(MountTmpfsOptions {
+                        size_bytes: Some(50 * 1024 * 1024), // 50MB
+                        mode: Some(0o1777),
+                    }),
+                    ..Default::default()
+                },
+                // Optional /tmp mount
+                Mount {
+                    target: Some("/tmp".to_string()),
+                    typ: Some(MountTypeEnum::TMPFS),
+                    tmpfs_options: Some(MountTmpfsOptions {
+                        size_bytes: Some(50 * 1024 * 1024),
+                        mode: Some(0o1777),
+                    }),
+                    ..Default::default()
+                }
+            ]),
+
+            auto_remove: Some(true), 
+            ..Default::default() 
+        }),
+        ..Default::default()
+    };
+
+    state.docker.create_container(
+        Some(CreateContainerOptions { name: container_name.clone(), platform: None }), 
+        config
+    ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Create Error: {}", e)))?;
+
+    state.docker.start_container::<String>(&container_name, None)
+        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Start Error: {}", e)))?;
+
+    {
+        let mut map = state.lock_sessions();
+        map.insert(session_id.clone(), SessionContext {
+            container_name: container_name.clone(), 
+            shell,
+            owner_id: None 
+        }); 
+    }
+    
+    Ok(Json(serde_json::json!({
+        "container_id": session_id,
+        "markdown": markdown,
+        "owner_id": owner_id
+    })))
+}
+
+pub async fn delete_project(
+    State(state): State<AppState>,
+    session: Session,
+    Path(slug): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    // 1. Authenticate User
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    // 2. Fetch Image Tag & Verify Ownership (Before Deletion)
+    // We need the image tag to clean up Docker, and we need to verify ownership strictly.
+    let record: Option<(String,)> = sqlx::query_as(
+        "SELECT image_tag FROM projects WHERE slug = $1 AND owner_id = $2"
+    )
+    .bind(&slug)
+    .bind(user.id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    let image_tag = match record {
+        Some(r) => r.0,
+        None => return Err((StatusCode::NOT_FOUND, "Project not found or access denied".to_string())),
+    };
+
+    // 3. Delete from Database (Source of Truth)
+    let db_result = sqlx::query(
+        "DELETE FROM projects WHERE slug = $1 AND owner_id = $2"
+    )
+    .bind(&slug)
+    .bind(user.id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Delete Error: {}", e)))?;
+
+    if db_result.rows_affected() == 0 {
+        // This is unlikely given step 2, but handles race conditions
+        return Err((StatusCode::NOT_FOUND, "Project not found".to_string()));
+    }
+
+    // 4. Purge Docker Image
+    // We use force=true to kill any active containers using this image.
+    // We map errors but do NOT fail the request if Docker fails (e.g., image already manualy deleted).
+    let remove_opts = RemoveImageOptions {
+        force: true, // Force removal even if containers are running
+        noprune: false,
+    };
+
+    if let Err(e) = state.docker.remove_image(&image_tag, Some(remove_opts), None).await {
+        // Log it, but don't fail the request to the client, as the DB entry is already gone.
+        eprintln!("Warning: Failed to remove docker image {}: {}", image_tag, e);
+    } else {
+        println!("Cleaned up image: {}", image_tag);
+    }
+
+    Ok(StatusCode::OK)
+}
+</file>
+
+<file path="client/src/pages/create.rs">
+use leptos::*;
+use leptos_router::*;
+use gloo_net::http::Request;
+use web_sys::RequestCredentials;
+use wasm_bindgen::JsValue;
+use wasm_bindgen::prelude::*;
+use std::rc::Rc;
+use std::cell::RefCell;
+use crate::api::api_base;
+use crate::types::User;
+use crate::components::terminal::TerminalView;
+
+// Simple resize divider setup
+fn setup_resize_divider() {
+    if let Some(divider) = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.query_selector(".resize-divider").ok().flatten())
+        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        let is_dragging = Rc::new(RefCell::new(false));
+        
+        let on_mousedown = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+                *is_dragging.borrow_mut() = true;
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
+        
+        let on_mousemove = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
+                if !*is_dragging.borrow() {
+                    return;
+                }
+                
+                if let Some(workspace) = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.query_selector(".workspace").ok().flatten())
+                    .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                {
+                    let workspace_width = workspace.offset_width() as f64;
+                    let workspace_left = workspace.offset_left() as f64;
+                    let relative_x = e.client_x() as f64 - workspace_left;
+                    let percentage = (relative_x / workspace_width * 100.0).max(20.0).min(80.0);
+                    
+                    if let Ok(panes) = workspace.query_selector_all(".pane") {
+                        if panes.length() >= 2 {
+                            if let Some(first_pane) = panes.get(0).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                                first_pane.style().set_property("flex", "0 1 auto").ok();
+                                first_pane.style().set_property("width", &format!("{}%", percentage)).ok();
+                            }
+                            if let Some(second_pane) = panes.get(1).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                                second_pane.style().set_property("flex", "0 1 auto").ok();
+                                second_pane.style().set_property("width", &format!("{}%", 100.0 - percentage)).ok();
+                            }
+                        }
+                    }
+                }
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
+        
+        let on_mouseup = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+                *is_dragging.borrow_mut() = false;
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
+        
+        divider.add_event_listener_with_callback("mousedown", on_mousedown.as_ref().unchecked_ref()).ok();
+        on_mousedown.forget();
+        
+        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+            document.add_event_listener_with_callback("mousemove", on_mousemove.as_ref().unchecked_ref()).ok();
+            document.add_event_listener_with_callback("mouseup", on_mouseup.as_ref().unchecked_ref()).ok();
+            on_mousemove.forget();
+            on_mouseup.forget();
+        }
+    }
+}
+
+#[component]
+pub fn CreatePage() -> impl IntoView {
+    let query_params = use_query_map();
+    let pre_filled_name = move || {
+        query_params.with(|params| {
+            params.get("name").cloned().unwrap_or_default()
+        })
+    };
+
+    let (container_id, set_container_id) = create_signal("".to_string());
+    let (markdown, set_markdown) = create_signal("# My Awesome Tool\n\nRun the install command...".to_string());
+    let (slug, set_slug) = create_signal(pre_filled_name());
+    let (slug_error, set_slug_error) = create_signal(None::<String>);
+    let (user, set_user) = create_signal(None::<User>);
+    let (is_publishing, set_is_publishing) = create_signal(false);
+
+    create_resource(|| (), move |_| async move {
+        let url = format!("{}/api/me", api_base());
+        let auth_req = Request::get(&url)
+            .credentials(RequestCredentials::Include)
+            .send()
+            .await;
+
+        match auth_req {
+            Ok(resp) => {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        set_user.set(Some(u));
+                        
+                        let spawn_url = format!("{}/api/spawn", api_base());
+                        let spawn_req = Request::post(&spawn_url)
+                            .credentials(RequestCredentials::Include)
+                            .send()
+                            .await;
+
+                        match spawn_req {
+                            Ok(spawn_resp) => {
+                                if spawn_resp.ok() {
+                                    if let Ok(id) = spawn_resp.json::<String>().await {
+                                        set_container_id.set(id);
+                                    }
+                                } else {
+                                    let status = spawn_resp.status();
+                                    let text = spawn_resp.text().await.unwrap_or_default();
+                                    set_container_id.set(format!("ERROR {}: {}", status, text));
+                                }
+                            }
+                            Err(e) => {
+                                set_container_id.set(format!("NETWORK_FAIL: {}", e));
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => web_sys::console::log_1(&JsValue::from_str(&format!("Auth Error: {}", e))),
+        }
+    });
+    let on_publish = move |_| {
+        // Prevent concurrent publish requests
+        if is_publishing.get() {
+            return;
+        }
+        set_is_publishing.set(true);
+        
+        spawn_local(async move {
+            let body_data = serde_json::json!({
+                "container_id": container_id.get_untracked(),
+                "slug": slug.get_untracked(),
+                "markdown": markdown.get_untracked()
+            });
+
+            // FIX: Safe serialization instead of unwrap()
+            let body_str = match serde_json::to_string(&body_data) {
+                Ok(s) => s,
+                Err(_) => {
+                    set_is_publishing.set(false);
+                    let _ = window().alert_with_message("Failed to serialize request");
+                    return;
+                }
+            };
+
+            let url = format!("{}/api/publish", api_base());
+            
+            // FIX: Safe Request building
+            let req = Request::post(&url)
+                .header("Content-Type", "application/json")
+                .credentials(RequestCredentials::Include)
+                .body(body_str);
+
+            if let Ok(r) = req {
+                match r.send().await {
+                    Ok(resp) => {
+                        if resp.ok() {
+                            let _ = window().alert_with_message("Published!");
+                        } else {
+                            let status = resp.status();
+                            let text = resp.text().await.unwrap_or_default();
+                            let _ = window().alert_with_message(&format!("Publish Failed ({}: {})", status, text));
+                        }
+                    },
+                    Err(_) => {
+                        let _ = window().alert_with_message("Publish Failed: Network Error");
+                    }
+                }
+            } else {
+                let _ = window().alert_with_message("Failed to build request");
+            }
+            
+            // Re-enable button after request completes
+            set_is_publishing.set(false);
+        });
+    };
+    let navigate = leptos_router::use_navigate();
+    view! {
+       <div class="nav">
+            <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
+                if user.get().is_some() {
+                    navigate("/dashboard", Default::default());
+                } else {
+                    navigate("/", Default::default());
+                }
+            }>
+                <span class="logo-icon">">_"</span>
+                <span>"TryCli Studio"</span>
+            </div>
+        <div class="controls">
+            {move || match user.get() {
+                Some(u) => view! {
+                     <div style="display: flex; align-items: center; margin-right: 20px;">
+                        <img src=u.avatar_url 
+                             style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid var(--border);" />
+                        <span style="color: var(--text-muted); font-size: 0.9rem;">
+                            {u.login.clone()}
+                        </span>
+                     </div>
+                     <a href=format!("{}/auth/logout", api_base()) 
+                        class="btn-primary btn-logout" 
+                        rel="external"  
+                        style="margin-right: 12px; text-decoration: none; font-size: 0.8rem;">
+                        "Logout"
+                     </a>
+                     <span style="color: var(--text-muted); font-size: 0.9rem; margin-right: 8px;">"Project Slug:"</span>
+                     <input type="text" class="input-slug" 
+                            on:input=move |ev| {
+                                let value = event_target_value(&ev);
+                                // Only allow alphanumeric characters and hyphens (Docker-safe)
+                                if value.is_empty() || value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                                    set_slug.set(value);
+                                    set_slug_error.set(None);
+                                } else {
+                                    set_slug_error.set(Some("Only letters, numbers, and hyphens allowed".to_string()));
+                                }
+                            }
+                            prop:value=slug />
+                     {move || slug_error.get().map(|err| view! {
+                         <span style="color: #ef4444; font-size: 0.75rem; margin-left: 8px;">{err}</span>
+                     })}
+                     <button class="btn-primary btn-success" on:click=on_publish 
+                             prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some() || is_publishing.get()
+                             style=move || if is_publishing.get() { "opacity: 0.6; cursor: not-allowed;" } else { "" }>
+                        {move || if is_publishing.get() { "Publishing..." } else { "Publish" }}
+                     </button>
+                }.into_view(),
+                None => view! {
+                    <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">
+                        "Login with GitHub"
+                    </a>
+                }.into_view()
+            }}
+        </div>
+       </div>
+        {move || match user.get() {
+            Some(_) => {
+                let mounted = create_signal(false);
+                
+                create_effect(move |_| {
+                    if !mounted.0.get() {
+                        // Use requestAnimationFrame to ensure DOM is fully rendered
+                        if let Some(window) = web_sys::window() {
+                            let callback = wasm_bindgen::closure::Closure::once(move || {
+                                setup_resize_divider();
+                                mounted.1.set(true);
+                            });
+                            window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
+                            callback.forget();
+                        }
+                    }
+                });
+                
+                view! {
+                    <div class="workspace">
+                        <div class="pane" style="width: 50%">
+                            <div class="terminal-header">
+                                <div class="dot red"></div>
+                                <div class="dot yellow"></div>
+                                <div class="dot green"></div>
+                                <span class="terminal-title">"bash — interactive"</span>
+                            </div>
+                            <div class="terminal-body">
+                                {move || match container_id.get().as_str() {
+                                    "" => view! { <div style="padding: 20px; color: #666;">"Initializing Environment..."</div> }.into_view(),
+                                    id => view! { <TerminalView container_id=id.to_string() /> }.into_view()
+                                }}
+                            </div>
+                        </div>
+                        <div class="resize-divider"></div>
+                        <div class="pane" style="width: 50%">
+                             <textarea class="editor-textarea"
+                                spellcheck="false"
+                                on:input=move |ev| set_markdown.set(event_target_value(&ev))
+                             >{markdown}</textarea>
+                        </div>
+                    </div>
+                }.into_view()
+            },
+            None => view! {
+                <div style="display: flex; height: calc(100vh - 60px); justify-content: center; align-items: center; flex-direction: column; gap: 20px;">
+                    <h2 style="color: var(--text-main);">"Welcome to TryCli Studio"</h2>
+                    <p style="color: var(--text-muted);">"Please sign in to start creating interactive demos."</p>
+                </div>
+            }.into_view()
+        }}
+    }
+}
+</file>
+
+<file path="client/src/pages/view.rs">
+use leptos::*;
+use leptos_router::*;
+use gloo_net::http::Request;
+use web_sys::RequestCredentials;
+use wasm_bindgen::prelude::*;
+use std::rc::Rc;
+use std::cell::RefCell;
+use pulldown_cmark::{Parser, Options, html};
+use crate::api::api_base;
+use crate::components::terminal::TerminalView;
+use crate::types::User;
+
+pub fn render_markdown(text: &str) -> String {
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TABLES);
+    let parser = Parser::new_ext(text, options);
+    let mut html_output = String::new();
+    html::push_html(&mut html_output, parser); 
+    html_output
+}
+
+// Simple resize divider setup
+fn setup_resize_divider() {
+    if let Some(divider) = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.query_selector(".resize-divider").ok().flatten())
+        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+    {
+        let is_dragging = Rc::new(RefCell::new(false));
+        
+        let on_mousedown = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+                *is_dragging.borrow_mut() = true;
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
+        
+        let on_mousemove = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
+                if !*is_dragging.borrow() {
+                    return;
+                }
+                
+                if let Some(workspace) = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.query_selector(".workspace").ok().flatten())
+                    .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                {
+                    let workspace_width = workspace.offset_width() as f64;
+                    let workspace_left = workspace.offset_left() as f64;
+                    let relative_x = e.client_x() as f64 - workspace_left;
+                    let percentage = (relative_x / workspace_width * 100.0).max(20.0).min(80.0);
+                    
+                    if let Ok(panes) = workspace.query_selector_all(".pane") {
+                        if panes.length() >= 2 {
+                            if let Some(first_pane) = panes.get(0).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                                first_pane.style().set_property("flex", "0 1 auto").ok();
+                                first_pane.style().set_property("width", &format!("{}%", percentage)).ok();
+                            }
+                            if let Some(second_pane) = panes.get(1).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                                second_pane.style().set_property("flex", "0 1 auto").ok();
+                                second_pane.style().set_property("width", &format!("{}%", 100.0 - percentage)).ok();
+                            }
+                        }
+                    }
+                }
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
+        
+        let on_mouseup = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+                *is_dragging.borrow_mut() = false;
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
+        
+        divider.add_event_listener_with_callback("mousedown", on_mousedown.as_ref().unchecked_ref()).ok();
+        on_mousedown.forget();
+        
+        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+            document.add_event_listener_with_callback("mousemove", on_mousemove.as_ref().unchecked_ref()).ok();
+            document.add_event_listener_with_callback("mouseup", on_mouseup.as_ref().unchecked_ref()).ok();
+            on_mousemove.forget();
+            on_mouseup.forget();
+        }
+    }
+}
+
+#[component]
+pub fn ViewPage() -> impl IntoView {
+    let params = use_params_map();
+    let username = move || params.get().get("username").cloned().unwrap_or_default();
+    let slug = move || params.get().get("slug").cloned().unwrap_or_default();
+    let (user, set_user) = create_signal(None::<User>);
+    
+create_resource(|| (), move |_| async move {
+        let auth_req = Request::get(&format!("{}/api/me", api_base()))
+            .credentials(RequestCredentials::Include)
+            .send()
+            .await;
+
+        match auth_req {
+            Ok(resp) => {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        set_user.set(Some(u));
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+    });
+let navigate = leptos_router::use_navigate();
+    
+    let copy_embed_code = move |u: String, s: String| {
+        let origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
+        let code = format!(
+            "<iframe src=\"{}/embed/{}/{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\"></iframe>",
+            origin, u, s
+        );
+        let _ = window().navigator().clipboard().write_text(&code);
+        let _ = window().alert_with_message("Embed code copied to clipboard!");
+    };
+
+    // 2. Fetch Project Data
+    let project_data = create_resource(
+        move || (username(), slug()), 
+        |(u, s)| async move {
+            let url = format!("{}/api/project/{}/{}", api_base(), u, s);
+            let req = Request::get(&url).send().await;
+            match req {
+                Ok(resp) => resp.json::<serde_json::Value>().await.ok(),
+                Err(_) => None
+            }
+        }
+    );
+    // 3. Ownership Logic Signal
+    let is_owner = move || {
+        let current_user = user.get();
+        let project_json = project_data.get().flatten(); // Flatten Option<Option<Value>> to Option<Value>
+
+        match (current_user, project_json) {
+            (Some(u), Some(p)) => {
+                // Extract owner_id from project JSON (it comes as a Number/i64)
+                let project_owner_id = p.get("owner_id").and_then(|id| id.as_i64());
+                
+                // Compare IDs
+                Some(u.id) == project_owner_id
+            },
+            _ => false
+        }
+    };
+
+view! {
+        <>
+            <div class="nav">
+                <div class="nav-brand" style="cursor: pointer;" on:click=move |_| {
+                    if user.get().is_some() {
+                        navigate("/dashboard", Default::default());
+                    } else {
+                        navigate("/", Default::default());
+                    }
+                }>
+                    <span class="logo-icon">">_"</span>
+                    <span>"TryCli Studio"</span>
+                </div>
+                <div class="controls">
+                    {move || match user.get() {
+                        Some(u) => view! {
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <img src=u.avatar_url 
+                                         style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                                    <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
+                                </div>
+
+                                // 4. Conditionally Render Button
+                                <Show when=is_owner fallback=|| ()>
+                                    <button class="btn-primary btn-success" 
+                                            on:click=move |_| {
+                                                let u_val = username();
+                                                let s_val = slug();
+                                                copy_embed_code(u_val, s_val);
+                                            }>
+                                        "Share / Embed"
+                                    </button>
+                                </Show>
+
+                                <a href=format!("{}/auth/logout", api_base()) 
+                                   class="btn-primary btn-logout" 
+                                   rel="external" 
+                                   style="text-decoration: none; font-size: 0.9rem;">
+                                    "Logout"
+                                </a>
+                            </div>
+                        }.into_view(),
+                        None => view! {
+                             // Optional: Login button if not authenticated
+                             <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">
+                                "Login"
+                            </a>
+                        }.into_view()
+                    }}
+                </div>
+            </div>
+            {move || match project_data.get() {
+                Some(Some(data)) => {
+                    let cid = data["container_id"].as_str().unwrap_or_default().to_string();
+                    let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
+                    let html_output = render_markdown(&md_raw);
+                    
+                    // Setup resize divider once component mounts
+                    let mounted = create_signal(false);
+                    create_effect(move |_| {
+                        if !mounted.0.get() {
+                            if let Some(window) = web_sys::window() {
+                                let callback = wasm_bindgen::closure::Closure::once(move || {
+                                    setup_resize_divider();
+                                    mounted.1.set(true);
+                                });
+                                window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
+                                callback.forget();
+                            }
+                        }
+                    });
+                    
+                    view! {
+                        <div class="workspace">
+                            <div class="pane" style="width: 50%; background: var(--bg-dark); overflow-y: auto;">
+                                <div class="markdown-body" inner_html=html_output />
+                            </div>
+                            <div class="resize-divider"></div>
+                            <div class="pane" style="width: 50%;">
+                                <div class="terminal-header">
+                                    <div class="dot red"></div>
+                                    <div class="dot yellow"></div>
+                                    <div class="dot green"></div>
+                                    <span class="terminal-title">"Live Demo"</span>
+                                </div>
+                                <div class="terminal-body">
+                                    <TerminalView container_id=cid />
+                                </div>
+                            </div>
+                        </div>
+                    }.into_view()
+                },
+                Some(None) => view! { <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">"Project not found."</div> }.into_view(),
+                None => view! { <div style="padding: 50px; text-align: center;">"Loading Project..."</div> }.into_view()
+            }}
+        </>
+    }
+}
+</file>
+
+</files>
