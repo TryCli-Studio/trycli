@@ -22,7 +22,7 @@ pub fn Modal(
                             <h3 class="modal-title">{move || title.get()}</h3>
                             <div class="modal-body">{move || body.get()}</div>
                             <div class="modal-actions">
-                                <button class="btn-primary" on:click=move |_| on_close.call(())>
+                                <button class="btn-secondary btn-action" on:click=move |_| on_close.call(())>
                                     {move || button_label.get()}
                                 </button>
                             </div>
@@ -93,7 +93,7 @@ pub fn EmbedModal(
                                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                                     </svg>
                                 </button>
-                                <button class="btn-primary" on:click=move |_| on_close.call(())>
+                                <button class="btn-secondary btn-action" on:click=move |_| on_close.call(())>
                                     "Close"
                                 </button>
                             </div>
@@ -154,10 +154,10 @@ pub fn ConfirmModal(
                                 })}
                             </div>
                             <div class="modal-actions">
-                                <button class="btn-secondary" on:click=move |_| on_cancel.call(())>
+                                <button class="btn-secondary btn-action" on:click=move |_| on_cancel.call(())>
                                     {move || cancel_label.get()}
                                 </button>
-                                <button class="btn-danger" on:click=move |_| {
+                                <button class="btn-secondary btn-action btn-danger" on:click=move |_| {
                                     if confirm_input.get().trim() == expected_name.get().trim() {
                                         on_confirm.call(());
                                         set_confirm_input.set(String::new());
