@@ -230,16 +230,73 @@ fn DashboardSearch(
     user_login: Rc<String>,
 ) -> impl IntoView {
     let navigate = leptos_router::use_navigate();
+    let (active_index, set_active_index) = create_signal(-1i32);
+    let navigate_key = navigate.clone();
+    let user_login_key = user_login.clone();
     view! {
         <div class="input-hero-wrapper" style="position: relative;">
             <input type="text" 
                    class="input-hero" 
                    placeholder="Search repositories or initialize a new sandbox..."
                    value=search_input.get()
-                   on:input=handle_search_input
+                   on:input=move |ev| {
+                       handle_search_input(ev);
+                       set_active_index.set(-1);
+                   }
                    on:focus=move |_| {
                        if !search_input.get().is_empty() {
                            set_show_suggestions.set(true);
+                       }
+                   }
+                   on:keydown=move |ev: ev::KeyboardEvent| {
+                       let key = ev.key();
+                       let results = search_results.get();
+                       let input_val = search_input.get();
+                       let count = if results.is_empty() && !input_val.is_empty() {
+                           1
+                       } else {
+                           results.len()
+                       };
+
+                       match key.as_str() {
+                           "ArrowDown" => {
+                               ev.prevent_default();
+                               if count > 0 {
+                                   set_show_suggestions.set(true);
+                                   let next = (active_index.get() + 1).rem_euclid(count as i32);
+                                   set_active_index.set(next);
+                               }
+                           }
+                           "ArrowUp" => {
+                               ev.prevent_default();
+                               if count > 0 {
+                                   set_show_suggestions.set(true);
+                                   let next = (active_index.get() - 1).rem_euclid(count as i32);
+                                   set_active_index.set(next);
+                               }
+                           }
+                           "Enter" => {
+                               if count > 0 {
+                                   ev.prevent_default();
+                                   if results.is_empty() && !input_val.is_empty() {
+                                       let encoded_name = js_sys::encode_uri_component(&input_val).to_string();
+                                       set_show_suggestions.set(false);
+                                       set_search_input.set(String::new());
+                                       navigate_key(&format!("/new?name={}", encoded_name), Default::default());
+                                   } else if active_index.get() >= 0 {
+                                       if let Some(proj) = results.get(active_index.get() as usize) {
+                                           let login = user_login_key.as_ref().clone();
+                                           set_show_suggestions.set(false);
+                                           set_search_input.set(String::new());
+                                           navigate_key(&format!("/{}/{}", login, proj.slug), Default::default());
+                                       }
+                                   }
+                               }
+                           }
+                           "Escape" => {
+                               set_show_suggestions.set(false);
+                           }
+                           _ => {}
                        }
                    }
                    on:blur=move |_| {
@@ -250,11 +307,12 @@ fn DashboardSearch(
             
             {
                 let nav = navigate.clone();
+                let user_login_list = user_login.clone();
                 move || {
                 if show_suggestions.get() {
                     let results = search_results.get();
                     let input_val = search_input.get();
-                    let user_login_clone = user_login.clone();
+                    let user_login_clone = user_login_list.clone();
                     let navigate_fn = nav.clone();
                     
                     view! {
@@ -266,7 +324,14 @@ fn DashboardSearch(
                                     <div style="padding: 16px; color: var(--text-muted);">
                                         <p style="margin: 0 0 8px 0; font-size: 0.9rem;">"No existing environment found."</p>
                                         <button class="btn-primary" 
-                                                style="font-size: 0.9rem; padding: 8px 12px; width: 100%; text-align: left;"
+                                                style=move || {
+                                                    let base = "font-size: 0.9rem; padding: 8px 12px; width: 100%; text-align: left;";
+                                                    if active_index.get() == 0 {
+                                                        format!("{} background: rgba(59, 130, 246, 0.2);", base)
+                                                    } else {
+                                                        base.to_string()
+                                                    }
+                                                }
                                                 on:click=move |_| {
                                                     set_show_suggestions.set(false);
                                                     set_search_input.set(String::new());
@@ -279,17 +344,29 @@ fn DashboardSearch(
                                 }.into_view()
                             } else {
                                 let login_str = user_login_clone.as_ref().clone();
+                                let indexed_results: Vec<(usize, ProjectSummary)> = results
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(idx, proj)| (idx, proj.clone()))
+                                    .collect();
                                 view! {
                                     <For
-                                        each=move || results.clone()
-                                        key=|p| p.slug.clone()
-                                        children=move |proj| {
+                                        each=move || indexed_results.clone()
+                                        key=|(_, p)| p.slug.clone()
+                                        children=move |(idx, proj)| {
                                             let login = login_str.clone();
                                             let proj_slug = proj.slug.clone();
                                             let proj_image = proj.image_tag.clone();
                                             view! {
                                                 <a href=format!("/{}/{}", login, proj_slug.clone())
-                                                   style="display: block; padding: 12px 16px; color: var(--text-main); text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; transition: background 0.2s;"
+                                                   style=move || {
+                                                       let base = "display: block; padding: 12px 16px; color: var(--text-main); text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer; transition: background 0.2s;";
+                                                       if active_index.get() == idx as i32 {
+                                                           format!("{} background: rgba(255, 255, 255, 0.05);", base)
+                                                       } else {
+                                                           base.to_string()
+                                                       }
+                                                   }
                                                    on:click=move |_| {
                                                        set_show_suggestions.set(false);
                                                        set_search_input.set(String::new());
