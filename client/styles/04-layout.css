@@ -80,6 +80,102 @@
     z-index: 9999;
 }
 
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(3, 7, 18, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+}
+
+.modal-card {
+    width: min(560px, 92vw);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+}
+
+.modal-title {
+    margin: 0 0 12px 0;
+    color: var(--text-main);
+    font-size: 1.1rem;
+}
+
+.modal-description {
+    color: var(--text-muted);
+    margin: 0 0 12px 0;
+    font-size: 0.95rem;
+}
+
+.modal-body {
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-bottom: 16px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.modal-code {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    color: var(--text-main);
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0 0 16px 0;
+    width: 100%;
+    min-height: 120px;
+    resize: none;
+}
+
+.modal-copy-status {
+    color: #22c55e;
+    font-size: 0.9rem;
+    margin: -6px 0 14px 0;
+}
+
+.modal-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-main);
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.modal-copy-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
 /* Grid Utilities */
 .spinner {
     width: 40px;

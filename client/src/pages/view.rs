@@ -10,6 +10,7 @@ use crate::api::api_base;
 use crate::components::terminal::TerminalView;
 use crate::components::limit::LimitReached;
 use crate::components::navbar::Navbar;
+use crate::components::modal::EmbedModal;
 use crate::types::User;
 use serde::{Serialize, Deserialize};
 
@@ -105,6 +106,8 @@ pub fn ViewPage() -> impl IntoView {
     let username = move || params.get().get("username").cloned().unwrap_or_default();
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();
     let (user, set_user) = create_signal(None::<User>);
+    let (embed_modal_open, set_embed_modal_open) = create_signal(false);
+    let (embed_code, set_embed_code) = create_signal(String::new());
     
     // Auth Check
     create_resource(|| (), move |_| async move {
@@ -122,14 +125,15 @@ pub fn ViewPage() -> impl IntoView {
         }
     });
 
-    let copy_embed_code = move |u: String, s: String| {
+    let build_embed_code = move |u: String, s: String| {
         let origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
-        let code = format!(
+        format!(
             "<iframe src=\"{}/embed/{}/{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\"></iframe>",
             origin, u, s
-        );
+        )
+    };
+    let copy_embed_code = move |code: String| {
         let _ = window().navigator().clipboard().write_text(&code);
-        let _ = window().alert_with_message("Embed code copied to clipboard!");
     };
 
     let project_resource = create_resource(
@@ -173,6 +177,12 @@ pub fn ViewPage() -> impl IntoView {
 
     view! {
         <>
+            <EmbedModal
+                show=embed_modal_open.into()
+                title="Share / Embed".to_string().into()
+                code=embed_code.into()
+                on_close=Callback::new(move |_| set_embed_modal_open.set(false))
+            />
             <Navbar>
                 <div class="controls">
                     {move || {
