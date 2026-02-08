@@ -40,61 +40,123 @@ pub fn Modal(
 pub fn EmbedModal(
     show: MaybeSignal<bool>,
     title: MaybeSignal<String>,
-    code: MaybeSignal<String>,
+    iframe_code: MaybeSignal<String>,
+    smart_link: MaybeSignal<String>,
     on_close: Callback<()>,
 ) -> impl IntoView {
-    let (copied, set_copied) = create_signal(false);
-    let textarea_ref = create_node_ref::<leptos::html::Textarea>();
+    let (copied_iframe, set_copied_iframe) = create_signal(false);
+    let (copied_link, set_copied_link) = create_signal(false);
+    
+    let iframe_ref = create_node_ref::<leptos::html::Textarea>();
+    let link_ref = create_node_ref::<leptos::html::Input>();
+
     view! {
         {move || {
-            let on_close = on_close.clone();
-            let title = title.clone();
-            let code = code.clone();
-            let code_for_click = code.clone();
             let show = show.clone();
+            let title = title.clone();
+            let iframe_code = iframe_code.clone();
+            let smart_link = smart_link.clone();
+            let on_close = on_close.clone();
+
+            let iframe_code_for_click = iframe_code.clone();
+            let smart_link_for_click = smart_link.clone();
+
             if show.get() {
                 view! {
-                    <div class="modal-overlay" role="dialog" aria-modal="true">
-                        <div class="modal-card">
-                            <h3 class="modal-title">{move || title.get()}</h3>
-                            <p class="modal-description">
-                                "Copy and paste this embedd in your blogs and articles to demo your environment."
-                            </p>
-                            <textarea
-                                class="modal-code"
-                                readonly
-                                node_ref=textarea_ref
-                                prop:value=move || code.get()
-                            ></textarea>
-                            {move || if copied.get() {
-                                view! { <div class="modal-copy-status">"Embed copied to clipboard"</div> }.into_view()
-                            } else {
-                                view! { <></> }.into_view()
-                            }}
-                            <div class="modal-actions">
-                                <button
-                                    class="modal-copy-btn"
-                                    aria-label="Copy embed code"
-                                    on:click=move |_| {
-                                        let text = code_for_click.get();
-                                        let _ = window().navigator().clipboard().write_text(&text);
-                                        if let Some(el) = textarea_ref.get() {
-                                            el.focus().ok();
-                                            el.select();
+                    <div class="modal-overlay" role="dialog" aria-modal="true" style="backdrop-filter: blur(5px);">
+                        <div class="modal-card" style="width: 600px; max-width: 95vw;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                                <h3 class="modal-title" style="margin: 0; font-size: 1.25rem;">{move || title.get()}</h3>
+                                <button class="btn-nav" on:click=move |_| on_close.call(()) style="font-size: 1.5rem; line-height: 1;">"×"</button>
+                            </div>
+                            
+                            // --- SECTION 1: IFRAME ---
+                            <div style="margin-bottom: 24px; position: relative;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <label style="color:var(--text-main); font-weight:600; font-size: 0.9rem;">
+                                        "Option 1: Iframe (For your website)"
+                                    </label>
+                                    {move || if copied_iframe.get() {
+                                        view! { <span style="color: #22c55e; font-size: 0.8rem; font-weight: 600; animation: fadeIn 0.2s;">"✓ Copied!"</span> }.into_view()
+                                    } else {
+                                        view! { <span style="opacity: 0;">"Placeholder"</span> }.into_view()
+                                    }}
+                                </div>
+                                <div class="input-hero-wrapper" style="display: flex; gap: 0;">
+                                    <textarea
+                                        class="modal-code"
+                                        style="min-height: 100px; margin: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; resize: none; font-size: 0.85rem;"
+                                        readonly
+                                        node_ref=iframe_ref
+                                        prop:value=move || iframe_code.get()
+                                    ></textarea>
+                                    <button
+                                        class="btn-secondary"
+                                        style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; width: 50px; display: flex; align-items: center; justify-content: center;"
+                                        aria-label="Copy iframe code"
+                                        on:click=move |_| {
+                                            let text = iframe_code_for_click.get();
+                                            let _ = window().navigator().clipboard().write_text(&text);
+                                            if let Some(el) = iframe_ref.get() { el.select(); }
+                                            set_copied_iframe.set(true);
+                                            set_timeout(move || set_copied_iframe.set(false), std::time::Duration::from_millis(2000));
                                         }
-                                        set_copied.set(true);
-                                        set_timeout(move || {
-                                            set_copied.set(false);
-                                        }, std::time::Duration::from_millis(2000));
-                                    }
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                    </svg>
-                                </button>
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            // --- SECTION 2: SMART LINK ---
+                            <div style="margin-bottom: 32px; position: relative;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <label style="color:var(--text-main); font-weight:600; font-size: 0.9rem;">
+                                        "Option 2: Smart Link (Medium, Reddit)"
+                                    </label>
+                                    {move || if copied_link.get() {
+                                        view! { <span style="color: #22c55e; font-size: 0.8rem; font-weight: 600; animation: fadeIn 0.2s;">"✓ Copied!"</span> }.into_view()
+                                    } else {
+                                        view! { <span style="opacity: 0;">"Placeholder"</span> }.into_view()
+                                    }}
+                                </div>
+                                <div class="input-hero-wrapper" style="display: flex; gap: 0;">
+                                    <input
+                                        type="text"
+                                        class="input-slug" 
+                                        style="flex: 1; font-family: var(--font-mono); font-size: 0.85rem; border-top-right-radius: 0; border-bottom-right-radius: 0; padding: 10px;"
+                                        readonly
+                                        node_ref=link_ref
+                                        prop:value=move || smart_link.get()
+                                    />
+                                    <button
+                                        class="btn-secondary"
+                                        style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; width: 50px; display: flex; align-items: center; justify-content: center;"
+                                        aria-label="Copy link"
+                                        on:click=move |_| {
+                                            let text = smart_link_for_click.get();
+                                            let _ = window().navigator().clipboard().write_text(&text);
+                                            if let Some(el) = link_ref.get() { el.select(); }
+                                            set_copied_link.set(true);
+                                            set_timeout(move || set_copied_link.set(false), std::time::Duration::from_millis(2000));
+                                        }
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
+                                    "Paste directly into Medium or Reddit to expand."
+                                </p>
+                            </div>
+
+                            <div class="modal-actions">
                                 <button class="btn-secondary btn-action" on:click=move |_| on_close.call(())>
-                                    "Close"
+                                    "Done"
                                 </button>
                             </div>
                         </div>

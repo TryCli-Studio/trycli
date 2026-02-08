@@ -6,7 +6,7 @@ use axum::{
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 use axum::http::header::{CONTENT_TYPE, AUTHORIZATION};
 use crate::state::AppState;
-use crate::handlers::{auth, project, spawn, analytics, admin};
+use crate::handlers::{auth, project, spawn, analytics, admin, oembed};
 use crate::services::websocket;
 
 pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Error>> {
@@ -27,6 +27,7 @@ pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Erro
         .merge(admin::routes())
         .route("/ws/:session_id", get(websocket::ws_handler))
         .route("/api/analytics", get(analytics::get_analytics))
+        .route("/api/oembed", get(oembed::oembed_handler))
         .layer(tower_http::cors::CorsLayer::new()
             .allow_origin(frontend_url.parse::<axum::http::HeaderValue>()?)
             // 2. ALLOW DELETE METHOD

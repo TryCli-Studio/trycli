@@ -107,7 +107,10 @@ pub fn ViewPage() -> impl IntoView {
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();
     let (user, set_user) = create_signal(None::<User>);
     let (embed_modal_open, set_embed_modal_open) = create_signal(false);
-    let (embed_code, set_embed_code) = create_signal(String::new());
+    
+    // Create two separate signals for the two fields
+    let (iframe_code, set_iframe_code) = create_signal(String::new());
+    let (smart_link, set_smart_link) = create_signal(String::new());
     
     // Auth Check
     create_resource(|| (), move |_| async move {
@@ -125,18 +128,11 @@ pub fn ViewPage() -> impl IntoView {
         }
     });
 
-    let build_embed_code = move |u: String, s: String| {
-        let origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
-        format!(
-            "<iframe src=\"{}/embed/{}/{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\"></iframe>",
-            origin, u, s
-        )
-    };
     let project_resource = create_resource(
-        move || (username(), slug()), 
-        |(u, s)| async move {
+        move || (username(), slug(), user.with(|u| u.as_ref().map(|x| x.id))), 
+        |(u, s, _)| async move {
             let url = format!("{}/api/project/{}/{}", api_base(), u, s);
-            let req = Request::get(&url).send().await;
+            let req = Request::get(&url).credentials(RequestCredentials::Include).send().await;
             
             match req {
                 Ok(resp) => {
@@ -157,7 +153,7 @@ pub fn ViewPage() -> impl IntoView {
         }
     );
 
-    // 3. Ownership Logic
+    // Ownership Logic
     let is_owner = move || {
         let current_user = user.get();
         if let Some(ProjectState::Ready(p)) = project_resource.get() {
@@ -173,12 +169,14 @@ pub fn ViewPage() -> impl IntoView {
 
     view! {
         <>
-            <EmbedModal
-                show=embed_modal_open.into()
-                title="Share / Embed".to_string().into()
-                code=embed_code.into()
-                on_close=Callback::new(move |_| set_embed_modal_open.set(false))
+            <EmbedModal 
+                show=embed_modal_open.into() 
+                title="Share Project".to_string().into() 
+                iframe_code=iframe_code.into() 
+                smart_link=smart_link.into()
+                on_close=Callback::new(move |_| set_embed_modal_open.set(false)) 
             />
+            
             <Navbar>
                 <div class="controls">
                     {move || {
@@ -190,14 +188,45 @@ pub fn ViewPage() -> impl IntoView {
                                             <img src=u.avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
                                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                                         </div>
+                                        
                                         <button class="btn-secondary btn-action btn-success" on:click=move |_| {
-                                            // FIX: Inlined logic from missing copy_embed_code function
-                                            let code = build_embed_code(username(), slug());
-                                            set_embed_code.set(code);
+                                            // FIX: Defined origin at top scope of closure
+                                            let frontend_origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
+                                            let backend_origin = api_base(); 
+                                            
+                                            let current_state = project_resource.get();
+                                            
+                                            let token = if let Some(ProjectState::Ready(data)) = current_state {
+                                                data.get("embed_token")
+                                                    .and_then(|v| v.as_str())
+                                                    .map(|s| s.to_string())
+                                            } else {
+                                                None
+                                            };
+
+                                            // 1. PUBLIC URL (Always safe, no token)
+                                            // Hits Frontend directly. Interactive IF you are logged in.
+                                            let public_url = format!("{}/embed/{}/{}", frontend_origin, username(), slug());
+
+                                            // 2. SECRET LINK (Only for Medium/Reddit)
+                                            // Hits Backend -> Redirects to Frontend with oEmbed magic.
+                                            let smart_url = match token {
+                                                Some(t) => format!("{}/e/{}", backend_origin, t),
+                                                None => public_url.clone() // Fallback (shouldn't happen for owner)
+                                            };
+
+                                            set_iframe_code.set(format!(
+                                                "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
+                                                public_url // <--- ALWAYS PUBLIC URL HERE
+                                            ));
+                                            
+                                            set_smart_link.set(smart_url);
+                                            
                                             set_embed_modal_open.set(true);
                                         }>
                                             "Share / Embed"
                                         </button>
+                                        
                                         <a href=format!("{}/auth/logout", api_base()) class="btn-secondary btn-action btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
                                     </div>
                                 }.into_view(),
@@ -217,7 +246,6 @@ pub fn ViewPage() -> impl IntoView {
                     let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                     let html_output = render_markdown(&md_raw);
                     
-                    // Trigger resize logic
                     let mounted = create_signal(false);
                     create_effect(move |_| {
                         if !mounted.0.get() {
