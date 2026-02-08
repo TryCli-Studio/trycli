@@ -175,7 +175,7 @@ pub fn LandingPage() -> impl IntoView {
                                 let url = auth_github_url();
                                 if auth_checked.get() && user.get().is_some() {
                                     view! {
-                                        <A href="/dashboard" class="btn-secondary btn-action btn-hero">
+                                        <A href="/dashboard" class="btn-primary btn-hero">
                                             "Go to Studio"
                                             <span class="arrow">"→"</span>
                                         </A>
