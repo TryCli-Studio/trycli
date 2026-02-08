@@ -132,10 +132,6 @@ pub fn ViewPage() -> impl IntoView {
             origin, u, s
         )
     };
-    let copy_embed_code = move |code: String| {
-        let _ = window().navigator().clipboard().write_text(&code);
-    };
-
     let project_resource = create_resource(
         move || (username(), slug()), 
         |(u, s)| async move {
