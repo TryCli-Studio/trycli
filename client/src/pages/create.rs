@@ -89,7 +89,48 @@ pub fn CreatePage() -> impl IntoView {
     };
 
     let (container_id, set_container_id) = create_signal("".to_string());
-    let (markdown, set_markdown) = create_signal("# My Awesome Tool\n\nRun the install command...".to_string());
+    let (markdown, set_markdown) = create_signal(r#"#  Welcome to Your TryCLI Environment
+
+This interactive workspace is your project's staging area. On the left is your live terminal, and here on the right is your editable documentation panel.
+
+---
+
+##  Environment Configuration
+
+### 1. Select Your Stack
+Use the environment settings to choose your preferred **Linux Distribution** and **Shell** (e.g., Bash, Zsh) to ensure your project runs in its native environment.
+
+### 2. Root Access
+You are authenticated as the **root user** in this container. You can execute all commands directly; there is no need to use `sudo` for installations or system configurations.
+
+### 3. Setup Your Project
+Use the terminal to prepare your demo:
+* Clone your repository or pull your source code directly.
+* Install necessary dependencies using package managers like `npm`, `pip`, or `cargo`.
+* Verify your CLI tool's functionality before publishing.
+
+---
+
+##  Guided Demo & Documentation
+
+This Markdown panel is **fully editable**. You should use this space to write down the specific steps, descriptions, and commands that viewers need to follow to experience a demo of your project.
+
+> **Tip:** Provide clear, copyable command snippets. Since viewers will follow your lead, ensure your documentation matches the environment setup on the left.
+
+---
+
+##  Publish & Embed
+
+Once your environment is configured and your guide is written, you can make your project live via the **Publish** action in your dashboard.
+
+### Sharing Your Work
+After publishing, you can easily distribute your interactive terminal:
+* **Direct Sharing:** Share the unique project URL with your community.
+* **Embed Anywhere:** Copy the **Embed Code** from the project settings and paste it into any blog (e.g., Hashnode, Dev.to) or documentation site. Your viewers will be able to interact with your CLI directly within your post.
+
+---
+
+*For advanced tips on container optimization, visit the [TryCLI Publisher Guide](https://trycli.com/docs).*"#.to_string());
     let (slug, set_slug) = create_signal(pre_filled_name());
     let (slug_error, set_slug_error) = create_signal(None::<String>);
     let (user, set_user) = create_signal(None::<User>);
@@ -140,7 +181,9 @@ pub fn CreatePage() -> impl IntoView {
             Err(e) => web_sys::console::log_1(&JsValue::from_str(&format!("Auth Error: {}", e))),
         }
     });
-    let on_publish = move |_| {
+    let navigate = use_navigate();
+    let on_publish = Rc::new(move |_: ev::MouseEvent| {
+        let navigate = navigate.clone();
         // Prevent concurrent publish requests
         if is_publishing.get() {
             return;
@@ -148,6 +191,8 @@ pub fn CreatePage() -> impl IntoView {
         set_is_publishing.set(true);
         
         spawn_local(async move {
+            let navigate = navigate.clone();
+            let mut publish_success = false;
             let body_data = serde_json::json!({
                 "container_id": container_id.get_untracked(),
                 "slug": slug.get_untracked(),
@@ -182,6 +227,7 @@ pub fn CreatePage() -> impl IntoView {
                 match r.send().await {
                     Ok(resp) => {
                         if resp.ok() {
+                            publish_success = true;
                             let _ = window().alert_with_message("Published!");
                         } else {
                             let status = resp.status();
@@ -199,12 +245,18 @@ pub fn CreatePage() -> impl IntoView {
             
             // Re-enable button after request completes
             set_is_publishing.set(false);
+
+            if publish_success {
+                navigate("/dashboard", Default::default());
+            }
         });
-    };
+    });
     view! {
         <Navbar>
             <div class="controls">
-                {move || match user.get() {
+                {move || {
+                    let on_publish = on_publish.clone();
+                    match user.get() {
                     Some(u) => view! {
                         <div style="display: flex; align-items: center; margin-right: 20px;">
                             <img src=u.avatar_url 
@@ -235,29 +287,7 @@ pub fn CreatePage() -> impl IntoView {
                         {move || slug_error.get().map(|err| view! {
                             <span style="color: #ef4444; font-size: 0.75rem; margin-left: 8px;">{err}</span>
                         })}
-                     <div style="display: flex; align-items: center; gap: 12px; margin-left: 12px;">
-                         <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; color: var(--text-muted);">
-                             <input type="checkbox" 
-                                    prop:checked=is_protected
-                                    on:change=move |ev| {
-                                        set_is_protected.set(event_target_checked(&ev));
-                                    } />
-                             <span>"Protect Embed"</span>
-                          </label>
-                          {move || if is_protected.get() {
-                             view! {
-                                     <input type="text" 
-                                            class="input-slug" 
-                                            placeholder="example.com, another.com"
-                                            prop:value=allowed_origins
-                                            on:input=move |ev| set_allowed_origins.set(event_target_value(&ev))
-                                            style="min-width: 200px; font-size: 0.85rem;" />
-                             }.into_view()
-                          } else {
-                             view! { <div></div> }.into_view()
-                          }}
-                     </div>
-                        <button class="btn-primary btn-success" on:click=on_publish 
+                        <button class="btn-primary btn-success" on:click=move |ev| (on_publish)(ev) 
                                 prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some() || is_publishing.get()
                                 style=move || if is_publishing.get() { "opacity: 0.6; cursor: not-allowed;" } else { "" }>
                             {move || if is_publishing.get() { "Publishing..." } else { "Publish" }}
@@ -268,6 +298,7 @@ pub fn CreatePage() -> impl IntoView {
                             "Login with GitHub"
                         </a>
                     }.into_view()
+                    }
                 }}
             </div>
         </Navbar>

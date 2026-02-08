@@ -48,8 +48,8 @@ pub fn LandingPage() -> impl IntoView {
     view! {
         <>
             // 4. SEO METADATA
-            <Title text="TryCLI - Interactive CLI Demos & Embeds" />
-            <Meta name="description" content="Host, share, and embed fully interactive CLI demos directly in the browser. Think Replit, but purpose-built for command-line applications." />
+            <Title text="TryCLI - The Standard for Interactive Documentation" />
+            <Meta name="description" content="Turn your static documentation into interactive live demos. Zero-config Docker sandboxes for onboarding users to your CLI tools instantly." />
             
             <Link rel="canonical" href="https://trycli.com" />
 
@@ -58,12 +58,12 @@ pub fn LandingPage() -> impl IntoView {
             </Script>
             
             <Meta property="og:type" content="website" />
-            <Meta property="og:title" content="TryCLI - Interactive CLI Demos & Embeds" />
+            <Meta property="og:title" content="TryCLI - The Standard for Interactive Documentation" />
             <Meta property="og:description" content="Instantly spin up isolated Docker containers and share your CLI projects with a single link." />
             <Meta property="og:url" content="https://trycli.com" />
             
             <Meta name="twitter:card" content="summary_large_image" />
-            <Meta name="twitter:title" content="TryCLI - Interactive CLI Demos" />
+            <Meta name="twitter:title" content="TryCLI Studio" />
             <Meta name="twitter:description" content="Host, share, and embed fully interactive CLI demos directly in the browser." />
         
             // MAIN CONTENT
@@ -72,11 +72,13 @@ pub fn LandingPage() -> impl IntoView {
                 <Navbar>
                     <div class="nav-actions">
                         {move || {
+                            let (menu_open, set_menu_open) = create_signal(false);
+                            
                             if auth_checked.get() {
                                 if let Some(u) = user.get() {
-                                    // LOGGED IN: Show Profile + Dashboard Button
+                                    // LOGGED IN: Show Profile + Dashboard Button + Hamburger Menu
                                     view! {
-                                        <div style="display: flex; align-items: center; gap: 20px;">
+                                        <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
                                             <div style="display: flex; align-items: center; gap: 12px;">
                                                 <img src=u.avatar_url 
                                                      style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" 
@@ -85,24 +87,69 @@ pub fn LandingPage() -> impl IntoView {
                                                     {u.login}
                                                 </span>
                                             </div>
-                                            <A href="/dashboard" class="btn-primary">"Dashboard"</A>
+                                            <A href="/dashboard" class="btn-primary btn-dashboard">"Dashboard"</A>
+                                            
+                                            // Hamburger Menu Button
+                                            <button
+                                                class="hamburger-menu"
+                                                class:open=move || menu_open.get()
+                                                on:click=move |_| set_menu_open.update(|open| *open = !*open)
+                                                aria-label="Toggle menu"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                                                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                                                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                                                </svg>
+                                            </button>
+
+                                            // Mobile Menu Dropdown
+                                            <div class="mobile-menu" class:open=move || menu_open.get()>
+                                                <A href="/dashboard" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Dashboard"</A>
+                                                <A href="/docs" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Docs"</A>
+                                                <A href="/blogs" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Blogs"</A>
+                                                <a href="https://twitter.com" target="_blank" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Twitter"</a>
+                                                <a href="https://ko-fi.com/tryclistudio" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Support Us"</a>
+                                            </div>
                                         </div>
                                     }.into_view()
                                 } else {
-                                    // LOGGED OUT: Single "Login with GitHub" Button
+                                    // LOGGED OUT
                                     let url = auth_github_url();
+                                    let (menu_open, set_menu_open) = create_signal(false);
+                                    
                                     view! {
-                                        <a href=url class="btn-primary" rel="external" style="display: flex; align-items: center; gap: 8px;">
-                                            // GitHub Logo SVG
-                                            <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
-                                                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                                            </svg>
-                                            "Login with GitHub"
-                                        </a>
+                                        <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
+                                            <a href=url class="btn-primary btn-login" rel="external" style="display: flex; align-items: center; gap: 8px;">
+                                                <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
+                                                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                                                </svg>
+                                                "Login"
+                                            </a>
+                                            
+                                            <button
+                                                class="hamburger-menu"
+                                                class:open=move || menu_open.get()
+                                                on:click=move |_| set_menu_open.update(|open| *open = !*open)
+                                                aria-label="Toggle menu"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                                                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                                                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                                                </svg>
+                                            </button>
+
+                                            <div class="mobile-menu" class:open=move || menu_open.get()>
+                                                <A href="/docs" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Docs"</A>
+                                                <A href="/blogs" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Blogs"</A>
+                                                <a href="https://twitter.com" target="_blank" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Twitter"</a>
+                                                <a href="/support" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Support Us"</a>
+                                            </div>
+                                        </div>
                                     }.into_view()
                                 }
                             } else {
-                                // Loading Spinner
                                 view! { <div class="spinner" style="width: 20px; height: 20px; border-width: 2px;"></div> }.into_view()
                             }
                         }}
@@ -112,16 +159,15 @@ pub fn LandingPage() -> impl IntoView {
                 // Hero Section
                 <main class="hero-main">
                     <div class="hero-content">
-                        <div class="badge">"Run Anywhere • Embed Everywhere"</div>
+                        <div class="badge">"Now supporting Alpine, Debian & Fish Shell"</div>
                         
                         <h1 class="hero-title">
                             "Interactive CLI Demos"<br />
-                            <span class="text-gradient">"for the Modern Web."</span>
+                            <span class="text-gradient">"for the Modern Web"</span>
                         </h1>
                         
                         <p class="hero-subtitle">
-                            "Host, share, and embed fully interactive CLI demos directly in the browser. "
-                            "Think Replit, but purpose-built for command-line applications."
+                            "The modern way to showcase CLI tools. Spin up instant, sandboxed Linux environments directly in your browser. No downloads, no configuration, just code."
                         </p>
 
                         <div class="cta-group">
@@ -130,23 +176,23 @@ pub fn LandingPage() -> impl IntoView {
                                 if auth_checked.get() && user.get().is_some() {
                                     view! {
                                         <A href="/dashboard" class="btn-primary btn-hero">
-                                            "Go to Dashboard"
+                                            "Go to Studio"
                                             <span class="arrow">"→"</span>
                                         </A>
                                     }.into_view()
                                 } else {
-                                    view! {
+                                    view! { 
                                         <a href=url class="btn-primary btn-hero" rel="external" style="display: flex; align-items: center; gap: 10px;">
                                             <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor" style="color: black;">
                                                 <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
                                             </svg>
-                                            "Login with GitHub"
-                                        </a>
+                                            "Start Building Free"
+                                        </a> 
                                     }.into_view()
                                 }
                             }}
                             <A href="/docs" class="btn-secondary">
-                                "View Docs"
+                                "Read Documentation"
                             </A>
                         </div>
 
@@ -156,17 +202,22 @@ pub fn LandingPage() -> impl IntoView {
                                 <div class="dot red"></div>
                                 <div class="dot yellow"></div>
                                 <div class="dot green"></div>
-                                <span class="terminal-title-preview">"guest@tryCLI-demo:~"</span>
+                                <span class="terminal-title-preview">"developer@trycli-studio:~"</span>
                             </div>
                             <div class="terminal-body-preview">
                                 <div class="line">
-                                    <span class="prompt">"$"</span> 
-                                    <span class="cmd">" TryCLI embed --target documentation"</span>
+                                    <span class="prompt">"➜"</span> 
+                                    <span class="cmd">" curl -fsSL https://trycli.com/install.sh | sh"</span>
                                 </div>
-                                <div class="line output"><span>"✔ Snapshotting environment state..."</span></div>
-                                <div class="line output"><span>"✔ Generating embed code..."</span></div>
-                                <div class="line output"><span class="success">"✓ Live Demo Ready: https://trycli.com/e/xyz123"</span></div>
-                                <div class="line"><span class="prompt">"$"</span> <span class="cursor">"_"</span></div>
+                                <div class="line output"><span>"→ Initializing environment (Ubuntu 22.04)..."</span></div>
+                                <div class="line output"><span>"→ Installing dependencies..."</span></div>
+                                <div class="line output"><span class="success">"✔ Environment Ready! Session ID: 9f8a-2b1c"</span></div>
+                                <div class="line">
+                                    <span class="prompt">"➜"</span> 
+                                    <span class="cmd">" trycli publish --public"</span>
+                                </div>
+                                <div class="line output"><span>"Snapshotting container state... Done (1.2s)"</span></div>
+                                <div class="line"><span class="prompt">"➜"</span> <span class="cursor">"_"</span></div>
                             </div>
                         </div>
                     </div>
@@ -175,91 +226,115 @@ pub fn LandingPage() -> impl IntoView {
                 // FEATURES 
                 <section class="section-features" style="background: rgba(255,255,255,0.01);">
                     <div class="container-narrow">
-                        <h2 class="section-title">"What Is TryCLI?"</h2>
-                        <p class="section-subtitle" style="text-align: left; margin-bottom: 2rem;">
-                            "TryCLI orchestrates on-demand, isolated Docker environments that run real Linux terminals in the browser. "
-                            "Each user gets a fresh Ubuntu sandbox where they can execute commands, explore tools, and follow guided instructions — without installing anything locally."
+                        <h2 class="section-title">"Frictionless Onboarding"</h2>
+                        
+                        <p class="section-subtitle" style="text-align: left; margin-bottom: 3rem;">
+                            "The biggest drop-off in developer adoption happens before the first command is ever run. "
+                            "TryCLI bridges the gap between reading about a tool and actually experiencing it."
                         </p>
-                        <p class="section-subtitle" style="text-align: left;">
-                            "Once published, a terminal session can be shared as a URL or embedded directly into external sites as a fully interactive component."
-                        </p>
+
+                        <div style="display: flex; flex-wrap: wrap; gap: 40px; align-items: center;">
+                            
+                            // Left Column: Text explanation
+                            <div style="flex: 1 1 400px; text-align: left;">
+                                <h3 style="font-size: 1.5rem; margin-bottom: 1rem; color: #fff; font-weight: 700;">"Stop Losing Users at 'npm install'"</h3>
+                                <p style="color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem;">
+                                    "The biggest barrier to adoption isn't your API design, it's the setup process. Every step in your 'Getting Started' guide is a chance for a user to bounce."
+                                </p>
+                                <p style="color: var(--text-muted); line-height: 1.6;">
+                                    "TryCLI replaces static code blocks with live, interactive playgrounds. Let developers experience the value of your tool immediately, without polluting their local machine."
+                                </p>
+                            </div>
+
+                            // Right Column: Visual Checklist Card
+                            <div style="flex: 1 1 300px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);">
+                                <ul style="list-style: none; padding: 0; margin: 0; font-family: var(--font-mono); font-size: 0.9rem;">
+                                    <li style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: #71717a;">
+                                        <span style="color: #ef4444;">"✕"</span> "git clone https://github.com/..."
+                                    </li>
+                                    <li style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: #71717a;">
+                                        <span style="color: #ef4444;">"✕"</span> "npm install / cargo build"
+                                    </li>
+                                    <li style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: #71717a;">
+                                        <span style="color: #ef4444;">"✕"</span> "Error: OpenSSL not found"
+                                    </li>
+                                    <li style="height: 1px; background: rgba(255,255,255,0.1); margin: 20px 0;"></li>
+                                    <li style="display: flex; align-items: center; gap: 12px; color: #fff; font-weight: 600;">
+                                        <span style="color: #22c55e;">"✓"</span> "Click Link → Start Coding"
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
                     </div>
                 </section>
 
                 <section class="section-features">
                     <div class="container-narrow">
-                        <h2 class="section-title"><span class="text-gradient">"Key Features"</span></h2>
+                        <h2 class="section-title"><span class="text-gradient">"Engineered for DevTools"</span></h2>
                         <div class="features-grid">
                             <article class="feature-card">
                                 <div class="icon-box">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                                 </div>
-                                <h3>"Instant Sandboxes"</h3>
-                                <p>"Every session launches a fresh, isolated Ubuntu container. No shared state, no conflicts, and automatic teardown."</p>
+                                <h3>"Multi-Environment Support"</h3>
+                                <p>"Choose your base. We support Ubuntu, Alpine, and Debian. Configure your preferred shell (Bash, Zsh, Fish) via our setup wizard."</p>
                             </article>
                             <article class="feature-card">
                                 <div class="icon-box">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
                                 </div>
-                                <h3>"Embed Everywhere"</h3>
-                                <p>"Snapshot your environment and embed it in docs, blogs, or wikis. Each embed launches a new isolated session per viewer."</p>
+                                <h3>"Instant Snapshots"</h3>
+                                <p>"Configure your environment interactively, then click 'Publish'. We freeze the filesystem state into a lightweight image that loads instantly for your users."</p>
                             </article>
                             <article class="feature-card">
                                 <div class="icon-box">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
                                 </div>
-                                <h3>"Interactive Guides"</h3>
-                                <p>"Split-pane interface pairs a real-time terminal with a GitHub-flavored Markdown editor for step-by-step walkthroughs."</p>
+                                <h3>"Split-Pane Studio"</h3>
+                                <p>"Write beautiful Markdown documentation on the right while running commands on the left. The perfect interface for tutorials and workshops."</p>
+                            </article>
+
+                            <article class="feature-card">
+                                <div class="icon-box">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+                                </div>
+                                <h3>"One-Click Embeds"</h3>
+                                <p>"Generate a copy-paste iframe snippet instantly. Embed your live terminal demo directly into your documentation, blog, or landing page."</p>
+                            </article>
+                            <article class="feature-card">
+                                <div class="icon-box">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                                </div>
+                                <h3>"Pristine Environments"</h3>
+                                <p>"Eliminate configuration drift. Every user session initializes from a clean, immutable snapshot, ensuring consistent behavior every single time."</p>
                             </article>
                         </div>
                     </div>
                 </section>
 
-                // USE CASES 
-                <section class="section-usage">
-                    <div class="container-narrow">
-                        <h2 class="section-title">"Use Cases"</h2>
-                        <p class="section-subtitle">"If it runs in a terminal, it runs — and embeds — on TryCLI."</p>
-                        <div class="features-grid">
-                            <div class="feature-card" style="border-left: 3px solid #22c55e;">
-                                <h3>"Documentation"</h3>
-                                <p>"Embed live CLI demos in docs instead of static screenshots."</p>
-                            </div>
-                            <div class="feature-card" style="border-left: 3px solid #3b82f6;">
-                                <h3>"Open Source"</h3>
-                                <p>"Showcase tools instantly without forcing users to install dependencies."</p>
-                            </div>
-                            <div class="feature-card" style="border-left: 3px solid #a855f7;">
-                                <h3>"DevRel"</h3>
-                                <p>"Create interactive tutorials, workshops, and hands-on content."</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
 
                 // FINAL CTA 
                 <section class="section-usage" style="border-bottom: none;">
                     <div class="container-narrow">
                         <div class="final-cta">
                             <h2 class="section-title" style="margin-bottom: 1rem;">
-                                <span class="text-gradient">"Why TryCLI?"</span>
+                                <span class="text-gradient">"Ready to Ship?"</span>
                             </h2>
                             <p style="font-size: 1.2rem; color: #a1a1aa; max-width: 700px; margin: 0 auto 2rem auto; line-height: 1.6;">
-                                "Most CLI tools fail at the first step: getting users to try them. "
-                                "TryCLI removes that barrier by turning CLI tools into embeddable, interactive experiences that run instantly in the browser."
+                                "Join the developers using TryCLI to build the next generation of interactive documentation."
                             </p>
                             <div style="margin-top: 2rem;">
                                 {move || {
                                     let url = auth_github_url();
                                     if auth_checked.get() && user.get().is_some() {
-                                        view! { <A href="/dashboard" class="btn-primary btn-lg">"Start Building Now"</A> }.into_view()
+                                        view! { <A href="/new" class="btn-primary btn-lg">"Create New Project"</A> }.into_view()
                                     } else {
                                         view! { 
                                             <a href=url class="btn-primary btn-lg" rel="external" style="display: flex; align-items: center; gap: 10px;">
                                                 <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor" style="color: black;">
                                                     <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
                                                 </svg>
-                                                "Login with GitHub"
+                                                "Sign Up with GitHub"
                                             </a> 
                                         }.into_view()
                                     }
