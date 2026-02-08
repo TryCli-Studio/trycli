@@ -38,3 +38,30 @@ pub struct PublishRequest {
     pub slug: String,
     pub markdown: String,
 }
+
+#[derive(Serialize)]
+#[serde(tag = "type")]
+pub enum OEmbedResponse {
+    #[serde(rename = "rich")]
+    Rich {
+        version: String,
+        title: String,
+        author_name: String,
+        author_url: String,
+        provider_name: String,
+        provider_url: String,
+        html: String,
+        width: u32,
+        height: u32,
+    },
+    #[serde(rename = "link")]
+    Link {
+        version: String,
+        title: String,
+        author_name: String,
+        author_url: String,
+        provider_name: String,
+        provider_url: String,
+        thumbnail_url: Option<String>,
+    }
+}
