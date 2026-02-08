@@ -412,7 +412,6 @@ fn DashboardProjectList(
     let (confirm_open, set_confirm_open) = create_signal(false);
     let (confirm_slug, set_confirm_slug) = create_signal(String::new());
     let (confirm_message, set_confirm_message) = create_signal(String::new());
-    let (confirm_result, set_confirm_result) = create_signal(Option::<String>::None);
 
     // Handler for deletion logic
     let handle_delete = move |slug: String| {
@@ -443,13 +442,10 @@ fn DashboardProjectList(
                             set_projects.update(|list| {
                                 list.retain(|p| p.slug != slug_clone);
                             });
-                            set_confirm_result.set(None);
                         } else {
-                            set_confirm_result.set(None);
                         }
                     },
                     Err(_) => {
-                        set_confirm_result.set(None);
                     }
                 }
             });
