@@ -1,8 +1,8 @@
 use axum::{
     extract::{Path, Query, State},
-    http::{header, HeaderMap, StatusCode},
     routing::{get, post, delete},
-    Json, Router,
+    Router, Json,
+    http::StatusCode,
     body::Bytes, // FIX: Import Bytes
 };
 use bollard::container::{CreateContainerOptions, Config};
@@ -19,32 +19,6 @@ use crate::models::{User, ProjectSummary, PublishRequest};
 #[derive(Deserialize)]
 pub struct SearchQuery {
     q: String,
-}
-
-#[derive(Deserialize)]
-pub struct EmbedQuery {
-    key: Option<String>,
-}
-
-// Strict host matching to prevent subdomain spoofing
-fn is_authorized(referer: &str, allowed_origins: &str, self_domain: &str) -> bool {
-    let ref_url = match Url::parse(referer) {
-        Ok(u) => u,
-        Err(_) => return false,
-    };
-    let ref_host = ref_url.host_str().unwrap_or("");
-    
-    // 1. Internal Check (localhost, 127.0.0.1, or your domain)
-    // NOTE: This is the "Localhost Loophole" that allows your tests to pass on port 8080.
-    if ref_host == "localhost" || ref_host == "127.0.0.1" || 
-       ref_host == self_domain || ref_host.ends_with(&format!(".{}", self_domain)) {
-        return true;
-    }
-    
-    // 2. Strict Whitelist Check (Prevents domain.com.evil.com exploits)
-    allowed_origins.split(',')
-        .map(|s| s.trim().trim_start_matches("https://").trim_start_matches("http://"))
-        .any(|domain| ref_host == domain || ref_host.ends_with(&format!(".{}", domain)))
 }
 
 pub fn routes() -> Router<AppState> {
@@ -67,7 +41,7 @@ pub async fn list_user_projects(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, is_protected FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
+        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
     )
     .bind(user.id)
     .fetch_all(&state.db)
@@ -94,7 +68,7 @@ pub async fn search_projects(
     let query_term = format!("%{}%", search.q);
     
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, is_protected FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
+        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
     )
     .bind(user.id)
     .bind(query_term)
@@ -113,7 +87,7 @@ pub async fn publish_handler(
     session: Session, 
     Json(payload): Json<PublishRequest>
 ) -> Result<Json<String>, (StatusCode, String)> {
-    // FIX: Map error instead of unwrap
+    
     let user: Option<User> = session.get("user")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
@@ -186,22 +160,26 @@ pub async fn publish_handler(
         ..Default::default()
     };
 
-    // 4. Commit
-    state.docker.commit_container(commit_opts, config)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Commit Error: {}", e)))?;
+    let mut create_image_stream = state.docker.create_image(
+        Some(create_opts),
+        Some(Bytes::from(tar_buffer)), 
+        None
+    );
 
-    // 5. Save to Database
-    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6)")
-        .bind(&payload.slug)
+    while let Some(result) = create_image_stream.next().await {
+        if let Err(e) = result {
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Import Error: {}", e)));
+        }
+    }
+
+    // 6. Update Database
+    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (owner_username, slug) DO UPDATE SET image_tag = $2, markdown = $3, shell = $6")
+        .bind(&safe_slug)
         .bind(&new_image_tag)
         .bind(&payload.markdown)
         .bind(user.id)          
         .bind(&user.login)
-        .bind(&shell_path)
-        .bind(payload.is_protected)
-        .bind(&embed_token)
-        .bind(&origins_str)
+        .bind(&shell_path) 
         .execute(&state.db)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
@@ -216,35 +194,38 @@ pub async fn publish_handler(
         bollard::container::RemoveContainerOptions { force: true, ..Default::default() }
     )).await;
 
-    // Return the token to the user for immediate use
-    if let Some(token) = &embed_token {
-        Ok(Json(format!("Published! Embed Token: {}", token)))
-    } else {
-        Ok(Json("Published!".to_string()))
-    }
+    Ok(Json("Published!".to_string()))
 }
 
 pub async fn get_project(
     Path((username, slug)): Path<(String, String)>, 
-    headers: HeaderMap,           
-    Query(query): Query<EmbedQuery>, 
     State(state): State<AppState>
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
-    // FIX: Handle DB errors properly
+    // Case-insensitive lookup (Fixes 404s due to capitalization)
     let row_result = sqlx::query_as::<_, (String, String, String, i64)>(
-        "SELECT image_tag, markdown, shell, owner_id FROM projects WHERE owner_username = $1 AND slug = $2"
+        "SELECT image_tag, markdown, shell, owner_id FROM projects WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
     )
     .bind(&username).bind(&slug)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    // Destructuring all 7 fields
-    let (image_tag, markdown, shell, is_protected, token, origins_raw, owner_id) = match row_result {
+    let (image_tag, markdown, shell, owner_id) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
+
+    {
+        let sessions = state.lock_sessions();
+        let active_viewers = sessions.values()
+            .filter(|ctx| ctx.project_owner_id == Some(owner_id))
+            .count();
+        
+        if active_viewers >= 5 {
+            return Err((StatusCode::TOO_MANY_REQUESTS, "Publisher limit reached".to_string()));
+        }
+    }
 
     let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
     let session_id = Uuid::new_v4().to_string();
@@ -262,29 +243,41 @@ pub async fn get_project(
             format!("SHELL={}", shell) 
         ]),
         host_config: Some(HostConfig { 
-            // 2. RESOURCE LIMITS
-            memory: Some(512 * 1024 * 1024), // 512 MB RAM
-            memory_swap: Some(512 * 1024 * 1024), // No extra swap
-            nano_cpus: Some(1_000_000_000), // 1.0 CPU Core
-            pids_limit: Some(64), // Prevent Fork Bombs (max 64 processes)
-            
-            // 3. NETWORK SECURITY
-            // "bridge" is default, but ensures they can't access host networking
+            runtime: Some("runsc".to_string()),
+            memory: Some(512 * 1024 * 1024), 
+            nano_cpus: Some(250_000_000),
+            pids_limit: Some(64),
             network_mode: Some("bridge".to_string()), 
             cap_drop: Some(vec!["ALL".to_string()]),
             cap_add: Some(vec![
-                "NET_BIND_SERVICE".to_string(), // Allow binding ports
-                "CHOWN".to_string(),            // File permissions
-                "SETUID".to_string(),           // Sudo/su support
+                "NET_BIND_SERVICE".to_string(),
+                "CHOWN".to_string(),
+                "SETUID".to_string(),
                 "SETGID".to_string(),
-                "DAC_OVERRIDE".to_string()      // File permission overrides
+                "DAC_OVERRIDE".to_string()
             ]),
             security_opt: Some(vec!["no-new-privileges".to_string()]),
-            
-            // 6. FILESYSTEM
-            // For now, we leave it writable for temp files, but we could mount a tmpfs.
-            readonly_rootfs: Some(false), 
-
+            readonly_rootfs: Some(true),
+            mounts: Some(vec![
+                Mount {
+                    target: Some("/root".to_string()), 
+                    typ: Some(MountTypeEnum::TMPFS), 
+                    tmpfs_options: Some(MountTmpfsOptions {
+                        size_bytes: Some(50 * 1024 * 1024), 
+                        mode: Some(0o1777),
+                    }),
+                    ..Default::default()
+                },
+                Mount {
+                    target: Some("/tmp".to_string()),
+                    typ: Some(MountTypeEnum::TMPFS),
+                    tmpfs_options: Some(MountTmpfsOptions {
+                        size_bytes: Some(50 * 1024 * 1024),
+                        mode: Some(0o1777),
+                    }),
+                    ..Default::default()
+                }
+            ]),
             auto_remove: Some(true), 
             ..Default::default() 
         }),
@@ -310,12 +303,61 @@ pub async fn get_project(
         }); 
     }
     
-    // MERGED: Return all necessary fields including owner_id
     Ok(Json(serde_json::json!({
         "container_id": session_id,
         "markdown": markdown,
-        "is_protected": is_protected,
-        "embed_token": token,
         "owner_id": owner_id
     })))
+}
+
+pub async fn delete_project(
+    State(state): State<AppState>,
+    session: Session,
+    Path(slug): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+        
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    let record: Option<(String,)> = sqlx::query_as(
+        "SELECT image_tag FROM projects WHERE LOWER(slug) = LOWER($1) AND owner_id = $2"
+    )
+    .bind(&slug)
+    .bind(user.id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    let image_tag = match record {
+        Some(r) => r.0,
+        None => return Err((StatusCode::NOT_FOUND, "Project not found or access denied".to_string())),
+    };
+
+    let db_result = sqlx::query(
+        "DELETE FROM projects WHERE LOWER(slug) = LOWER($1) AND owner_id = $2"
+    )
+    .bind(&slug)
+    .bind(user.id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Delete Error: {}", e)))?;
+
+    if db_result.rows_affected() == 0 {
+        return Err((StatusCode::NOT_FOUND, "Project not found".to_string()));
+    }
+
+    let remove_opts = RemoveImageOptions {
+        force: true,
+        noprune: false,
+    };
+
+    if let Err(e) = state.docker.remove_image(&image_tag, Some(remove_opts), None).await {
+        eprintln!("Warning: Failed to remove docker image {}: {}", image_tag, e);
+    } else {
+        println!("Cleaned up image: {}", image_tag);
+    }
+
+    Ok(StatusCode::OK)
 }
