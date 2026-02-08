@@ -16,6 +16,7 @@ use serde::Deserialize;
 use futures::StreamExt;
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest};
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -282,6 +283,9 @@ pub async fn get_project(
 
     let config = Config {
         image: Some(image_tag),
+        labels: Some(HashMap::from([
+        ("managed_by".to_string(), "TryCli Studio".to_string())
+        ])),
         tty: Some(true),
         user: Some("root".to_string()), 
         cmd: Some(vec![shell.clone()]), 
