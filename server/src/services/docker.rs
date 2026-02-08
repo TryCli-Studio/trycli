@@ -1,27 +1,17 @@
 use bollard::Docker;
 use bollard::container::{ListContainersOptions, RemoveContainerOptions, StatsOptions};
 use std::sync::Arc;
-use std::collections::HashMap;
-use futures::StreamExt; // <--- CRITICAL FIX: This enables .next() on streams
+use std::collections::{HashMap, HashSet}; // Import HashSet
+use futures::StreamExt; 
 use crate::state::SessionMap;
 
 pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
-    // Check every 30 seconds
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30)); 
     
     loop {
         interval.tick().await;
         
-        // --- 1. CLEANUP ZOMBIE CONTAINERS ---
-        
-        let active_container_names: Vec<String> = match sessions.lock() {
-            Ok(guard) => guard.values().map(|ctx| ctx.container_name.clone()).collect(),
-            Err(e) => {
-                eprintln!("!! Reaper Mutex Poisoned: {}", e);
-                continue; 
-            }
-        };
-        
+        // 1. Fetch ALL containers from Docker first
         let filters = HashMap::from([
             ("label".to_string(), vec!["managed_by=TryCli Studio".to_string()])
         ]);
@@ -32,32 +22,78 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
             ..Default::default()
         };
 
-        if let Ok(containers) = docker.list_containers(Some(opts)).await {
-            for container in containers {
-                // Check if this container is known to our SessionMap
-                let is_active = container.names.as_ref().map_or(false, |names| {
-                    names.iter().any(|n| {
-                        let clean = n.trim_start_matches('/'); 
-                        active_container_names.contains(&clean.to_string())
-                    })
-                });
+        // Get the "Ground Truth" from Docker
+        let docker_containers = match docker.list_containers(Some(opts)).await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Reaper failed to list containers: {}", e);
+                continue;
+            }
+        };
 
-                // If not active in our map, kill it
-                if !is_active {
-                    if let Some(id) = container.id {
-                        println!("Reaper: Killing Zombie Container {}", id);
-                        let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
-                            force: true, 
-                            ..Default::default()
-                        })).await;
-                    }
-                } 
-                // --- 2. MINING DETECTION (CPU MONITORING) ---
-                else {
-                    // It is active, but is it misbehaving?
-                    if let Some(id) = container.id {
-                       check_resource_usage(&docker, &id).await;
-                    }
+        // Create a HashSet of actual running/existing container names
+        let mut actual_container_names: HashSet<String> = HashSet::new();
+        for c in &docker_containers {
+            if let Some(names) = &c.names {
+                for name in names {
+                    // Docker names come with a leading slash (e.g., "/keen_eaver")
+                    actual_container_names.insert(name.trim_start_matches('/').to_string());
+                }
+            }
+        }
+
+        // --- 2. CLEANUP GHOST SESSIONS (The Fix for your issue) ---
+        {
+            let mut map = match sessions.lock() {
+                Ok(g) => g,
+                Err(e) => {
+                    eprintln!("Reaper Lock Error: {}", e);
+                    continue; 
+                }
+            };
+
+            // Remove sessions from memory if they don't exist in Docker
+            map.retain(|_session_id, ctx| {
+                // Always keep initializing sessions (give them 30s grace period)
+                if ctx.container_name == "INITIALIZING" {
+                    return true;
+                }
+                
+                let exists = actual_container_names.contains(&ctx.container_name);
+                
+                if !exists {
+                    println!("Reaper: Removing Ghost Session (Memory leak) for {}", ctx.container_name);
+                }
+                
+                exists
+            });
+        }
+
+        // --- 3. CLEANUP ZOMBIE CONTAINERS (Existing Logic) ---
+        // (We can verify map existence again or just use the filtered list logic)
+        
+        // Build a fresh list of valid names from the now-cleaned map
+        let valid_session_names: HashSet<String> = sessions.lock().unwrap().values()
+            .map(|c| c.container_name.clone())
+            .collect();
+
+        for container in docker_containers {
+            let is_known = container.names.as_ref().map_or(false, |names| {
+                names.iter().any(|n| valid_session_names.contains(n.trim_start_matches('/')))
+            });
+
+            if !is_known {
+                if let Some(id) = container.id.clone() {
+                    println!("Reaper: Killing Zombie Container {}", id);
+                    let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
+                        force: true, 
+                        ..Default::default()
+                    })).await;
+                }
+            } else {
+                // --- 4. RESOURCE MONITORING (Existing Logic) ---
+                if let Some(id) = container.id {
+                    check_resource_usage(&docker, &id).await;
                 }
             }
         }

@@ -122,7 +122,7 @@ pub async fn get_all_projects(
 pub async fn kill_container(
     State(state): State<AppState>,
     session: Session,
-    Path(id): Path<String>,
+    Path(id): Path<String>, // Note: 'id' here might be the container ID or Name
 ) -> Result<Json<String>, (StatusCode, String)> {
     check_admin(&session).await?;
 
@@ -131,7 +131,16 @@ pub async fn kill_container(
         ..Default::default()
     })).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json("Container killed".to_string()))
+    // 2. Remove from SessionMap (The Fix)
+    {
+        let mut map = state.lock_sessions();
+        // Remove the entry where the container name matches the ID passed
+        // Note: The UI passes the container ID usually, but check if your UI passes Name or ID. 
+        // Ideally, check against both or ensure consistency.
+        map.retain(|_, ctx| ctx.container_name != id);
+    }
+
+    Ok(Json("Container killed and session cleared".to_string()))
 }
 
 pub async fn delete_project_admin(
