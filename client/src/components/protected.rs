@@ -50,7 +50,7 @@ pub fn ProtectedRoute(children: Children) -> impl IntoView {
                         <h2 style="color: var(--text-main);">"Authentication Required"</h2>
                         <p style="color: var(--text-muted);">"Please log in to access this page"</p>
                         <a href=format!("{}/auth/github", api_base()) 
-                           class="btn-primary" 
+                           class="btn-secondary btn-action" 
                            rel="external" 
                            style="text-decoration: none;">
                             "Login with GitHub"

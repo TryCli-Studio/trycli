@@ -41,7 +41,7 @@ pub async fn list_user_projects(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
+        "SELECT slug, image_tag, view_count FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
     )
     .bind(user.id)
     .fetch_all(&state.db)
@@ -68,7 +68,7 @@ pub async fn search_projects(
     let query_term = format!("%{}%", search.q);
     
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
+        "SELECT slug, image_tag, view_count FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
     )
     .bind(user.id)
     .bind(query_term)
@@ -216,6 +216,19 @@ pub async fn get_project(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
+    // 2. [NEW] Increment View Count asynchronously
+    // We don't await strictly for this to ensure speed for the user
+    let db_clone = state.db.clone();
+    let slug_clone = slug.clone();
+    let username_clone = username.clone();
+    tokio::spawn(async move {
+        let _ = sqlx::query("UPDATE projects SET view_count = view_count + 1 WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)")
+            .bind(username_clone)
+            .bind(slug_clone)
+            .execute(&db_clone)
+            .await;
+    });
+
     {
         let sessions = state.lock_sessions();
         let active_viewers = sessions.values()
@@ -299,7 +312,9 @@ pub async fn get_project(
             shell,
             owner_id: None,
             project_owner_id: Some(owner_id),
-            is_publishing: false // <--- INIT FLAG
+            is_publishing: false,
+            project_slug: Some(slug), 
+            created_at: std::time::Instant::now(),
         }); 
     }
     

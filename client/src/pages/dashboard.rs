@@ -144,14 +144,14 @@ pub fn DashboardPage() -> impl IntoView {
                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                         </div>
                         <a href=format!("{}/auth/logout", api_base()) 
-                           class="btn-primary btn-logout" 
+                           class="btn-secondary btn-action btn-logout" 
                            rel="external"  
                            style="text-decoration: none; font-size: 0.9rem;">
                            "Logout"
                         </a>
                     }.into_view(),
                     None => view! {
-                        <a href=format!("{}/auth/github", api_base()) class="btn-primary" rel="external" style="text-decoration: none;">                            "Login with GitHub"
+                        <a href=format!("{}/auth/github", api_base()) class="btn-secondary btn-action" rel="external" style="text-decoration: none;">                            "Login with GitHub"
                         </a>
                     }.into_view()
                 }}
@@ -183,11 +183,19 @@ pub fn DashboardPage() -> impl IntoView {
                                 </div>
 
                                 <div class="dashboard-section">
-                                   <div class="section-header">
+                                    <div class="section-header">
                                         <h2>"Active Deployments"</h2>
-                                        <A href="/new" class="btn-primary">
-                                            "+ Initialize Environment"
-                                        </A>
+                                        
+                                        
+                                        <div style="display: flex; gap: 12px; align-items: center;">
+                                            <A href="/analytics" class="btn-secondary btn-action">
+                                                "Analytics"
+                                            </A>
+                                            
+                                            <A href="/new" class="btn-secondary btn-action">
+                                                "+ Initialize Environment"
+                                            </A>
+                                        </div>
                                     </div>
 
                                     <DashboardProjectList
@@ -323,7 +331,7 @@ fn DashboardSearch(
                                 view! {
                                     <div style="padding: 16px; color: var(--text-muted);">
                                         <p style="margin: 0 0 8px 0; font-size: 0.9rem;">"No existing environment found."</p>
-                                        <button class="btn-primary" 
+                                        <button class="btn-secondary btn-action" 
                                                 style=move || {
                                                     let base = "font-size: 0.9rem; padding: 8px 12px; width: 100%; text-align: left;";
                                                     if active_index.get() == 0 {
@@ -446,7 +454,7 @@ fn DashboardProjectList(
             Some(err) => view! {
                 <div class="error-state">
                     <p class="error-message">{err}</p>
-                    <button class="btn-primary" on:click=move |_| {
+                    <button class="btn-secondary btn-action" on:click=move |_| {
                         set_error.set(None);
                         set_loading.set(true);
                     }>
@@ -460,7 +468,7 @@ fn DashboardProjectList(
                     view! {
                         <div class="empty-state">
                             <p class="empty-message">"No active environments. Initialize a new sandbox to start building."</p>
-                            <A href="/new" class="btn-primary">
+                            <A href="/new" class="btn-secondary btn-action">
                                 "Initialize Environment"
                             </A>
                         </div>

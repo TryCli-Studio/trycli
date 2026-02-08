@@ -10,6 +10,7 @@ mod handlers {
     pub mod auth;
     pub mod project;
     pub mod spawn;
+    pub mod analytics;
 }
 
 use services::docker::start_background_reaper;

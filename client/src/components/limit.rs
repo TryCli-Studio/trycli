@@ -19,7 +19,7 @@ pub fn LimitReached() -> impl IntoView {
                         "Are you the owner?"
                     </p>
                     <a href="mailto:tryclistudio@gmail.com" 
-                       class="btn-primary"
+                       class="btn-secondary btn-action"
                        style="width: 100%; max-width: 300px; text-decoration: none;">
                         "Request More Compute"
                     </a>
