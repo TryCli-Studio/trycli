@@ -18,8 +18,9 @@ pub async fn get_analytics(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     // 2. Fetch Projects & Lifetime Views
+    // FIX: Added 'owner_username' to the SELECT statement
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, view_count FROM projects WHERE owner_id = $1 ORDER BY view_count DESC"
+        "SELECT slug, image_tag, view_count, owner_username FROM projects WHERE owner_id = $1 ORDER BY view_count DESC"
     )
     .bind(user.id)
     .fetch_all(&state.db)

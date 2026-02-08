@@ -10,6 +10,8 @@ use crate::types::{User, AnalyticsDashboardData};
 pub fn AnalyticsPage() -> impl IntoView {
     let (_user, set_user) = create_signal(None::<User>);
     let (data, set_data) = create_signal(None::<AnalyticsDashboardData>);
+    // Add an error state
+    let (_error, set_error) = create_signal(None::<String>);
     
     // Auth & Data Fetch
     create_resource(|| (), move |_| async move {
@@ -27,16 +29,26 @@ pub fn AnalyticsPage() -> impl IntoView {
                     
                     // 2. Fetch Analytics
                     let analytics_url = format!("{}/api/analytics", api_base());
-                    if let Ok(data_resp) = Request::get(&analytics_url)
+                    match Request::get(&analytics_url)
                         .credentials(RequestCredentials::Include)
                         .send()
                         .await 
                     {
-                        if let Ok(d) = data_resp.json::<AnalyticsDashboardData>().await {
-                            set_data.set(Some(d));
-                        }
+                        Ok(data_resp) => {
+                            if data_resp.ok() {
+                                match data_resp.json::<AnalyticsDashboardData>().await {
+                                    Ok(d) => set_data.set(Some(d)),
+                                    Err(e) => set_error.set(Some(format!("Failed to parse data: {}", e))),
+                                }
+                            } else {
+                                set_error.set(Some(format!("API Error: {}", data_resp.status())));
+                            }
+                        },
+                        Err(e) => set_error.set(Some(format!("Network Error: {}", e))),
                     }
                 }
+            } else {
+                 set_error.set(Some("Please log in to view analytics".to_string()));
             }
         }
     });
