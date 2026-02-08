@@ -273,7 +273,7 @@ After publishing, you can easily distribute your interactive terminal:
                             </span>
                         </div>
                         <a href=format!("{}/auth/logout", api_base()) 
-                            class="btn-primary btn-logout" 
+                            class="btn-secondary btn-action btn-logout" 
                             rel="external"  
                             style="margin-right: 12px; text-decoration: none; font-size: 0.8rem;">
                             "Logout"
@@ -294,14 +294,14 @@ After publishing, you can easily distribute your interactive terminal:
                         {move || slug_error.get().map(|err| view! {
                             <span style="color: #ef4444; font-size: 0.75rem; margin-left: 8px;">{err}</span>
                         })}
-                        <button class="btn-primary btn-success" on:click=move |ev| (on_publish)(ev) 
+                        <button class="btn-secondary btn-action btn-success" on:click=move |ev| (on_publish)(ev) 
                                 prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some() || is_publishing.get()
                                 style=move || if is_publishing.get() { "opacity: 0.6; cursor: not-allowed;" } else { "" }>
                             {move || if is_publishing.get() { "Publishing..." } else { "Publish" }}
                         </button>
                     }.into_view(),
                     None => view! {
-                        <a href=format!("{}/auth/github", api_base()) class="btn-primary" style="text-decoration: none;">
+                        <a href=format!("{}/auth/github", api_base()) class="btn-secondary btn-action" style="text-decoration: none;">
                             "Login with GitHub"
                         </a>
                     }.into_view()

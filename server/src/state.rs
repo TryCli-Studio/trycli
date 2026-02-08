@@ -1,19 +1,18 @@
 use bollard::Docker;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::collections::HashMap;
+use std::time::Instant;
 
 // New Struct to track container details AND ownership
 #[derive(Clone, Debug)]
 pub struct SessionContext {
     pub container_name: String,
     pub shell: String,
-    // If Some(id), only that user can access (Private/Builder). 
-    // If None, it's public (Viewer).
-    pub owner_id: Option<i64>, 
-    // The ID of the user who PUBLISHED this project.
+    pub owner_id: Option<i64>,
     pub project_owner_id: Option<i64>,
-    // NEW: Signals that the Publish Handler has taken over responsibility
-    pub is_publishing: bool, 
+    pub is_publishing: bool,
+    pub project_slug: Option<String>, 
+    pub created_at: Instant,
 }
 
 pub type SessionMap = Arc<Mutex<HashMap<String, SessionContext>>>;
