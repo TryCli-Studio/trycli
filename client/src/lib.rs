@@ -17,6 +17,7 @@ pub mod pages {
     pub mod embed;
     pub mod docs;
     pub mod blogs;
+    pub mod analytics;
 }
 
 pub use app::App;

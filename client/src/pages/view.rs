@@ -184,12 +184,12 @@ pub fn ViewPage() -> impl IntoView {
                                             <img src=u.avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
                                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                                         </div>
-                                        <button class="btn-primary btn-success" on:click=move |_| {
+                                        <button class="btn-secondary btn-action btn-success" on:click=move |_| {
                                             copy_embed_code(username(), slug());
                                         }>
                                             "Share / Embed"
                                         </button>
-                                        <a href=format!("{}/auth/logout", api_base()) class="btn-primary btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
+                                        <a href=format!("{}/auth/logout", api_base()) class="btn-secondary btn-action btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
                                     </div>
                                 }.into_view(),
                                 None => view! { <></> }.into_view()

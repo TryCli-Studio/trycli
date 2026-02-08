@@ -58,7 +58,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, u
                 shell: "".to_string(),
                 owner_id: user_id,
                 project_owner_id: user_id,
-                is_publishing: false, // <--- INIT FLAG
+                is_publishing: false,
+                project_slug: None, // Builder sessions don't have a specific slug yet
+                created_at: std::time::Instant::now(), // Start timer
             });
             true
         }
@@ -223,7 +225,9 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
                     shell: final_shell.to_string(),
                     owner_id: user_id,
                     project_owner_id: user_id,
-                    is_publishing: false, // <--- INIT FLAG
+                    is_publishing: false, 
+                    project_slug: None,
+                    created_at: std::time::Instant::now(), 
                 });
             }
             let limit_config = "Acquire::http::Dl-Limit \"500\"; Acquire::https::Dl-Limit \"500\";";
