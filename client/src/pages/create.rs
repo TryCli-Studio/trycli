@@ -10,6 +10,7 @@ use crate::api::api_base;
 use crate::types::User;
 use crate::components::terminal::TerminalView;
 use crate::components::navbar::Navbar;
+use crate::components::modal::Modal;
 
 // Simple resize divider setup
 fn setup_resize_divider() {
@@ -99,7 +100,6 @@ This interactive workspace is your project's staging area. On the left is your l
 
 ### 1. Select Your Stack
 Use the environment settings to choose your preferred **Linux Distribution** and **Shell** (e.g., Bash, Zsh) to ensure your project runs in its native environment.
-
 ### 2. Root Access
 You are authenticated as the **root user** in this container. You can execute all commands directly; there is no need to use `sudo` for installations or system configurations.
 
@@ -115,7 +115,6 @@ Use the terminal to prepare your demo:
 
 This Markdown panel is **fully editable**. You should use this space to write down the specific steps, descriptions, and commands that viewers need to follow to experience a demo of your project.
 
-> **Tip:** Provide clear, copyable command snippets. Since viewers will follow your lead, ensure your documentation matches the environment setup on the left.
 
 ---
 
@@ -123,7 +122,6 @@ This Markdown panel is **fully editable**. You should use this space to write do
 
 Once your environment is configured and your guide is written, you can make your project live via the **Publish** action in your dashboard.
 
-### Sharing Your Work
 After publishing, you can easily distribute your interactive terminal:
 * **Direct Sharing:** Share the unique project URL with your community.
 * **Embed Anywhere:** Copy the **Embed Code** from the project settings and paste it into any blog (e.g., Hashnode, Dev.to) or documentation site. Your viewers will be able to interact with your CLI directly within your post.
@@ -135,6 +133,10 @@ After publishing, you can easily distribute your interactive terminal:
     let (slug_error, set_slug_error) = create_signal(None::<String>);
     let (user, set_user) = create_signal(None::<User>);
     let (is_publishing, set_is_publishing) = create_signal(false);
+    let (modal_open, set_modal_open) = create_signal(false);
+    let (modal_title, set_modal_title) = create_signal(String::new());
+    let (modal_body, set_modal_body) = create_signal(String::new());
+    let (modal_success, set_modal_success) = create_signal(false);
 
     create_resource(|| (), move |_| async move {
         let url = format!("{}/api/me", api_base());
@@ -177,17 +179,15 @@ After publishing, you can easily distribute your interactive terminal:
             Err(e) => web_sys::console::log_1(&JsValue::from_str(&format!("Auth Error: {}", e))),
         }
     });
-    let navigate = use_navigate();
+    let navigate_modal = use_navigate();
     let on_publish = Rc::new(move |_: ev::MouseEvent| {
-        let navigate = navigate.clone();
         // Prevent concurrent publish requests
         if is_publishing.get() {
             return;
         }
         set_is_publishing.set(true);
-        
+
         spawn_local(async move {
-            let navigate = navigate.clone();
             let mut publish_success = false;
             let body_data = serde_json::json!({
                 "container_id": container_id.get_untracked(),
@@ -195,19 +195,19 @@ After publishing, you can easily distribute your interactive terminal:
                 "markdown": markdown.get_untracked()
             });
 
-            // FIX: Safe serialization instead of unwrap()
             let body_str = match serde_json::to_string(&body_data) {
                 Ok(s) => s,
                 Err(_) => {
                     set_is_publishing.set(false);
-                    let _ = window().alert_with_message("Failed to serialize request");
+                    set_modal_title.set("Publish failed".to_string());
+                    set_modal_body.set("Failed to serialize request.".to_string());
+                    set_modal_success.set(false);
+                    set_modal_open.set(true);
                     return;
                 }
             };
 
             let url = format!("{}/api/publish", api_base());
-            
-            // FIX: Safe Request building
             let req = Request::post(&url)
                 .header("Content-Type", "application/json")
                 .credentials(RequestCredentials::Include)
@@ -218,30 +218,47 @@ After publishing, you can easily distribute your interactive terminal:
                     Ok(resp) => {
                         if resp.ok() {
                             publish_success = true;
-                            let _ = window().alert_with_message("Published!");
+                            set_modal_title.set("Published".to_string());
+                            set_modal_body.set("Your project has been published successfully.".to_string());
                         } else {
                             let status = resp.status();
                             let text = resp.text().await.unwrap_or_default();
-                            let _ = window().alert_with_message(&format!("Publish Failed ({}: {})", status, text));
+                            set_modal_title.set("Publish failed".to_string());
+                            set_modal_body.set(format!("{}: {}", status, text));
                         }
                     },
                     Err(_) => {
-                        let _ = window().alert_with_message("Publish Failed: Network Error");
+                        set_modal_title.set("Publish failed".to_string());
+                        set_modal_body.set("Network error while publishing.".to_string());
                     }
                 }
             } else {
-                let _ = window().alert_with_message("Failed to build request");
+                set_modal_title.set("Publish failed".to_string());
+                set_modal_body.set("Failed to build request.".to_string());
             }
-            
-            // Re-enable button after request completes
-            set_is_publishing.set(false);
 
-            if publish_success {
-                navigate("/dashboard", Default::default());
-            }
+            set_is_publishing.set(false);
+            set_modal_success.set(publish_success);
+            set_modal_open.set(true);
         });
     });
+    let on_modal_close = {
+        let navigate = navigate_modal.clone();
+        Callback::new(move |_| {
+            set_modal_open.set(false);
+            if modal_success.get() {
+                navigate("/dashboard", Default::default());
+            }
+        })
+    };
     view! {
+        <Modal
+            show=modal_open.into()
+            title=modal_title.into()
+            body=modal_body.into()
+            button_label="Close".to_string().into()
+            on_close=on_modal_close
+        />
         <Navbar>
             <div class="controls">
                 {move || {

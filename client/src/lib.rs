@@ -8,6 +8,7 @@ pub mod components {
     pub mod protected;
     pub mod limit;
     pub mod navbar;
+    pub mod modal;
 }
 pub mod pages {
     pub mod home;
