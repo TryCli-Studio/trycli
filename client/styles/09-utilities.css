@@ -24,3 +24,86 @@ html {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
 }
+
+/* ====================================
+   ALERT & FORM UTILITIES
+   ==================================== */
+
+/* Alert Components */
+.alert {
+    padding: 16px;
+    border-radius: 6px;
+    border-left: 4px solid;
+}
+
+.alert-info {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: #3b82f6;
+    color: var(--text-main);
+}
+
+.alert-success {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: #22c55e;
+    color: var(--text-main);
+}
+
+.alert strong {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.alert p {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+/* Form Components */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label {
+    font-weight: 600;
+    color: var(--text-main);
+    font-size: 0.9rem;
+}
+
+.form-group input,
+.form-group textarea {
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-darker);
+    color: var(--text-main);
+    font-size: 0.9rem;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+/* Text Utilities */
+.text-muted {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* Error Container */
+.error-container {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { 
+        opacity: 0; 
+        transform: translateY(20px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
