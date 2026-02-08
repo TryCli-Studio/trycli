@@ -10,6 +10,7 @@ use bollard::exec::{CreateExecOptions, StartExecResults};
 use futures::{stream::StreamExt, SinkExt};
 use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
+use tokio::time::Duration;
 use uuid::Uuid;
 use tower_sessions::Session; 
 use crate::state::{AppState, SessionContext}; 
@@ -279,22 +280,67 @@ async fn attach_to_container(
             let _ = input.write_all(script.as_bytes()).await;
         }
 
+        // TASK 1: Docker Output -> WebSocket Client
         let mut send_task = tokio::spawn(async move {
-            while let Some(Ok(Message::Text(text))) = receiver.next().await {
-                let _ = input.write_all(text.as_bytes()).await;
-            }
-        });
-
-        let mut recv_task = tokio::spawn(async move {
             while let Some(Ok(msg)) = output.next().await {
-                let _ = sender.send(Message::Text(msg.to_string().into())).await;
+                // If the pipe breaks, we just stop
+                if sender.send(Message::Text(msg.to_string().into())).await.is_err() {
+                    break;
+                }
             }
         });
 
-        let _ = tokio::select! {
-            _ = &mut send_task => {},
-            _ = &mut recv_task => {},
-        };
+        // TASK 2: WebSocket Client -> Docker Input (WITH IDLE TIMEOUT)
+        // Clone session_id for logging within the task
+        let session_id_log = session_id.clone();
+        
+        let mut recv_task = tokio::spawn(async move {
+            // Guardrail: 20 Minute Idle Timeout
+            const IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 20);
+
+            loop {
+                // We wrap the receiver.next() in a timeout
+                match tokio::time::timeout(IDLE_TIMEOUT, receiver.next()).await {
+                    // Case A: Received a message within time limit
+                    Ok(Some(Ok(msg))) => {
+                        match msg {
+                            Message::Text(text) => {
+                                if input.write_all(text.as_bytes()).await.is_err() {
+                                    break; // Container stdin closed
+                                }
+                            },
+                            Message::Binary(bin) => {
+                                if input.write_all(&bin).await.is_err() {
+                                    break;
+                                }
+                            },
+                            Message::Close(_) => break, // Client closed tab
+                            _ => {} // Ignore Pings/Pongs (handled by Axum)
+                        }
+                    },
+                    // Case B: Stream ended normally (client disconnected)
+                    Ok(None) | Ok(Some(Err(_))) => break,
+                    
+                    // Case C: IDLE TIMEOUT HIT
+                    Err(_) => {
+                        println!("Session {} timed out due to inactivity (20m). Closing.", session_id_log);
+                        break; 
+                    }
+                }
+            }
+        });
+
+        // Wait for EITHER task to finish.
+        // If recv_task times out, this select completes, dropping send_task, 
+        // and proceeding to the cleanup block below.
+        let max_session_duration = Duration::from_secs(60 * 60); // 1 hour
+
+        let _ = tokio::time::timeout(max_session_duration, async {
+            tokio::select! {
+                _ = &mut send_task => {},
+                _ = &mut recv_task => {},
+            }
+        }).await;
 
         // --- HANDOFF PROTOCOL: Only delete if NOT publishing ---
         let should_delete = {
