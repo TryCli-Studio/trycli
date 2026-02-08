@@ -6,7 +6,7 @@ use axum::{
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 use axum::http::header::{CONTENT_TYPE, AUTHORIZATION};
 use crate::state::AppState;
-use crate::handlers::{auth, project, spawn, analytics};
+use crate::handlers::{auth, project, spawn, analytics, admin};
 use crate::services::websocket;
 
 pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Error>> {
@@ -24,6 +24,7 @@ pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Erro
         .merge(auth::routes())
         .merge(spawn::routes())
         .merge(project::routes())
+        .merge(admin::routes())
         .route("/ws/:session_id", get(websocket::ws_handler))
         .route("/api/analytics", get(analytics::get_analytics))
         .layer(tower_http::cors::CorsLayer::new()

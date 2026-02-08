@@ -6,6 +6,8 @@ pub struct ProjectSummary {
     pub image_tag: String,
     #[serde(default)]
     pub view_count: i64,
+    #[serde(default)]
+    pub owner_username: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -41,7 +41,7 @@ pub async fn list_user_projects(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, view_count FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
+        "SELECT slug, image_tag, view_count, owner_username FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
     )
     .bind(user.id)
     .fetch_all(&state.db)
@@ -68,7 +68,7 @@ pub async fn search_projects(
     let query_term = format!("%{}%", search.q);
     
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, view_count FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
+        "SELECT slug, image_tag, view_count, owner_username FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
     )
     .bind(user.id)
     .bind(query_term)

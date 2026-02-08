@@ -5,9 +5,10 @@ use sqlx::FromRow;
 pub struct ProjectSummary {
     pub slug: String,
     pub image_tag: String,
-    // Add this to existing struct or ensure query maps correctly
     #[serde(default)] 
     pub view_count: i64, 
+    #[serde(default)] 
+    pub owner_username: String,
 }
 
 #[derive(Serialize)]
