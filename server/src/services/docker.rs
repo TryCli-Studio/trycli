@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::collections::{HashMap, HashSet}; // Import HashSet
 use futures::StreamExt; 
 use crate::state::SessionMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30)); 
@@ -77,25 +78,62 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
             .map(|c| c.container_name.clone())
             .collect();
 
+        let now_ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+
         for container in docker_containers {
             let is_known = container.names.as_ref().map_or(false, |names| {
                 names.iter().any(|n| valid_session_names.contains(n.trim_start_matches('/')))
             });
 
             if !is_known {
-                if let Some(id) = container.id.clone() {
-                    println!("Reaper: Killing Zombie Container {}", id);
-                    let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
-                        force: true, 
-                        ..Default::default()
-                    })).await;
+                // --- FIX: Grace Period Check ---
+                // If container was created < 30 seconds ago, it might be in the middle of "spawn" logic.
+                // If it is older than 30s and still unknown, it is definitely a zombie.
+                let created = container.created.unwrap_or(0);
+                let age = now_ts - created;
+
+                if age > 30 {
+                    if let Some(id) = container.id.clone() {
+                        println!("Reaper: Killing Zombie Container {} (Age: {}s)", id, age);
+                        let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
+                            force: true, 
+                            ..Default::default()
+                        })).await;
+                    }
                 }
             } else {
-                // --- 4. RESOURCE MONITORING (Existing Logic) ---
+                // 4. Resource Monitoring (Keep existing logic)
                 if let Some(id) = container.id {
                     check_resource_usage(&docker, &id).await;
                 }
             }
+        }
+
+        let abandoned_sessions: Vec<(String, String)> = {
+            let map = sessions.lock().unwrap();
+            map.iter()
+                .filter(|(_, ctx)| {
+                    // If it's not connected AND it's older than 45 seconds
+                    !ctx.is_ws_connected && ctx.created_at.elapsed().as_secs() > 45
+                })
+                .map(|(id, ctx)| (id.clone(), ctx.container_name.clone()))
+                .collect()
+        };
+
+        for (session_id, container_name) in abandoned_sessions {
+            println!("Reaper: Killing Abandoned Session {} (Never connected)", session_id);
+            
+            // 1. Remove from Map
+            {
+                let mut map = sessions.lock().unwrap();
+                map.remove(&session_id);
+            }
+
+            // 2. Kill Container
+            let _ = docker.remove_container(&container_name, Some(RemoveContainerOptions {
+                force: true, 
+                ..Default::default()
+            })).await;
         }
     }
 }

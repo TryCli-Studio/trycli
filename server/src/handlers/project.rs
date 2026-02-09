@@ -355,6 +355,7 @@ pub async fn get_project(
             is_publishing: false,
             project_slug: Some(slug), 
             created_at: std::time::Instant::now(),
+            is_ws_connected: false,
         }); 
     }
     
