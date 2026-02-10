@@ -108,9 +108,9 @@ pub fn ViewPage() -> impl IntoView {
     let (embed_modal_open, set_embed_modal_open) = create_signal(false);
     let (iframe_code, set_iframe_code) = create_signal(String::new());
     let (smart_link, set_smart_link) = create_signal(String::new());
+    let (vip_link, set_vip_link) = create_signal(String::new());
     
     let (whitelist, set_whitelist) = create_signal(Vec::<String>::new());
-    let (new_url, set_new_url) = create_signal(String::new());
 
     // Auth Resource
     let auth_resource = create_resource(|| (), move |_| async move {
@@ -197,7 +197,21 @@ pub fn ViewPage() -> impl IntoView {
 
             if let Ok(builder) = req {
                 let _ = builder.send().await;
-                set_new_url.set(String::new());
+                whitelist_resource.refetch();
+            }
+        }
+    });
+
+    let remove_whitelist_item = create_action(move |url: &String| {
+        let url = url.clone();
+        let s = slug();
+        async move {
+            let req = Request::delete(&format!("{}/api/project/{}/whitelist", api_base(), s))
+                .credentials(RequestCredentials::Include)
+                .json(&serde_json::json!({ "allowed_url": url }));
+
+            if let Ok(builder) = req {
+                let _ = builder.send().await;
                 whitelist_resource.refetch();
             }
         }
@@ -210,6 +224,10 @@ pub fn ViewPage() -> impl IntoView {
                 title="Share Project".to_string().into() 
                 iframe_code=iframe_code.into() 
                 smart_link=smart_link.into()
+                vip_link=vip_link.into()
+                whitelist=whitelist.into()
+                on_add_url=Callback::new(move |url: String| add_whitelist_item.dispatch(url))
+                on_remove_url=Callback::new(move |url: String| remove_whitelist_item.dispatch(url))
                 on_close=Callback::new(move |_| set_embed_modal_open.set(false)) 
             />
             
@@ -228,15 +246,21 @@ pub fn ViewPage() -> impl IntoView {
                                         let token = data.get("embed_token").and_then(|v| v.as_str()).unwrap_or_default();
                                         let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
                                         
-                                        // VIP Link for owner
-                                        let public_url = format!("{}/embed/{}/{}?key={}", origin, username(), slug(), key);
+                                        // Public embed uses whitelist + domain check only
+                                        let public_url = format!("{}/embed/{}/{}", origin, username(), slug());
                                         let smart_url = format!("{}/e/{}", api_base(), token);
+                                        let vip = if key.is_empty() {
+                                            String::new()
+                                        } else {
+                                            format!("{}/{}/{}?key={}", origin, username(), slug(), key)
+                                        };
 
                                         set_iframe_code.set(format!(
                                             "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
                                             public_url
                                         ));
                                         set_smart_link.set(smart_url);
+                                        set_vip_link.set(vip);
                                         set_embed_modal_open.set(true);
                                     }
                                 }>
@@ -284,42 +308,6 @@ pub fn ViewPage() -> impl IntoView {
                                     </div>
                                 </div>
                             </div>
-                            
-                            {move || if is_owner() {
-                                view! {
-                                    <div style="background: var(--bg-panel); border-top: 1px solid var(--border); padding: 20px;">
-                                        <h3 style="font-size: 1rem; margin-bottom: 12px; color: var(--text-main);">"Guest List (Authorized URLs)"</h3>
-                                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                                            <input type="text" class="input-slug" style="flex: 1;"
-                                                placeholder="https://medium.com/@user/article-slug"
-                                                prop:value=new_url
-                                                on:input=move |ev| set_new_url.set(event_target_value(&ev)) />
-                                            <button class="btn-primary" 
-                                                on:click=move |_| add_whitelist_item.dispatch(new_url.get())
-                                                prop:disabled=move || new_url.get().is_empty()>
-                                                "Add URL"
-                                            </button>
-                                        </div>
-                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                            <For each=move || whitelist.get() key=|u| u.clone() children=move |url| {
-                                                view! {
-                                                    <span class="badge" style="margin: 0; display: flex; align-items: center; gap: 8px;">
-                                                        {url}
-                                                        <span style="cursor: pointer; color: #ef4444; font-weight: bold;">"×"</span>
-                                                    </span>
-                                                }
-                                            }/>
-                                        </div>
-                                    </div>
-                                }.into_view()
-                            } else {
-                                view! {
-                                    <div style="background: var(--bg-panel); border-top: 1px solid var(--border); padding: 20px; text-align: center; color: var(--text-muted);">
-                                        <p>"This project is shared with a select list of authorized websites."</p>
-                                        <p>"Contact the owner for access or more information."</p>
-                                    </div>
-                                }.into_view()
-                            }}
                         </div>
                     }.into_view()
                 },

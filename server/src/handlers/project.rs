@@ -48,7 +48,8 @@ pub async fn list_user_projects(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, view_count, owner_username FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
+        "SELECT slug, image_tag, view_count, owner_username, embed_key \
+         FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
     )
     .bind(user.id)
     .fetch_all(&state.db)
@@ -75,7 +76,8 @@ pub async fn search_projects(
     let query_term = format!("%{}%", search.q);
     
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, view_count, owner_username FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
+        "SELECT slug, image_tag, view_count, owner_username, embed_key \
+         FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
     )
     .bind(user.id)
     .bind(query_term)
@@ -229,7 +231,7 @@ pub async fn get_project(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    let (project_id, image_tag, markdown, shell, owner_id, embed_key) = match row_result {
+    let (project_id, image_tag, markdown, shell, owner_id, mut embed_key) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
@@ -238,7 +240,30 @@ pub async fn get_project(
     let current_user: Option<User> = session.get("user").await.ok().flatten();
     let is_owner = current_user.as_ref().map(|u| u.id) == Some(owner_id);
 
-    // 3. Dual-layer security for embeds (VIP key + Guest List)
+    // 3. Ensure owners always have a VIP key (embed_key); generate one lazily if missing
+    if is_owner && embed_key.is_none() {
+        let new_key_row: Option<(String,)> = sqlx::query_as(
+            "UPDATE projects \
+             SET embed_key = encode(gen_random_bytes(24), 'base64') \
+             WHERE id = $1 \
+             RETURNING embed_key",
+        )
+        .bind(project_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to generate VIP key: {}", e),
+            )
+        })?;
+
+        if let Some((k,)) = new_key_row {
+            embed_key = Some(k);
+        }
+    }
+
+    // 4. Dual-layer security for embeds (VIP key + Guest List)
     if !is_owner {
         // VIP Pass: compare URL ?key with stored embed_key using a match on Options
         let vip_allowed = match (params.get("key"), embed_key.as_ref()) {
@@ -288,7 +313,7 @@ pub async fn get_project(
         }
     }
 
-    // 4. Increment View Count asynchronously (only after passing security)
+    // 5. Increment View Count asynchronously (only after passing security)
     let db_clone = state.db.clone();
     let slug_clone = slug.clone();
     let username_clone = username.clone();
@@ -300,7 +325,7 @@ pub async fn get_project(
             .await;
     });
 
-    // 5. Publisher concurrency limit (protect compute)
+    // 6. Publisher concurrency limit (protect compute)
     {
         let sessions = state.lock_sessions();
         let active_viewers = sessions.values()
@@ -312,7 +337,7 @@ pub async fn get_project(
         }
     }
 
-    // 6. Construct JSON response
+    // 7. Construct JSON response
     let mut response_json = serde_json::json!({
         "markdown": markdown,
         "owner_id": owner_id,
