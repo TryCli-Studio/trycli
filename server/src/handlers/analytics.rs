@@ -22,14 +22,14 @@ pub async fn get_analytics(
         "SELECT \
             p.slug, \
             p.image_tag, \
-            p.view_count, \
+            COALESCE(COUNT(*) FILTER (WHERE ae.event_type = 'view'), 0) AS view_count, \
             COALESCE(AVG(ae.duration_seconds) FILTER (WHERE ae.event_type = 'session_end'), 0)::FLOAT8 AS avg_session_duration, \
             COALESCE(COUNT(*) FILTER (WHERE ae.event_type = 'error'), 0) AS error_count \
         FROM projects p \
         LEFT JOIN analytics_events ae ON ae.project_id = p.id \
         WHERE p.owner_id = $1 \
-        GROUP BY p.slug, p.image_tag, p.view_count \
-        ORDER BY p.view_count DESC"
+        GROUP BY p.slug, p.image_tag \
+        ORDER BY view_count DESC"
     )
     .bind(user.id)
     .fetch_all(&state.db)
