@@ -20,6 +20,7 @@ pub mod pages {
     pub mod blogs;
     pub mod analytics;
     pub mod admin;
+    pub mod policy;
 }
 
 pub use app::App;
