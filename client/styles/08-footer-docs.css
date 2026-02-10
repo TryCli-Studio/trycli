@@ -61,6 +61,8 @@
 .footer-links {
     display: flex;
     gap: 24px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .footer-links a {
@@ -100,6 +102,24 @@
 
     .footer-brand {
         align-items: center;
+    }
+
+    .footer-container {
+        padding: 0 16px;
+    }
+
+    .footer-links {
+        justify-content: center;
+        row-gap: 12px;
+        column-gap: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .footer-links {
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
     }
 }
 

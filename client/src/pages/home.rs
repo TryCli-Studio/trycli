@@ -355,6 +355,7 @@ pub fn LandingPage() -> impl IntoView {
                             <div class="footer-links">
                                 <a href="https://ko-fi.com/V7V21TRPL5" target="_blank" rel="noopener noreferrer">"Support us"</a>
                                 <a href="/blogs" rel="noopener noreferrer">"Blogs"</a>
+                                <a href="/policy" rel="noopener noreferrer">"Terms & Policy"</a>
                                 <a href="/docs" rel="noopener noreferrer">"Documentation"</a>
                                 <a href="https://x.com/TryCliStudio" rel="noopener noreferrer">"Twitter"</a>
                             </div>
