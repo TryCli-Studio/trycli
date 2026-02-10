@@ -14,6 +14,15 @@ use crate::components::modal::EmbedModal;
 use crate::types::User;
 use serde::{Serialize, Deserialize};
 
+#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
+enum ProjectState {
+    Loading,
+    NotFound,
+    LimitReached,
+    Unauthorized, // Security block state
+    Ready(serde_json::Value),
+}
+
 pub fn render_markdown(text: &str) -> String {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -24,7 +33,6 @@ pub fn render_markdown(text: &str) -> String {
     html_output
 }
 
-// Simple resize divider setup
 fn setup_resize_divider() {
     if let Some(divider) = web_sys::window()
         .and_then(|w| w.document())
@@ -43,10 +51,7 @@ fn setup_resize_divider() {
         let on_mousemove = {
             let is_dragging = is_dragging.clone();
             wasm_bindgen::closure::Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
-                if !*is_dragging.borrow() {
-                    return;
-                }
-                
+                if !*is_dragging.borrow() { return; }
                 if let Some(workspace) = web_sys::window()
                     .and_then(|w| w.document())
                     .and_then(|d| d.query_selector(".workspace").ok().flatten())
@@ -59,13 +64,13 @@ fn setup_resize_divider() {
                     
                     if let Ok(panes) = workspace.query_selector_all(".pane") {
                         if panes.length() >= 2 {
-                            if let Some(first_pane) = panes.get(0).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
-                                first_pane.style().set_property("flex", "0 1 auto").ok();
-                                first_pane.style().set_property("width", &format!("{}%", percentage)).ok();
+                            if let Some(p1) = panes.get(0).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                                p1.style().set_property("flex", "0 1 auto").ok();
+                                p1.style().set_property("width", &format!("{}%", percentage)).ok();
                             }
-                            if let Some(second_pane) = panes.get(1).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
-                                second_pane.style().set_property("flex", "0 1 auto").ok();
-                                second_pane.style().set_property("width", &format!("{}%", 100.0 - percentage)).ok();
+                            if let Some(p2) = panes.get(1).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                                p2.style().set_property("flex", "0 1 auto").ok();
+                                p2.style().set_property("width", &format!("{}%", 100.0 - percentage)).ok();
                             }
                         }
                     }
@@ -92,34 +97,28 @@ fn setup_resize_divider() {
     }
 }
 
-#[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
-enum ProjectState {
-    Loading,
-    NotFound,
-    LimitReached,
-    Ready(serde_json::Value),
-}
-
 #[component]
 pub fn ViewPage() -> impl IntoView {
     let params = use_params_map();
+    let query_params = use_query_map();
     let username = move || params.get().get("username").cloned().unwrap_or_default();
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();
+    
     let (user, set_user) = create_signal(None::<User>);
     let (embed_modal_open, set_embed_modal_open) = create_signal(false);
-    
-    // Create two separate signals for the two fields
     let (iframe_code, set_iframe_code) = create_signal(String::new());
     let (smart_link, set_smart_link) = create_signal(String::new());
     
-    // Auth Check
-    create_resource(|| (), move |_| async move {
-        let auth_req = Request::get(&format!("{}/api/me", api_base()))
-            .credentials(RequestCredentials::Include)
-            .send()
-            .await;
+    let (whitelist, set_whitelist) = create_signal(Vec::<String>::new());
+    let (new_url, set_new_url) = create_signal(String::new());
 
-        if let Ok(resp) = auth_req {
+    // Auth Resource
+    let auth_resource = create_resource(|| (), move |_| async move {
+        let req = Request::get(&format!("{}/api/me", api_base()))
+            .credentials(RequestCredentials::Include)
+            .send().await;
+
+        if let Ok(resp) = req {
             if resp.ok() {
                  if let Ok(u) = resp.json::<User>().await {
                      set_user.set(Some(u));
@@ -128,22 +127,29 @@ pub fn ViewPage() -> impl IntoView {
         }
     });
 
+    // Project Data Resource (with VIP key and Referer security)
     let project_resource = create_resource(
-        move || (username(), slug(), user.with(|u| u.as_ref().map(|x| x.id))), 
-        |(u, s, _)| async move {
-            let url = format!("{}/api/project/{}/{}", api_base(), u, s);
+        move || (username(), slug(), auth_resource.get()), 
+        move |(u, s, _)| async move {
+            let key = query_params.get_untracked().get("key").cloned().unwrap_or_default();
+            let url = if key.is_empty() {
+                format!("{}/api/project/{}/{}", api_base(), u, s)
+            } else {
+                format!("{}/api/project/{}/{}?key={}", api_base(), u, s, key)
+            };
+
             let req = Request::get(&url).credentials(RequestCredentials::Include).send().await;
             
             match req {
                 Ok(resp) => {
-                    if resp.status() == 429 {
+                    if resp.status() == 403 {
+                        ProjectState::Unauthorized
+                    } else if resp.status() == 429 {
                         ProjectState::LimitReached
                     } else if resp.ok() {
-                        if let Ok(json) = resp.json::<serde_json::Value>().await {
-                            ProjectState::Ready(json)
-                        } else {
-                            ProjectState::NotFound
-                        }
+                        resp.json::<serde_json::Value>().await
+                            .map(ProjectState::Ready)
+                            .unwrap_or(ProjectState::NotFound)
                     } else {
                         ProjectState::NotFound
                     }
@@ -153,7 +159,21 @@ pub fn ViewPage() -> impl IntoView {
         }
     );
 
-    // Ownership Logic
+    // Whitelist Resource for Owners
+    let whitelist_resource = create_resource(
+        move || (project_resource.get(), slug()),
+        move |(state, s)| async move {
+            if let Some(ProjectState::Ready(_)) = state {
+                let url = format!("{}/api/project/{}/whitelist", api_base(), s);
+                if let Ok(resp) = Request::get(&url).credentials(RequestCredentials::Include).send().await {
+                    if let Ok(list) = resp.json::<Vec<String>>().await {
+                        set_whitelist.set(list);
+                    }
+                }
+            }
+        }
+    );
+
     let is_owner = move || {
         let current_user = user.get();
         if let Some(ProjectState::Ready(p)) = project_resource.get() {
@@ -167,6 +187,22 @@ pub fn ViewPage() -> impl IntoView {
         }
     };
 
+    let add_whitelist_item = create_action(move |url: &String| {
+        let url = url.clone();
+        let s = slug();
+        async move {
+            let req = Request::post(&format!("{}/api/project/{}/whitelist", api_base(), s))
+                .credentials(RequestCredentials::Include)
+                .json(&serde_json::json!({ "allowed_url": url }));
+
+            if let Ok(builder) = req {
+                let _ = builder.send().await;
+                set_new_url.set(String::new());
+                whitelist_resource.refetch();
+            }
+        }
+    });
+
     view! {
         <>
             <EmbedModal 
@@ -179,115 +215,130 @@ pub fn ViewPage() -> impl IntoView {
             
             <Navbar>
                 <div class="controls">
-                    {move || {
-                        if is_owner() {
-                            match user.get() {
-                                Some(u) => view! {
-                                    <div style="display: flex; align-items: center; gap: 16px;">
-                                        <div style="display: flex; align-items: center; gap: 8px;">
-                                            <img src=u.avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
-                                            <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
-                                        </div>
+                    {move || if is_owner() {
+                        user.get().map(|u| view! {
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <img src=u.avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                                    <span style="color: var(--text-main); font-weight: 500;">{u.login}</span>
+                                </div>
+                                <button class="btn-secondary btn-action btn-success" on:click=move |_| {
+                                    let origin = window().location().origin().unwrap_or_else(|_| "http://localhost:8080".to_string());
+                                    if let Some(ProjectState::Ready(data)) = project_resource.get() {
+                                        let token = data.get("embed_token").and_then(|v| v.as_str()).unwrap_or_default();
+                                        let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
                                         
-                                        <button class="btn-secondary btn-action btn-success" on:click=move |_| {
-                                            // FIX: Defined origin at top scope of closure
-                                            let frontend_origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
-                                            let backend_origin = api_base(); 
-                                            
-                                            let current_state = project_resource.get();
-                                            
-                                            let token = if let Some(ProjectState::Ready(data)) = current_state {
-                                                data.get("embed_token")
-                                                    .and_then(|v| v.as_str())
-                                                    .map(|s| s.to_string())
-                                            } else {
-                                                None
-                                            };
+                                        // VIP Link for owner
+                                        let public_url = format!("{}/embed/{}/{}?key={}", origin, username(), slug(), key);
+                                        let smart_url = format!("{}/e/{}", api_base(), token);
 
-                                            // 1. PUBLIC URL (Always safe, no token)
-                                            // Hits Frontend directly. Interactive IF you are logged in.
-                                            let public_url = format!("{}/embed/{}/{}", frontend_origin, username(), slug());
-
-                                            // 2. SECRET LINK (Only for Medium/Reddit)
-                                            // Hits Backend -> Redirects to Frontend with oEmbed magic.
-                                            let smart_url = match token {
-                                                Some(t) => format!("{}/e/{}", backend_origin, t),
-                                                None => public_url.clone() // Fallback (shouldn't happen for owner)
-                                            };
-
-                                            set_iframe_code.set(format!(
-                                                "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
-                                                public_url // <--- ALWAYS PUBLIC URL HERE
-                                            ));
-                                            
-                                            set_smart_link.set(smart_url);
-                                            
-                                            set_embed_modal_open.set(true);
-                                        }>
-                                            "Share / Embed"
-                                        </button>
-                                        
-                                        <a href=format!("{}/auth/logout", api_base()) class="btn-secondary btn-action btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
-                                    </div>
-                                }.into_view(),
-                                None => view! { <></> }.into_view()
-                            }
-                        } else {
-                            view! { <></> }.into_view()
-                        }
-                    }}
+                                        set_iframe_code.set(format!(
+                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
+                                            public_url
+                                        ));
+                                        set_smart_link.set(smart_url);
+                                        set_embed_modal_open.set(true);
+                                    }
+                                }>
+                                    "Share / Embed"
+                                </button>
+                                <a href=format!("{}/auth/logout", api_base()) class="btn-secondary btn-action btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
+                            </div>
+                        })
+                    } else { None }}
                 </div>
             </Navbar>
 
-            // MAIN CONTENT SWITCH
             {move || match project_resource.get() {
                 Some(ProjectState::Ready(data)) => {
                     let cid = data["container_id"].as_str().unwrap_or_default().to_string();
                     let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                     let html_output = render_markdown(&md_raw);
                     
-                    let mounted = create_signal(false);
                     create_effect(move |_| {
-                        if !mounted.0.get() {
-                            if let Some(window) = web_sys::window() {
-                                let callback = wasm_bindgen::closure::Closure::once(move || {
-                                    setup_resize_divider();
-                                    mounted.1.set(true);
-                                });
-                                window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
-                                callback.forget();
-                            }
+                        if let Some(window) = web_sys::window() {
+                            let callback = wasm_bindgen::closure::Closure::once(move || {
+                                setup_resize_divider();
+                            });
+                            window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
+                            callback.forget();
                         }
                     });
                     
                     view! {
-                        <div class="workspace">
-                            <div class="pane" style="width: 50%; background: var(--bg-dark); overflow-y: auto;">
-                                <div class="markdown-body" inner_html=html_output />
-                            </div>
-                            <div class="resize-divider"></div>
-                            <div class="pane" style="width: 50%;">
-                                <div class="terminal-header">
-                                    <div class="dot red"></div>
-                                    <div class="dot yellow"></div>
-                                    <div class="dot green"></div>
-                                    <span class="terminal-title">"Live Demo"</span>
+                        <div style="display: flex; flex-direction: column; height: calc(100vh - 60px);">
+                            <div class="workspace" style="flex: 1;">
+                                <div class="pane" style="width: 50%; background: var(--bg-dark); overflow-y: auto;">
+                                    <div class="markdown-body" inner_html=html_output />
                                 </div>
-                                <div class="terminal-body">
-                                    <TerminalView container_id=cid />
+                                <div class="resize-divider"></div>
+                                <div class="pane" style="width: 50%;">
+                                    <div class="terminal-header">
+                                        <div class="dot red"></div>
+                                        <div class="dot yellow"></div>
+                                        <div class="dot green"></div>
+                                        <span class="terminal-title">"Live Demo"</span>
+                                    </div>
+                                    <div class="terminal-body">
+                                        <TerminalView container_id=cid />
+                                    </div>
                                 </div>
                             </div>
+                            
+                            {move || if is_owner() {
+                                view! {
+                                    <div style="background: var(--bg-panel); border-top: 1px solid var(--border); padding: 20px;">
+                                        <h3 style="font-size: 1rem; margin-bottom: 12px; color: var(--text-main);">"Guest List (Authorized URLs)"</h3>
+                                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                                            <input type="text" class="input-slug" style="flex: 1;"
+                                                placeholder="https://medium.com/@user/article-slug"
+                                                prop:value=new_url
+                                                on:input=move |ev| set_new_url.set(event_target_value(&ev)) />
+                                            <button class="btn-primary" 
+                                                on:click=move |_| add_whitelist_item.dispatch(new_url.get())
+                                                prop:disabled=move || new_url.get().is_empty()>
+                                                "Add URL"
+                                            </button>
+                                        </div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                            <For each=move || whitelist.get() key=|u| u.clone() children=move |url| {
+                                                view! {
+                                                    <span class="badge" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                                                        {url}
+                                                        <span style="cursor: pointer; color: #ef4444; font-weight: bold;">"×"</span>
+                                                    </span>
+                                                }
+                                            }/>
+                                        </div>
+                                    </div>
+                                }.into_view()
+                            } else {
+                                view! {
+                                    <div style="background: var(--bg-panel); border-top: 1px solid var(--border); padding: 20px; text-align: center; color: var(--text-muted);">
+                                        <p>"This project is shared with a select list of authorized websites."</p>
+                                        <p>"Contact the owner for access or more information."</p>
+                                    </div>
+                                }.into_view()
+                            }}
                         </div>
                     }.into_view()
                 },
+                Some(ProjectState::Unauthorized) => view! {
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:80vh; text-align:center; padding:40px;">
+                        <h2 style="color: #ef4444; font-size: 2rem;">"403: Access Denied"</h2>
+                        <p style="color: var(--text-muted); margin-top: 1rem; max-width: 400px;">
+                            "This terminal is restricted to authorized websites. Contact the owner to whitelist this domain."
+                        </p>
+                    </div>
+                }.into_view(),
                 Some(ProjectState::LimitReached) => view! { <LimitReached /> }.into_view(),
                 Some(ProjectState::NotFound) => view! { 
-                    <div style="color: var(--text-muted); text-align: center; margin-top: 50px;">"Project not found."</div> 
+                    <div style="color: var(--text-muted); text-align: center; margin-top: 100px;">"Project not found."</div> 
                 }.into_view(),
-                Some(ProjectState::Loading) | None => view! { 
+                _ => view! { 
                     <div style="padding: 50px; text-align: center;">
                          <div class="spinner" style="margin: 0 auto;"></div>
-                         <p style="margin-top: 1rem; color: var(--text-muted);">"Loading Environment..."</p>
+                         <p style="margin-top: 1rem; color: var(--text-muted);">"PREPARING ENVIRONMENT..."</p>
                     </div> 
                 }.into_view()
             }}

@@ -9,6 +9,7 @@ pub struct ProjectSummary {
     pub view_count: i64, 
     #[serde(default)] 
     pub owner_username: String,
+    pub embed_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -18,6 +19,11 @@ pub struct AnalyticsProjectSummary {
     pub view_count: i64,
     pub avg_session_duration: f64,
     pub error_count: i64,
+}
+
+#[derive(Deserialize)]
+pub struct WhitelistRequest {
+    pub allowed_url: String,
 }
 
 #[derive(Serialize)]

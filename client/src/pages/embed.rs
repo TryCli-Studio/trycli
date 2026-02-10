@@ -12,6 +12,7 @@ enum ProjectState {
     NotFound,
     LimitReached,
     Ready(serde_json::Value),
+    Unauthorized,
 }
 
 #[component]
@@ -32,7 +33,9 @@ pub fn EmbedPage() -> impl IntoView {
             
             match req {
                 Ok(resp) => {
-                    if resp.status() == 429 {
+                    if resp.status() == 403{
+                        ProjectState::Unauthorized
+                    } else if resp.status() == 429 {
                         ProjectState::LimitReached
                     } else if resp.ok() {
                         if let Ok(json) = resp.json::<serde_json::Value>().await {
@@ -74,6 +77,16 @@ pub fn EmbedPage() -> impl IntoView {
                 Some(ProjectState::Ready(data)) => {
                     let cid = data["container_id"].as_str().unwrap_or_default().to_string();
                     view! { <TerminalView container_id=cid /> }.into_view()
+                },
+                Some(ProjectState::Unauthorized) => {
+        view! {
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#000; color:#ef4444; text-align:center; padding:20px;">
+                <h3 style="font-family: var(--font-sans);">"403: Unauthorized Embed Location"</h3>
+                <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">
+                    "This domain is not on the publisher's Guest List."
+                </p>
+            </div>
+        }.into_view()
                 },
                 Some(ProjectState::LimitReached) => {
                      // Inside embed, we remove the "Start" overlay (already gone via if logic) and show Limit
