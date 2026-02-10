@@ -8,7 +8,7 @@ use crate::api::api_base;
 use crate::types::User;
 
 #[component]
-pub fn LandingPage() -> impl IntoView {
+pub fn ViewPage() -> impl IntoView {
     let (user, set_user) = create_signal(None::<User>);
     let (auth_checked, set_auth_checked) = create_signal(false);
 
