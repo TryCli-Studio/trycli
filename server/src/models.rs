@@ -5,9 +5,10 @@ use sqlx::{FromRow, Type};
 pub struct ProjectSummary {
     pub slug: String,
     pub image_tag: String,
-    // Add this to existing struct or ensure query maps correctly
     #[serde(default)] 
     pub view_count: i64, 
+    #[serde(default)] 
+    pub owner_username: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -69,4 +70,31 @@ pub struct PublishRequest {
     pub container_id: String,
     pub slug: String,
     pub markdown: String,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type")]
+pub enum OEmbedResponse {
+    #[serde(rename = "rich")]
+    Rich {
+        version: String,
+        title: String,
+        author_name: String,
+        author_url: String,
+        provider_name: String,
+        provider_url: String,
+        html: String,
+        width: u32,
+        height: u32,
+    },
+    #[serde(rename = "link")]
+    Link {
+        version: String,
+        title: String,
+        author_name: String,
+        author_url: String,
+        provider_name: String,
+        provider_url: String,
+        thumbnail_url: Option<String>,
+    }
 }

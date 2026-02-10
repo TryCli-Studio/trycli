@@ -2,6 +2,7 @@ use axum::{
     extract::{Query, State},
     routing::post,
     Router, Json,
+    extract::State, // Add State
     http::StatusCode,
 };
 use serde::Deserialize;
@@ -9,6 +10,8 @@ use tower_sessions::Session;
 use uuid::Uuid;
 use crate::state::AppState;
 use crate::models::{User, AnalyticsEventType};
+use crate::models::User;
+use bollard::container::RemoveContainerOptions;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -26,13 +29,42 @@ pub async fn spawn_handler(
     session: Session, 
     Query(view_query): Query<SpawnViewQuery>,
 ) -> Result<Json<String>, (StatusCode, String)> {
-    // FIX: Map error instead of unwrap
     let user: Option<User> = session.get("user")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
         
-    if user.is_none() {
-        return Err((StatusCode::UNAUTHORIZED, "Please login first".to_string()));
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Please login first".to_string()))?;
+
+    // --- FIX: DEDUPLICATION LOGIC ---
+    let old_session_to_kill = {
+        let mut sessions = state.lock_sessions();
+        let mut target_id = None;
+
+        // Find any existing "Builder" session (project_slug is None) for this user
+        for (id, ctx) in sessions.iter() {
+            if ctx.owner_id == Some(user.id) && ctx.project_slug.is_none() {
+                target_id = Some((id.clone(), ctx.container_name.clone()));
+                break; 
+            }
+        }
+
+        // Remove from map immediately to prevent new connections to it
+        if let Some((sid, _)) = &target_id {
+            sessions.remove(sid);
+        }
+        target_id
+    };
+
+    // If we found an old session, tell Docker to kill it in the background
+    if let Some((_, container_name)) = old_session_to_kill {
+        if container_name != "INITIALIZING" {
+            let docker = state.docker.clone();
+            tokio::spawn(async move {
+                let _ = docker.remove_container(&container_name, Some(RemoveContainerOptions {
+                    force: true, ..Default::default()
+                })).await;
+            });
+        }
     }
     let session_id = Uuid::new_v4().to_string();
 

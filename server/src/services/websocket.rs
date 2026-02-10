@@ -48,6 +48,14 @@ pub async fn ws_handler(
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
+
+    {
+        let mut map = state.lock_sessions();
+        if let Some(ctx) = map.get_mut(&session_id) {
+            ctx.is_ws_connected = true;
+        }
+    }
+
     let is_claimed_by_us = {
         let mut map = state.lock_sessions();
         if map.contains_key(&session_id) {
@@ -61,6 +69,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, u
                 is_publishing: false,
                 project_slug: None, // Builder sessions don't have a specific slug yet
                 created_at: std::time::Instant::now(), // Start timer
+                is_ws_connected: true,
             });
             true
         }
@@ -84,7 +93,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, u
     }
 }
 
-async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
+async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: String, _user_id: Option<i64>) {
     async fn send_txt(ws: &mut WebSocket, txt: &str) {
         let _ = ws.send(Message::Text(txt.to_string())).await;
     }
@@ -140,7 +149,23 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
         _ => ("debian:bookworm-slim", "true", "/bin/bash"),
     };
 
+    {
+        let map = state.lock_sessions();
+        if !map.contains_key(&session_id) {
+            println!("Wizard: Session {} disconnected early. Aborting spawn.", session_id);
+            return;
+        }
+    }
+
     let _ = state.docker.create_image(Some(CreateImageOptions { from_image: image, ..Default::default() }), None, None).collect::<Vec<_>>().await;
+
+    {
+        let map = state.lock_sessions();
+        if !map.contains_key(&session_id) {
+            println!("Wizard: Session {} disconnected during pull. Aborting spawn.", session_id);
+            return;
+        }
+    }
 
     let container_name = format!("trycli-studio-session-{}", Uuid::new_v4());
     let config = Config {
@@ -209,42 +234,74 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
         Some(CreateContainerOptions { name: container_name.clone(), platform: None }), config
     ).await {
         Ok(_) => {
+            // 1. Attempt to start the container
             if let Err(e) = state.docker.start_container::<String>(&container_name, None).await {
+                // If start fails, cleanup map and notify client (if still connected)
                 {
                     let mut map = state.lock_sessions();
                     map.remove(&session_id);
                 }
                 send_txt(&mut socket, &format!("{}Fatal Error: Could not start container: {}{}", red, e, reset)).await;
+                // Attempt to remove the dead container artifacts
+                let _ = state.docker.remove_container(&container_name, Some(
+                    bollard::container::RemoveContainerOptions { force: true, ..Default::default() }
+                )).await;
                 return;
             }
 
-            {
+            // 2. CHECK: Is the client still here?
+            // We lock the map to check if the session key still exists.
+            // If the WS disconnected during 'create_container' or 'start_container', 
+            // the 'ws_handler' would have removed the key.
+            let session_active = {
                 let mut map = state.lock_sessions();
-                map.insert(session_id.clone(), SessionContext {
-                    container_name: container_name.clone(),
-                    shell: final_shell.to_string(),
-                    owner_id: user_id,
-                    project_owner_id: user_id,
-                    is_publishing: false, 
-                    project_slug: None,
-                    created_at: std::time::Instant::now(), 
-                });
+                if map.contains_key(&session_id) {
+                    // Update the existing placeholder session with the real container details
+                    if let Some(ctx) = map.get_mut(&session_id) {
+                        ctx.container_name = container_name.clone();
+                        ctx.shell = final_shell.to_string();
+                        // owner_id and other fields remain as initialized
+                    }
+                    true
+                } else {
+                    false
+                }
+            };
+
+            // 3. HANDLE ABANDONMENT
+            if !session_active {
+                println!("Wizard: Session {} abandoned after spawn. Cleaning up immediately.", session_id);
+                let _ = state.docker.remove_container(&container_name, Some(
+                    bollard::container::RemoveContainerOptions { force: true, ..Default::default() }
+                )).await;
+                return;
             }
+
+            // 4. PREPARE ENVIRONMENT (Rate limits & Auto-install)
             let limit_config = "Acquire::http::Dl-Limit \"500\"; Acquire::https::Dl-Limit \"500\";";
             let inject_limit_cmd = format!(
-            "echo '{}' > /etc/apt/apt.conf.d/99limit", 
-            limit_config
+                "echo '{}' > /etc/apt/apt.conf.d/99limit", 
+                limit_config
             );
 
+            // Chain commands:
+            // 1. Inject apt config (rate limiting)
+            // 2. Run the distro-specific install script (e.g. install fish/zsh)
+            // 3. Echo READY to signal completion
+            // 4. Exec into the final requested shell
             let auto_type_cmd = format!(
                 "mkdir -p /etc/apt/apt.conf.d && {} && {} && echo '\r\n\r\n READY ' && exec {}\n", 
                 inject_limit_cmd,
                 install_script, 
                 final_shell
             );
+
+            // 5. ATTACH
+            // We connect to /bin/sh initially to run the setup script, which then execs into the final shell.
             attach_to_container(socket, state, session_id, container_name, "/bin/sh".to_string(), Some(auto_type_cmd)).await;
         },
         Err(e) => {
+            // Container creation failed entirely
             {
                 let mut map = state.lock_sessions();
                 map.remove(&session_id);

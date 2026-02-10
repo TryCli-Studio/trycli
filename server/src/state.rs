@@ -13,6 +13,7 @@ pub struct SessionContext {
     pub is_publishing: bool,
     pub project_slug: Option<String>, 
     pub created_at: Instant,
+    pub is_ws_connected: bool,
 }
 
 pub type SessionMap = Arc<Mutex<HashMap<String, SessionContext>>>;

@@ -71,6 +71,8 @@ pub fn AnalyticsPage() -> impl IntoView {
                 } else {
                     set_error.set(Some("Invalid analytics response".to_string()));
                 }
+            } else {
+                 set_error.set(Some("Please log in to view analytics".to_string()));
             }
             Ok(r) => set_error.set(Some(format!("Analytics failed: {}", r.status()))),
             Err(e) => set_error.set(Some(format!("Analytics error: {}", e))),
