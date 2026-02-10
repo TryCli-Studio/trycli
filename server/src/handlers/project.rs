@@ -1,10 +1,10 @@
 use axum::{
-    extract::{Path, Query, State},
-    routing::{get, post, delete},
-    Router, Json,
-    http::StatusCode,
     body::Bytes,
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode},
     response::Html,
+    routing::{delete, get, post},
+    Json, Router,
 };
 use bollard::container::{CreateContainerOptions, Config};
 use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
@@ -15,7 +15,7 @@ use uuid::Uuid;
 use serde::Deserialize;
 use futures::StreamExt;
 use crate::state::{AppState, SessionContext};
-use crate::models::{User, ProjectSummary, PublishRequest};
+use crate::models::{User, ProjectSummary, PublishRequest, WhitelistRequest};
 use std::collections::HashMap;
 
 #[derive(Deserialize)]
@@ -28,6 +28,10 @@ pub fn routes() -> Router<AppState> {
         .route("/api/my-projects", get(list_user_projects))
         .route("/api/project/:username/:slug", get(get_project))
         .route("/api/project/:slug", delete(delete_project))
+        .route(
+            "/api/project/:slug/whitelist",
+            get(get_whitelist).post(add_to_whitelist).delete(remove_from_whitelist),
+        )
         .route("/api/search-projects", get(search_projects))
         .route("/api/publish", post(publish_handler))
         .route("/e/:token", get(resolve_secret_embed)) // Secret Embed Route
@@ -209,24 +213,82 @@ pub async fn publish_handler(
 pub async fn get_project(
     Path((username, slug)): Path<(String, String)>, 
     State(state): State<AppState>,
-    session: Session, // Added session to check ownership
+    session: Session, // Session is used to check ownership for secure embeds
+    Query(params): Query<HashMap<String, String>>,
+    headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
-    // Case-insensitive lookup (Fixes 404s due to capitalization)
-    let row_result = sqlx::query_as::<_, (String, String, String, i64)>(
-        "SELECT image_tag, markdown, shell, owner_id FROM projects WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
+    // 1. Load project + security metadata (case-insensitive for username/slug)
+    let row_result = sqlx::query_as::<_, (i64, String, String, String, i64, Option<String>)>(
+        "SELECT id, image_tag, markdown, shell, owner_id, embed_key \
+         FROM projects \
+         WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
     )
     .bind(&username).bind(&slug)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    let (image_tag, markdown, shell, owner_id) = match row_result {
+    let (project_id, image_tag, markdown, shell, owner_id, embed_key) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
-    // 2. Increment View Count asynchronously
+    // 2. Determine current user & ownership (owners bypass embed security)
+    let current_user: Option<User> = session.get("user").await.ok().flatten();
+    let is_owner = current_user.as_ref().map(|u| u.id) == Some(owner_id);
+
+    // 3. Dual-layer security for embeds (VIP key + Guest List)
+    if !is_owner {
+        // VIP Pass: compare URL ?key with stored embed_key using a match on Options
+        let vip_allowed = match (params.get("key"), embed_key.as_ref()) {
+            (Some(request_key), Some(stored_key)) if request_key == stored_key => true,
+            _ => false,
+        };
+
+        if !vip_allowed {
+            // Guest List: validate Referer header against project_whitelists
+            let referer = headers
+                .get("Referer")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
+
+            // Optional boolean, safely unwrapped later
+            let whitelist_allowed: Option<bool> = if let Some(referer_url) = referer {
+                let exists_row: Option<(bool,)> = sqlx::query_as(
+                    "SELECT TRUE FROM project_whitelists \
+                     WHERE project_id = $1 AND allowed_url = $2 \
+                     LIMIT 1",
+                )
+                .bind(project_id)
+                .bind(&referer_url)
+                .fetch_optional(&state.db)
+                .await
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Whitelist DB Error: {}", e),
+                    )
+                })?;
+
+                // TRUE row exists => allowed; otherwise false
+                Some(exists_row.is_some())
+            } else {
+                None
+            };
+
+            let is_allowed = whitelist_allowed.unwrap_or(false);
+
+            if !is_allowed {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    "This terminal is restricted to authorized websites.".to_string(),
+                ));
+            }
+        }
+    }
+
+    // 4. Increment View Count asynchronously (only after passing security)
     let db_clone = state.db.clone();
     let slug_clone = slug.clone();
     let username_clone = username.clone();
@@ -238,6 +300,7 @@ pub async fn get_project(
             .await;
     });
 
+    // 5. Publisher concurrency limit (protect compute)
     {
         let sessions = state.lock_sessions();
         let active_viewers = sessions.values()
@@ -249,18 +312,14 @@ pub async fn get_project(
         }
     }
 
-    // 3. [NEW] Construct Response
-    // We check if the current user is the owner. If so, we attach the `embed_token`.
-    let current_user: Option<User> = session.get("user").await.ok().flatten();
-    let is_owner = current_user.map(|u| u.id) == Some(owner_id);
-
+    // 6. Construct JSON response
     let mut response_json = serde_json::json!({
         "markdown": markdown,
         "owner_id": owner_id,
         // We will insert container_id below
     });
 
-    // If owner, fetch and attach the secret token
+    // If owner, fetch and attach the secret token + VIP embed_key for the Share / Embed modal
     if is_owner {
         let token_record: Option<(String,)> = sqlx::query_as(
             "SELECT embed_token FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)"
@@ -274,6 +333,10 @@ pub async fn get_project(
 
         if let Some((token,)) = token_record {
             response_json["embed_token"] = serde_json::Value::String(token);
+        }
+
+        if let Some(key) = embed_key {
+            response_json["embed_key"] = serde_json::Value::String(key);
         }
     }
 
@@ -363,6 +426,136 @@ pub async fn get_project(
     response_json["container_id"] = serde_json::Value::String(session_id);
 
     Ok(Json(response_json))
+}
+
+/// Get the current whitelist (Guest List) for a project owned by the authenticated user.
+pub async fn get_whitelist(
+    State(state): State<AppState>,
+    session: Session,
+    Path(slug): Path<String>,
+) -> Result<Json<Vec<String>>, (StatusCode, String)> {
+    let user: Option<User> = session
+        .get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    // Resolve project_id for this owner + slug
+    let project_row: Option<(i64,)> = sqlx::query_as(
+        "SELECT id FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)",
+    )
+    .bind(user.id)
+    .bind(&slug)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    let (project_id,) = match project_row {
+        Some(row) => row,
+        None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
+    };
+
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT allowed_url FROM project_whitelists WHERE project_id = $1 ORDER BY created_at DESC",
+    )
+    .bind(project_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    let urls = rows.into_iter().map(|(url,)| url).collect();
+
+    Ok(Json(urls))
+}
+
+/// Add a new URL to a project's whitelist (Guest List).
+pub async fn add_to_whitelist(
+    State(state): State<AppState>,
+    session: Session,
+    Path(slug): Path<String>,
+    Json(payload): Json<WhitelistRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let user: Option<User> = session
+        .get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    let trimmed_url = payload.allowed_url.trim();
+    if trimmed_url.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "allowed_url is required".to_string()));
+    }
+
+    let project_row: Option<(i64,)> = sqlx::query_as(
+        "SELECT id FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)",
+    )
+    .bind(user.id)
+    .bind(&slug)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    let (project_id,) = match project_row {
+        Some(row) => row,
+        None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
+    };
+
+    // Unique(project_id, allowed_url) is enforced by the DB; ignore conflicts
+    let result = sqlx::query(
+        "INSERT INTO project_whitelists (project_id, allowed_url) \
+         VALUES ($1, $2) \
+         ON CONFLICT (project_id, allowed_url) DO NOTHING",
+    )
+    .bind(project_id)
+    .bind(trimmed_url)
+    .execute(&state.db)
+    .await;
+
+    if let Err(e) = result {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)));
+    }
+
+    Ok(StatusCode::CREATED)
+}
+
+/// Remove a URL from a project's whitelist (Guest List).
+pub async fn remove_from_whitelist(
+    State(state): State<AppState>,
+    session: Session,
+    Path(slug): Path<String>,
+    Json(payload): Json<WhitelistRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let user: Option<User> = session
+        .get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    let trimmed_url = payload.allowed_url.trim();
+    if trimmed_url.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "allowed_url is required".to_string()));
+    }
+
+    let delete_result = sqlx::query(
+        "DELETE FROM project_whitelists pw \
+         USING projects p \
+         WHERE pw.project_id = p.id \
+           AND p.owner_id = $1 \
+           AND LOWER(p.slug) = LOWER($2) \
+           AND pw.allowed_url = $3",
+    )
+    .bind(user.id)
+    .bind(&slug)
+    .bind(trimmed_url)
+    .execute(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    if delete_result.rows_affected() == 0 {
+        return Err((StatusCode::NOT_FOUND, "Whitelist entry not found".to_string()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn delete_project(
