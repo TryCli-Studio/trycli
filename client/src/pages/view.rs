@@ -5,6 +5,7 @@ use gloo_net::http::Request;
 use web_sys::RequestCredentials;
 use crate::components::navbar::Navbar;
 use crate::api::api_base;
+use crate::components::modal::EmbedModal;
 use crate::types::User;
 
 #[component]
@@ -12,6 +13,13 @@ pub fn ViewPage() -> impl IntoView {
     let (user, set_user) = create_signal(None::<User>);
     let (auth_checked, set_auth_checked) = create_signal(false);
 
+    let (embed_modal_open, set_embed_modal_open) = create_signal(false);
+    
+    // Create two separate signals for the two fields
+    let (iframe_code, set_iframe_code) = create_signal(String::new());
+    let (smart_link, set_smart_link) = create_signal(String::new());
+    
+    // Auth Check
     create_resource(|| (), move |_| async move {
         let url = format!("{}/api/me", api_base());
         if let Ok(resp) = Request::get(&url)
@@ -28,81 +36,134 @@ pub fn ViewPage() -> impl IntoView {
         set_auth_checked.set(true);
     });
 
-    let auth_github_url = move || format!("{}/auth/github", api_base());
+    let project_resource = create_resource(
+        move || (username(), slug(), user.with(|u| u.as_ref().map(|x| x.id))), 
+        |(u, s, _)| async move {
+            let url = format!("{}/api/project/{}/{}", api_base(), u, s);
+            let req = Request::get(&url).credentials(RequestCredentials::Include).send().await;
+            
+            match req {
+                Ok(resp) => {
+                    if resp.status() == 429 {
+                        ProjectState::LimitReached
+                    } else if resp.ok() {
+                        if let Ok(json) = resp.json::<serde_json::Value>().await {
+                            ProjectState::Ready(json)
+                        } else {
+                            ProjectState::NotFound
+                        }
+                    } else {
+                        ProjectState::NotFound
+                    }
+                },
+                Err(_) => ProjectState::NotFound
+            }
+        }
+    );
 
-    // 2. STRUCTURED DATA (JSON-LD)
-    let schema_json = r#"{
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "TryCLI Studio",
-        "applicationCategory": "DeveloperApplication",
-        "operatingSystem": "WebBrowser, WASM",
-        "offers": {
-            "@type": "Offer",
-            "price": "0",
-            "priceCurrency": "USD"
-        },
-        "featureList": "Docker Integration, In-Browser Terminal, Markdown Guides"
-    }"#;
+    // Ownership Logic
+    let is_owner = move || {
+        let current_user = user.get();
+        if let Some(ProjectState::Ready(p)) = project_resource.get() {
+             let project_owner_id = p.get("owner_id").and_then(|id| id.as_i64());
+             match current_user {
+                 Some(u) => Some(u.id) == project_owner_id,
+                 None => false
+             }
+        } else {
+            false
+        }
+    };
 
     view! {
         <>
-            // 4. SEO METADATA
-            <Title text="TryCLI - Interactive CLI Demos & Embeds" />
-            <Meta name="description" content="Host, share, and embed fully interactive CLI demos directly in the browser. Think Replit, but purpose-built for command-line applications." />
+            <EmbedModal 
+                show=embed_modal_open.into() 
+                title="Share Project".to_string().into() 
+                iframe_code=iframe_code.into() 
+                smart_link=smart_link.into()
+                on_close=Callback::new(move |_| set_embed_modal_open.set(false)) 
+            />
             
-            <Link rel="canonical" href="https://trycli.com" />
-
-            <Script type_="application/ld+json">
-                {schema_json}
-            </Script>
-            
-            <Meta property="og:type" content="website" />
-            <Meta property="og:title" content="TryCLI - Interactive CLI Demos & Embeds" />
-            <Meta property="og:description" content="Instantly spin up isolated Docker containers and share your CLI projects with a single link." />
-            <Meta property="og:url" content="https://trycli.com" />
-            
-            <Meta name="twitter:card" content="summary_large_image" />
-            <Meta name="twitter:title" content="TryCLI - Interactive CLI Demos" />
-            <Meta name="twitter:description" content="Host, share, and embed fully interactive CLI demos directly in the browser." />
-        
-            // MAIN CONTENT
-            <div class="landing-container">
-                
-                <Navbar>
-                    <div class="nav-actions">
-                        {move || {
-                            if auth_checked.get() {
-                                if let Some(u) = user.get() {
-                                    // LOGGED IN STATE
-                                    view! {
-                                        <div style="display: flex; align-items: center; gap: 20px;">
-                                            <div style="display: flex; align-items: center; gap: 12px;">
-                                                <img src=u.avatar_url 
-                                                     style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" 
-                                                     alt="User Avatar" />
-                                                <span style="color: var(--text-main); font-weight: 500; font-size: 0.95rem;">
-                                                    {u.login}
-                                                </span>
-                                            </div>
-                                            <A href="/dashboard" class="btn-primary btn-lg">"Dashboard"</A>
+            <Navbar>
+                <div class="controls">
+                    {move || {
+                        if is_owner() {
+                            match user.get() {
+                                Some(u) => view! {
+                                    <div style="display: flex; align-items: center; gap: 16px;">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <img src=u.avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                                            <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                                         </div>
-                                    }.into_view()
-                                } else {
-                                    // LOGGED OUT STATE
-                                    let url = auth_github_url();
-                                    view! {
-                                        <a href=url class="btn-primary btn-lg" rel="external" style="display: flex; align-items: center; gap: 8px;">
-                                            <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
-                                                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                                            </svg>
-                                            "Login with GitHub"
-                                        </a>
-                                    }.into_view()
-                                }
-                            } else {
-                                // Loading Spinner
-                                view! { <div class="spinner" style="width: 20px; height: 20px; border-width: 2px;"></div> }.into_view()
+                                        
+                                        <button class="btn-secondary btn-action btn-success" on:click=move |_| {
+                                            // FIX: Defined origin at top scope of closure
+                                            let frontend_origin = window().location().origin().unwrap_or("http://localhost:8080".to_string());
+                                            let backend_origin = api_base(); 
+                                            
+                                            let current_state = project_resource.get();
+                                            
+                                            let token = if let Some(ProjectState::Ready(data)) = current_state {
+                                                data.get("embed_token")
+                                                    .and_then(|v| v.as_str())
+                                                    .map(|s| s.to_string())
+                                            } else {
+                                                None
+                                            };
+
+                                            // 1. PUBLIC URL (Always safe, no token)
+                                            // Hits Frontend directly. Interactive IF you are logged in.
+                                            let public_url = format!("{}/embed/{}/{}", frontend_origin, username(), slug());
+
+                                            // 2. SECRET LINK (Only for Medium/Reddit)
+                                            // Hits Backend -> Redirects to Frontend with oEmbed magic.
+                                            let smart_url = match token {
+                                                Some(t) => format!("{}/e/{}", backend_origin, t),
+                                                None => public_url.clone() // Fallback (shouldn't happen for owner)
+                                            };
+
+                                            set_iframe_code.set(format!(
+                                                "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
+                                                public_url // <--- ALWAYS PUBLIC URL HERE
+                                            ));
+                                            
+                                            set_smart_link.set(smart_url);
+                                            
+                                            set_embed_modal_open.set(true);
+                                        }>
+                                            "Share / Embed"
+                                        </button>
+                                        
+                                        <a href=format!("{}/auth/logout", api_base()) class="btn-secondary btn-action btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
+                                    </div>
+                                }.into_view(),
+                                None => view! { <></> }.into_view()
+                            }
+                        } else {
+                            view! { <></> }.into_view()
+                        }
+                    }}
+                </div>
+            </Navbar>
+
+            // MAIN CONTENT SWITCH
+            {move || match project_resource.get() {
+                Some(ProjectState::Ready(data)) => {
+                    let cid = data["container_id"].as_str().unwrap_or_default().to_string();
+                    let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
+                    let html_output = render_markdown(&md_raw);
+                    
+                    let mounted = create_signal(false);
+                    create_effect(move |_| {
+                        if !mounted.0.get() {
+                            if let Some(window) = web_sys::window() {
+                                let callback = wasm_bindgen::closure::Closure::once(move || {
+                                    setup_resize_divider();
+                                    mounted.1.set(true);
+                                });
+                                window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
+                                callback.forget();
                             }
                         }}
                     </div>

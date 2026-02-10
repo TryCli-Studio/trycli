@@ -3,7 +3,8 @@ use axum::{
     routing::{get, post, delete},
     Router, Json,
     http::StatusCode,
-    body::Bytes, // FIX: Import Bytes
+    body::Bytes,
+    response::Html,
 };
 use bollard::container::{CreateContainerOptions, Config};
 use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
@@ -12,9 +13,10 @@ use bollard::image::{CreateImageOptions, RemoveImageOptions};
 use tower_sessions::Session;
 use uuid::Uuid;
 use serde::Deserialize;
-use futures::StreamExt; // FIX: Import StreamExt
+use futures::StreamExt;
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest};
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -28,6 +30,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/project/:slug", delete(delete_project))
         .route("/api/search-projects", get(search_projects))
         .route("/api/publish", post(publish_handler))
+        .route("/e/:token", get(resolve_secret_embed)) // Secret Embed Route
 }
 
 pub async fn list_user_projects(
@@ -41,7 +44,7 @@ pub async fn list_user_projects(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
+        "SELECT slug, image_tag, view_count, owner_username FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
     )
     .bind(user.id)
     .fetch_all(&state.db)
@@ -68,7 +71,7 @@ pub async fn search_projects(
     let query_term = format!("%{}%", search.q);
     
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
+        "SELECT slug, image_tag, view_count, owner_username FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
     )
     .bind(user.id)
     .bind(query_term)
@@ -172,8 +175,14 @@ pub async fn publish_handler(
         }
     }
 
-    // 6. Update Database
-    sqlx::query("INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (owner_username, slug) DO UPDATE SET image_tag = $2, markdown = $3, shell = $6")
+    // 6. Update Database with new embed_token logic
+    // gen_random_uuid() requires Postgres 13+. If older, ensure pgcrypto extension is enabled.
+    sqlx::query("
+            INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell, embed_token) 
+            VALUES ($1, $2, $3, $4, $5, $6, gen_random_uuid()::text) 
+            ON CONFLICT (owner_username, slug) 
+            DO UPDATE SET image_tag = $2, markdown = $3, shell = $6
+        ")
         .bind(&safe_slug)
         .bind(&new_image_tag)
         .bind(&payload.markdown)
@@ -199,7 +208,8 @@ pub async fn publish_handler(
 
 pub async fn get_project(
     Path((username, slug)): Path<(String, String)>, 
-    State(state): State<AppState>
+    State(state): State<AppState>,
+    session: Session, // Added session to check ownership
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
     // Case-insensitive lookup (Fixes 404s due to capitalization)
@@ -216,6 +226,18 @@ pub async fn get_project(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
+    // 2. Increment View Count asynchronously
+    let db_clone = state.db.clone();
+    let slug_clone = slug.clone();
+    let username_clone = username.clone();
+    tokio::spawn(async move {
+        let _ = sqlx::query("UPDATE projects SET view_count = view_count + 1 WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)")
+            .bind(username_clone)
+            .bind(slug_clone)
+            .execute(&db_clone)
+            .await;
+    });
+
     {
         let sessions = state.lock_sessions();
         let active_viewers = sessions.values()
@@ -227,14 +249,45 @@ pub async fn get_project(
         }
     }
 
+    // 3. [NEW] Construct Response
+    // We check if the current user is the owner. If so, we attach the `embed_token`.
+    let current_user: Option<User> = session.get("user").await.ok().flatten();
+    let is_owner = current_user.map(|u| u.id) == Some(owner_id);
+
+    let mut response_json = serde_json::json!({
+        "markdown": markdown,
+        "owner_id": owner_id,
+        // We will insert container_id below
+    });
+
+    // If owner, fetch and attach the secret token
+    if is_owner {
+        let token_record: Option<(String,)> = sqlx::query_as(
+            "SELECT embed_token FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)"
+        )
+        .bind(owner_id)
+        .bind(&slug)
+        .fetch_optional(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+        if let Some((token,)) = token_record {
+            response_json["embed_token"] = serde_json::Value::String(token);
+        }
+    }
+
+    // Spin up container
     let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
     let session_id = Uuid::new_v4().to_string();
 
     let config = Config {
         image: Some(image_tag),
+        labels: Some(HashMap::from([
+        ("managed_by".to_string(), "TryCli Studio".to_string())
+        ])),
         tty: Some(true),
         user: Some("root".to_string()), 
-        // FIX: Explicit CMD needed for flattened images
         cmd: Some(vec![shell.clone()]), 
         env: Some(vec![
             "LANG=C.UTF-8".to_string(), 
@@ -299,15 +352,17 @@ pub async fn get_project(
             shell,
             owner_id: None,
             project_owner_id: Some(owner_id),
-            is_publishing: false // <--- INIT FLAG
+            is_publishing: false,
+            project_slug: Some(slug), 
+            created_at: std::time::Instant::now(),
+            is_ws_connected: false,
         }); 
     }
     
-    Ok(Json(serde_json::json!({
-        "container_id": session_id,
-        "markdown": markdown,
-        "owner_id": owner_id
-    })))
+    // Add session ID to the response
+    response_json["container_id"] = serde_json::Value::String(session_id);
+
+    Ok(Json(response_json))
 }
 
 pub async fn delete_project(
@@ -360,4 +415,50 @@ pub async fn delete_project(
     }
 
     Ok(StatusCode::OK)
+}
+
+pub async fn resolve_secret_embed(
+    State(state): State<AppState>,
+    Path(token): Path<String>,
+) -> Result<Html<String>, (StatusCode, String)> {
+    // 1. Validate Token from DB
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT owner_username, slug FROM projects WHERE embed_token = $1"
+    )
+    .bind(&token)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let (owner, slug) = row.ok_or((StatusCode::NOT_FOUND, "Invalid embed token".to_string()))?;
+
+    // 2. Get Configurations
+    let api_url = std::env::var("API_URL").unwrap_or("http://localhost:3000".to_string());
+    // FIX: Get the Frontend URL so we redirect to the right port (8080 in dev)
+    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or("http://localhost:8080".to_string());
+    
+    // 3. Generate Discovery URL for OEmbed (Points to Backend)
+    let oembed_url = format!("{}/api/oembed?url={}/e/{}", api_url, api_url, token);
+
+    // 4. Construct Target URL (Points to Frontend)
+    let target_url = format!("{}/embed/{}/{}", frontend_url, owner, slug);
+
+    // 5. Return HTML with <link> tags + Meta Refresh
+    let html = format!(r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>TryCLI Interactive Demo</title>
+    <link rel="alternate" type="application/json+oembed" href="{}" title="Interactive Terminal" />
+    <meta property="og:title" content="Interactive Terminal Demo" />
+    <meta property="og:description" content="Click to launch a live Linux container for this project." />
+    <meta property="og:type" content="website" />
+    <meta http-equiv="refresh" content="0;url={}" />
+</head>
+<body>
+    <p>Redirecting to interactive terminal...</p>
+    <script>window.location.href = "{}";</script>
+</body>
+</html>"#, oembed_url, target_url, target_url);
+
+    Ok(Html(html))
 }

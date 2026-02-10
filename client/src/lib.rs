@@ -8,6 +8,7 @@ pub mod components {
     pub mod protected;
     pub mod limit;
     pub mod navbar;
+    pub mod modal;
 }
 pub mod pages {
     pub mod home;
@@ -17,6 +18,9 @@ pub mod pages {
     pub mod embed;
     pub mod docs;
     pub mod blogs;
+    pub mod analytics;
+    pub mod admin;
+    pub mod policy;
 }
 
 pub use app::App;

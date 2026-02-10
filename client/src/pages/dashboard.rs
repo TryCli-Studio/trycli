@@ -8,6 +8,7 @@ use std::rc::Rc;
 use crate::types::{User, ProjectSummary};
 use crate::api::api_base;
 use crate::components::navbar::Navbar;
+use crate::components::modal::ConfirmModal;
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
@@ -144,14 +145,14 @@ pub fn DashboardPage() -> impl IntoView {
                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                         </div>
                         <a href=format!("{}/auth/logout", api_base()) 
-                           class="btn-primary btn-logout" 
+                           class="btn-secondary btn-action btn-logout" 
                            rel="external"  
                            style="text-decoration: none; font-size: 0.9rem;">
                            "Logout"
                         </a>
                     }.into_view(),
                     None => view! {
-                        <a href=format!("{}/auth/github", api_base()) class="btn-primary" rel="external" style="text-decoration: none;">                            "Login with GitHub"
+                        <a href=format!("{}/auth/github", api_base()) class="btn-secondary btn-action" rel="external" style="text-decoration: none;">                            "Login with GitHub"
                         </a>
                     }.into_view()
                 }}
@@ -183,11 +184,19 @@ pub fn DashboardPage() -> impl IntoView {
                                 </div>
 
                                 <div class="dashboard-section">
-                                   <div class="section-header">
+                                    <div class="section-header">
                                         <h2>"Active Deployments"</h2>
-                                        <A href="/new" class="btn-primary">
-                                            "+ Initialize Environment"
-                                        </A>
+                                        
+                                        
+                                        <div style="display: flex; gap: 12px; align-items: center;">
+                                            <A href="/analytics" class="btn-secondary btn-action">
+                                                "Analytics"
+                                            </A>
+                                            
+                                            <A href="/new" class="btn-secondary btn-action">
+                                                "+ Initialize Environment"
+                                            </A>
+                                        </div>
                                     </div>
 
                                     <DashboardProjectList
@@ -323,7 +332,7 @@ fn DashboardSearch(
                                 view! {
                                     <div style="padding: 16px; color: var(--text-muted);">
                                         <p style="margin: 0 0 8px 0; font-size: 0.9rem;">"No existing environment found."</p>
-                                        <button class="btn-primary" 
+                                        <button class="btn-secondary btn-action" 
                                                 style=move || {
                                                     let base = "font-size: 0.9rem; padding: 8px 12px; width: 100%; text-align: left;";
                                                     if active_index.get() == 0 {
@@ -400,53 +409,69 @@ fn DashboardProjectList(
     user_login: Rc<String>,
 ) -> impl IntoView {
 
+    let (confirm_open, set_confirm_open) = create_signal(false);
+    let (confirm_slug, set_confirm_slug) = create_signal(String::new());
+    let (confirm_message, set_confirm_message) = create_signal(String::new());
+
     // Handler for deletion logic
     let handle_delete = move |slug: String| {
-        let prompt_text = format!(
-            "⚠️ TERMINATE ENVIRONMENT\n\nThis will permanently delete the snapshot '{}'. This action cannot be undone.\n\nPlease type the environment name to confirm:", 
+        set_confirm_slug.set(slug.clone());
+        set_confirm_message.set(format!(
+            "This will permanently delete the snapshot '{}' and cannot be undone.",
             slug
-        );
-
-        if let Ok(Some(input)) = window().prompt_with_message(&prompt_text) {
-            if input == slug {
-                let slug_clone = slug.clone();
-                
-                spawn_local(async move {
-                    let url = format!("{}/api/project/{}", api_base(), slug_clone);
-                    
-                    let req = Request::delete(&url)
-                        .credentials(RequestCredentials::Include)
-                        .send()
-                        .await;
-
-                    match req {
-                        Ok(resp) => {
-                            if resp.ok() {
-                                set_projects.update(|list| {
-                                    list.retain(|p| p.slug != slug_clone);
-                                });
-                                let _ = window().alert_with_message("Environment terminated and image removed.");
-                            } else {
-                                let _ = window().alert_with_message("Failed to terminate environment.");
-                            }
-                        },
-                        Err(_) => {
-                            let _ = window().alert_with_message("Network error occurred.");
-                        }
-                    }
-                });
-            } else {
-                let _ = window().alert_with_message("Name mismatch. Termination cancelled.");
-            }
-        }
+        ));
+        set_confirm_open.set(true);
     };
 
+    let on_confirm_delete = {
+        let set_projects = set_projects.clone();
+        Callback::new(move |_| {
+            let slug = confirm_slug.get();
+            let slug_clone = slug.clone();
+            set_confirm_open.set(false);
+            spawn_local(async move {
+                let url = format!("{}/api/project/{}", api_base(), slug_clone);
+                let req = Request::delete(&url)
+                    .credentials(RequestCredentials::Include)
+                    .send()
+                    .await;
+
+                match req {
+                    Ok(resp) => {
+                        if resp.ok() {
+                            set_projects.update(|list| {
+                                list.retain(|p| p.slug != slug_clone);
+                            });
+                        } else {
+                        }
+                    },
+                    Err(_) => {
+                    }
+                }
+            });
+        })
+    };
+
+    let on_cancel_delete = Callback::new(move |_| {
+        set_confirm_open.set(false);
+    });
+
     view! {
+        <ConfirmModal
+            show=confirm_open.into()
+            title="Terminate environment".to_string().into()
+            body=confirm_message.into()
+            expected_name=confirm_slug.into()
+            confirm_label="Terminate".to_string().into()
+            cancel_label="Cancel".to_string().into()
+            on_confirm=on_confirm_delete
+            on_cancel=on_cancel_delete
+        />
         {move || match error.get() {
             Some(err) => view! {
                 <div class="error-state">
                     <p class="error-message">{err}</p>
-                    <button class="btn-primary" on:click=move |_| {
+                    <button class="btn-secondary btn-action" on:click=move |_| {
                         set_error.set(None);
                         set_loading.set(true);
                     }>
@@ -460,7 +485,7 @@ fn DashboardProjectList(
                     view! {
                         <div class="empty-state">
                             <p class="empty-message">"No active environments. Initialize a new sandbox to start building."</p>
-                            <A href="/new" class="btn-primary">
+                            <A href="/new" class="btn-secondary btn-action">
                                 "Initialize Environment"
                             </A>
                         </div>

@@ -19,15 +19,15 @@ pub fn LimitReached() -> impl IntoView {
                         "Are you the owner?"
                     </p>
                     <a href="mailto:tryclistudio@gmail.com" 
-                       class="btn-primary"
-                       style="width: 100%; max-width: 300px; text-decoration: none;">
+                       class="btn-secondary btn-action"
+                       style="width: 100%; max-width: 300px; text-decoration: none; justify-content: center">
                         "Request More Compute"
                     </a>
-                    <a href="https://buymeacoffee.com" 
+                    <a href="https://ko-fi.com/V7V21TRPL5" 
                        target="_blank" 
                        rel="noopener noreferrer"
                        class="btn-secondary"
-                       style="width: 100%; max-width: 300px; justify-content: center; color: #ffdd00; border-color: #FFDD00;">
+                       style="width: 100%; max-width: 300px; justify-content: center; color: #ffdd00; border-color: #FFDD00; font-weight: 200;">
                         "Support Us"
                     </a>
                 </div>

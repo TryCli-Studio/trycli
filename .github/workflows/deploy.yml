@@ -48,6 +48,8 @@ jobs:
       - name: Build Backend (Static Binary)
         # ⚠️ CHANGE: Run from root to ensure workspace lockfile is respected
         # and point to the server binary explicitly.
+        env:
+          SQLX_OFFLINE: true  # <--- ADD THIS LINE
         run: cross build --release --target x86_64-unknown-linux-musl --bin server
 
       #  DEPLOYMENT 
