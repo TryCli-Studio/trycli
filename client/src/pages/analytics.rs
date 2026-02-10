@@ -59,24 +59,32 @@ pub fn AnalyticsPage() -> impl IntoView {
         set_user.set(Some(user));
 
         // 2. Fetch Analytics
-        let analytics_url = format!("{}/api/analytics", api_base());
-        match Request::get(&analytics_url)
-            .credentials(RequestCredentials::Include)
-            .send()
-            .await 
-        {
-            Ok(r) if r.ok() => {
-                if let Ok(d) = r.json::<AnalyticsDashboardData>().await {
-                    set_data.set(Some(d));
-                } else {
-                    set_error.set(Some("Invalid analytics response".to_string()));
-                }
-            } else {
-                 set_error.set(Some("Please log in to view analytics".to_string()));
-            }
-            Ok(r) => set_error.set(Some(format!("Analytics failed: {}", r.status()))),
-            Err(e) => set_error.set(Some(format!("Analytics error: {}", e))),
+let analytics_url = format!("{}/api/analytics", api_base());
+match Request::get(&analytics_url)
+    .credentials(RequestCredentials::Include)
+    .send()
+    .await 
+{
+    // Success case: Status is 200-299
+    Ok(r) if r.ok() => {
+        if let Ok(d) = r.json::<AnalyticsDashboardData>().await {
+            set_data.set(Some(d));
+        } else {
+            set_error.set(Some("Invalid analytics response".to_string()));
         }
+    }
+    // Fallback case: Status is NOT 200-299 (e.g. 401, 403, 500)
+    // This replaces your 'else' block
+    Ok(r) => {
+        if r.status() == 401 || r.status() == 403 {
+            set_error.set(Some("Please log in to view analytics".to_string()));
+        } else {
+            set_error.set(Some(format!("Analytics failed: {}", r.status())));
+        }
+    }
+    // Network error case
+    Err(e) => set_error.set(Some(format!("Analytics error: {}", e))),
+}
     });
 
     view! {

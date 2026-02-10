@@ -2,7 +2,6 @@ use axum::{
     extract::{Query, State},
     routing::post,
     Router, Json,
-    extract::State, // Add State
     http::StatusCode,
 };
 use serde::Deserialize;
@@ -10,7 +9,6 @@ use tower_sessions::Session;
 use uuid::Uuid;
 use crate::state::AppState;
 use crate::models::{User, AnalyticsEventType};
-use crate::models::User;
 use bollard::container::RemoveContainerOptions;
 
 pub fn routes() -> Router<AppState> {
