@@ -6,13 +6,29 @@ use crate::components::navbar::Navbar;
 use crate::api::api_base;
 use crate::types::{User, AnalyticsDashboardData};
 
+fn format_uptime(seconds: u64) -> String {
+    if seconds < 60 {
+        format!("{}s", seconds)
+    } else if seconds < 3600 {
+        format!("{}m {}s", seconds / 60, seconds % 60)
+    } else {
+        format!("{}h {}m", seconds / 3600, (seconds % 3600) / 60)
+    }
+}
+
+fn format_duration(seconds: f64) -> String {
+    let secs = seconds.round() as u64;
+    format_uptime(secs)
+}
+
 #[component]
 pub fn AnalyticsPage() -> impl IntoView {
     let (_user, set_user) = create_signal(None::<User>);
     let (data, set_data) = create_signal(None::<AnalyticsDashboardData>);
+    let (error, set_error) = create_signal(None::<String>);
     
     // Auth & Data Fetch
-    create_resource(|| (), move |_| async move {
+    let _analytics_resource = create_resource(|| (), move |_| async move {
         // 1. Check Auth
         let auth_url = format!("{}/api/me", api_base());
         let auth_resp = Request::get(&auth_url)
@@ -20,36 +36,46 @@ pub fn AnalyticsPage() -> impl IntoView {
             .send()
             .await;
 
-        if let Ok(resp) = auth_resp {
-            if resp.ok() {
-                if let Ok(u) = resp.json::<User>().await {
-                    set_user.set(Some(u));
-                    
-                    // 2. Fetch Analytics
-                    let analytics_url = format!("{}/api/analytics", api_base());
-                    if let Ok(data_resp) = Request::get(&analytics_url)
-                        .credentials(RequestCredentials::Include)
-                        .send()
-                        .await 
-                    {
-                        if let Ok(d) = data_resp.json::<AnalyticsDashboardData>().await {
-                            set_data.set(Some(d));
-                        }
-                    }
+        let resp = match auth_resp {
+            Ok(r) if r.ok() => r,
+            Ok(r) => {
+                set_error.set(Some(format!("Auth failed: {}", r.status())));
+                return;
+            }
+            Err(e) => {
+                set_error.set(Some(format!("Auth error: {}", e)));
+                return;
+            }
+        };
+
+        let user = match resp.json::<User>().await {
+            Ok(u) => u,
+            Err(_) => {
+                set_error.set(Some("Invalid user response".to_string()));
+                return;
+            }
+        };
+
+        set_user.set(Some(user));
+
+        // 2. Fetch Analytics
+        let analytics_url = format!("{}/api/analytics", api_base());
+        match Request::get(&analytics_url)
+            .credentials(RequestCredentials::Include)
+            .send()
+            .await 
+        {
+            Ok(r) if r.ok() => {
+                if let Ok(d) = r.json::<AnalyticsDashboardData>().await {
+                    set_data.set(Some(d));
+                } else {
+                    set_error.set(Some("Invalid analytics response".to_string()));
                 }
             }
+            Ok(r) => set_error.set(Some(format!("Analytics failed: {}", r.status()))),
+            Err(e) => set_error.set(Some(format!("Analytics error: {}", e))),
         }
     });
-
-    let format_uptime = |seconds: u64| {
-        if seconds < 60 {
-            format!("{}s", seconds)
-        } else if seconds < 3600 {
-            format!("{}m {}s", seconds / 60, seconds % 60)
-        } else {
-            format!("{}h {}m", seconds / 3600, (seconds % 3600) / 60)
-        }
-    };
 
     view! {
         <div style="min-height: 100vh; background: var(--bg-dark);">
@@ -75,14 +101,43 @@ pub fn AnalyticsPage() -> impl IntoView {
                     }}
                 </div>
 
+                {move || error.get().map(|e| view! {
+                    <div style="padding: 16px; color: #ff6b6b;">{e}</div>
+                })}
+
                 {move || match data.get() {
                     Some(stats) => view! {
                         // 1. TOP STATS
                         <div class="stats-grid">
                             <div class="stat-card">
+                                <span class="stat-label">"Views (24h)"</span>
+                                <span class="stat-value">{stats.views_24h}</span>
+                                <span class="stat-sub">"Last 24 hours"</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">"Views (7d)"</span>
+                                <span class="stat-value">{stats.views_7d}</span>
+                                <span class="stat-sub">"Last 7 days"</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">"Views (30d)"</span>
+                                <span class="stat-value">{stats.views_30d}</span>
+                                <span class="stat-sub">"Last 30 days"</span>
+                            </div>
+                            <div class="stat-card">
                                 <span class="stat-label">"Total Lifetime Views"</span>
-                                <span class="stat-value">{stats.total_lifetime_views}</span>
-                                <span class="stat-sub">"Across all projects"</span>
+                                <span class="stat-value">{stats.views_lifetime}</span>
+                                <span class="stat-sub">"All-time"</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">"Avg Session Duration"</span>
+                                <span class="stat-value">{format_duration(stats.avg_session_duration)}</span>
+                                <span class="stat-sub">"Across all sessions"</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">"Error Events"</span>
+                                <span class="stat-value">{stats.error_count}</span>
+                                <span class="stat-sub">"Total errors"</span>
                             </div>
                             <div class="stat-card">
                                 <span class="stat-label">"Active Viewers Now"</span>
@@ -147,14 +202,16 @@ pub fn AnalyticsPage() -> impl IntoView {
                                     <tr>
                                         <th>"Project Name"</th>
                                         <th>"Total Views"</th>
-                                        <th style="width: 40%;">"Engagement"</th>
+                                        <th>"Avg Session"</th>
+                                        <th>"Errors"</th>
+                                        <th style="width: 30%;">"Engagement"</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {stats.project_breakdown.into_iter().map(|proj| {
                                         // Calculate percentage for bar width
-                                        let percent = if stats.total_lifetime_views > 0 {
-                                            (proj.view_count as f64 / stats.total_lifetime_views as f64) * 100.0
+                                        let percent = if stats.views_lifetime > 0 {
+                                            (proj.view_count as f64 / stats.views_lifetime as f64) * 100.0
                                         } else {
                                             0.0
                                         };
@@ -163,6 +220,8 @@ pub fn AnalyticsPage() -> impl IntoView {
                                             <tr>
                                                 <td style="font-weight: 600;">{proj.slug}</td>
                                                 <td style="font-family: var(--font-mono);">{proj.view_count}</td>
+                                                <td style="font-family: var(--font-mono);">{format_duration(proj.avg_session_duration)}</td>
+                                                <td style="font-family: var(--font-mono);">{proj.error_count}</td>
                                                 <td>
                                                     <div style="display: flex; align-items: center; gap: 12px;">
                                                         <div class="progress-bar-bg">

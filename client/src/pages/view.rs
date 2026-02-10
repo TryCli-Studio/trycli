@@ -191,7 +191,9 @@ pub fn ViewPage() -> impl IntoView {
                                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                                         </div>
                                         <button class="btn-secondary btn-action btn-success" on:click=move |_| {
-                                            copy_embed_code(username(), slug());
+                                            let code = build_embed_code(username(), slug());
+                                            set_embed_code.set(code);
+                                            set_embed_modal_open.set(true);
                                         }>
                                             "Share / Embed"
                                         </button>

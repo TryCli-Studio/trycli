@@ -3,9 +3,14 @@ use bollard::container::{ListContainersOptions, RemoveContainerOptions, StatsOpt
 use std::sync::Arc;
 use std::collections::HashMap;
 use futures::StreamExt; // <--- CRITICAL FIX: This enables .next() on streams
-use crate::state::SessionMap;
+use crate::state::{SessionMap, SessionContext};
+use crate::models::AnalyticsEventType;
 
-pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
+pub async fn start_background_reaper(
+    docker: Arc<Docker>,
+    sessions: SessionMap,
+    db: sqlx::PgPool,
+) {
     // Check every 30 seconds
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30)); 
     
@@ -14,8 +19,10 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
         
         // --- 1. CLEANUP ZOMBIE CONTAINERS ---
         
-        let active_container_names: Vec<String> = match sessions.lock() {
-            Ok(guard) => guard.values().map(|ctx| ctx.container_name.clone()).collect(),
+        let session_snapshot: HashMap<String, (String, SessionContext)> = match sessions.lock() {
+            Ok(guard) => guard.iter().map(|(session_id, ctx)| {
+                (ctx.container_name.clone(), (session_id.clone(), ctx.clone()))
+            }).collect(),
             Err(e) => {
                 eprintln!("!! Reaper Mutex Poisoned: {}", e);
                 continue; 
@@ -38,7 +45,7 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
                 let is_active = container.names.as_ref().map_or(false, |names| {
                     names.iter().any(|n| {
                         let clean = n.trim_start_matches('/'); 
-                        active_container_names.contains(&clean.to_string())
+                        session_snapshot.contains_key(clean)
                     })
                 });
 
@@ -56,7 +63,23 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
                 else {
                     // It is active, but is it misbehaving?
                     if let Some(id) = container.id {
-                       check_resource_usage(&docker, &id).await;
+                        let container_name = container.names.as_ref()
+                            .and_then(|names| names.first())
+                            .map(|n| n.trim_start_matches('/').to_string())
+                            .unwrap_or_default();
+
+                        if let Some((session_id, ctx)) = session_snapshot.get(&container_name) {
+                            let abuse_killed = check_resource_usage(&docker, &id).await;
+
+                            if abuse_killed {
+                                log_abuse_and_session_end(&db, ctx).await;
+
+                                let mut map = sessions.lock().unwrap_or_else(|p| p.into_inner());
+                                map.remove(session_id);
+                            }
+                        } else {
+                            check_resource_usage(&docker, &id).await;
+                        }
                     }
                 }
             }
@@ -65,7 +88,7 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
 }
 
 // Helper function to check CPU usage
-async fn check_resource_usage(docker: &Docker, container_id: &str) {
+async fn check_resource_usage(docker: &Docker, container_id: &str) -> bool {
     let options = StatsOptions {
         stream: false,
         ..Default::default()
@@ -85,7 +108,7 @@ async fn check_resource_usage(docker: &Docker, container_id: &str) {
             if cpu_percent > 90.0 {
                 println!("ABUSE: CPU Hog {} ({:.2}%). Killing.", container_id, cpu_percent);
                 let _ = docker.remove_container(container_id, Some(RemoveContainerOptions { force: true, ..Default::default() })).await;
-                return; // Container killed, exit
+                return true; // Container killed, exit
             }
         }
 
@@ -108,6 +131,52 @@ async fn check_resource_usage(docker: &Docker, container_id: &str) {
                 force: true,
                 ..Default::default()
             })).await;
+            return true;
         }
     }
+
+    false
+}
+
+async fn log_abuse_and_session_end(db: &sqlx::PgPool, ctx: &SessionContext) {
+    let project_id = match (ctx.project_owner_id, ctx.project_slug.as_deref()) {
+        (Some(owner_id), Some(slug)) => {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT id FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)"
+            )
+            .bind(owner_id)
+            .bind(slug)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten()
+        }
+        _ => None,
+    };
+
+    let Some(project_id) = project_id else {
+        return;
+    };
+
+    let duration_seconds = std::time::Instant::now()
+        .duration_since(ctx.created_at)
+        .as_secs() as i64;
+
+    let _ = sqlx::query(
+        "INSERT INTO analytics_events (project_id, event_type, duration_seconds) VALUES ($1, $2, $3)"
+    )
+    .bind(project_id)
+    .bind(AnalyticsEventType::SessionEnd)
+    .bind(duration_seconds)
+    .execute(db)
+    .await;
+
+    let _ = sqlx::query(
+        "INSERT INTO analytics_events (project_id, event_type, error_type) VALUES ($1, $2, $3)"
+    )
+    .bind(project_id)
+    .bind(AnalyticsEventType::Error)
+    .bind("ABUSE")
+    .execute(db)
+    .await;
 }
