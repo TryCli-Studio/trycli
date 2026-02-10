@@ -3,16 +3,28 @@ use bollard::container::{ListContainersOptions, RemoveContainerOptions, StatsOpt
 use std::sync::Arc;
 use std::collections::{HashMap, HashSet}; // Import HashSet
 use futures::StreamExt; 
-use crate::state::SessionMap;
+use crate::state::{SessionMap, SessionContext};
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::models::AnalyticsEventType;
 
-pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) {
+pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap, db: sqlx::PgPool) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30)); 
     
     loop {
         interval.tick().await;
         
-        // 1. Fetch ALL containers from Docker first
+        // --- 1. CLEANUP ZOMBIE CONTAINERS ---
+        let session_snapshot: HashMap<String, (String, SessionContext)> = match sessions.lock() {
+            Ok(guard) => guard.iter().map(|(session_id, ctx)| {
+                (ctx.container_name.clone(), (session_id.clone(), ctx.clone()))
+            }).collect(),
+            Err(e) => {
+                eprintln!("!! Reaper Mutex Poisoned: {}", e);
+                continue; 
+            }
+        };
+
+        // --- 2. FETCH ALL CONTAINERS FROM DOCKER ---
         let filters = HashMap::from([
             ("label".to_string(), vec!["managed_by=TryCli Studio".to_string()])
         ]);
@@ -37,13 +49,12 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
         for c in &docker_containers {
             if let Some(names) = &c.names {
                 for name in names {
-                    // Docker names come with a leading slash (e.g., "/keen_eaver")
                     actual_container_names.insert(name.trim_start_matches('/').to_string());
                 }
             }
         }
 
-        // --- 2. CLEANUP GHOST SESSIONS (The Fix for your issue) ---
+        // --- 3. CLEANUP GHOST SESSIONS  ---
         {
             let mut map = match sessions.lock() {
                 Ok(g) => g,
@@ -70,9 +81,7 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
             });
         }
 
-        // --- 3. CLEANUP ZOMBIE CONTAINERS (Existing Logic) ---
-        // (We can verify map existence again or just use the filtered list logic)
-        
+        // --- 4. CLEANUP ZOMBIE CONTAINERS ---
         // Build a fresh list of valid names from the now-cleaned map
         let valid_session_names: HashSet<String> = sessions.lock().unwrap().values()
             .map(|c| c.container_name.clone())
@@ -87,8 +96,6 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
 
             if !is_known {
                 // --- FIX: Grace Period Check ---
-                // If container was created < 30 seconds ago, it might be in the middle of "spawn" logic.
-                // If it is older than 30s and still unknown, it is definitely a zombie.
                 let created = container.created.unwrap_or(0);
                 let age = now_ts - created;
 
@@ -100,15 +107,32 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
                             ..Default::default()
                         })).await;
                     }
-                }
+                } 
             } else {
-                // 4. Resource Monitoring (Keep existing logic)
+                // --- MINING DETECTION / CPU MONITORING ---
                 if let Some(id) = container.id {
-                    check_resource_usage(&docker, &id).await;
+                    let container_name = container.names.as_ref()
+                        .and_then(|names| names.first())
+                        .map(|n| n.trim_start_matches('/').to_string())
+                        .unwrap_or_default();
+
+                    if let Some((session_id, ctx)) = session_snapshot.get(&container_name) {
+                        let abuse_killed = check_resource_usage(&docker, &id).await;
+
+                        if abuse_killed {
+                            log_abuse_and_session_end(&db, ctx).await;
+
+                            let mut map = sessions.lock().unwrap_or_else(|p| p.into_inner());
+                            map.remove(session_id);
+                        }
+                    } else {
+                        check_resource_usage(&docker, &id).await;
+                    }
                 }
             }
         }
 
+        // --- 5. CLEANUP ABANDONED SESSIONS ---
         let abandoned_sessions: Vec<(String, String)> = {
             let map = sessions.lock().unwrap();
             map.iter()
@@ -138,8 +162,7 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap) 
     }
 }
 
-// Helper function to check CPU usage
-async fn check_resource_usage(docker: &Docker, container_id: &str) {
+async fn check_resource_usage(docker: &Docker, container_id: &str) -> bool {
     let options = StatsOptions {
         stream: false,
         ..Default::default()
@@ -148,7 +171,7 @@ async fn check_resource_usage(docker: &Docker, container_id: &str) {
     let mut stats_stream = docker.stats(container_id, Some(options));
 
     if let Some(Ok(stats)) = stats_stream.next().await {
-        // --- EXISTING CPU CHECK ---
+        // --- CPU CHECK (From feat) ---
         let cpu_delta = stats.cpu_stats.cpu_usage.total_usage as f64 - stats.precpu_stats.cpu_usage.total_usage as f64;
         let system_cpu_usage = stats.cpu_stats.system_cpu_usage.unwrap_or(0);
         let pre_system_cpu_usage = stats.precpu_stats.system_cpu_usage.unwrap_or(0);
@@ -159,12 +182,11 @@ async fn check_resource_usage(docker: &Docker, container_id: &str) {
             if cpu_percent > 90.0 {
                 println!("ABUSE: CPU Hog {} ({:.2}%). Killing.", container_id, cpu_percent);
                 let _ = docker.remove_container(container_id, Some(RemoveContainerOptions { force: true, ..Default::default() })).await;
-                return; // Container killed, exit
+                return true;
             }
         }
 
-        // --- NEW NETWORK CHECK ---
-        // Sum up Rx (Received) and Tx (Transmitted) across all interfaces
+        // --- NETWORK CHECK ---
         let mut total_network_bytes = 0;
         if let Some(networks) = stats.networks {
             for (_, net_stats) in networks {
@@ -172,8 +194,6 @@ async fn check_resource_usage(docker: &Docker, container_id: &str) {
             }
         }
 
-        // LIMIT: 1 GB (1024 * 1024 * 1024)
-        // If they download/upload more than 1GB total, kill them.
         const NETWORK_LIMIT_BYTES: u64 = 1024 * 1024 * 1024; 
 
         if total_network_bytes > NETWORK_LIMIT_BYTES {
@@ -182,6 +202,52 @@ async fn check_resource_usage(docker: &Docker, container_id: &str) {
                 force: true,
                 ..Default::default()
             })).await;
+            return true;
         }
     }
+
+    false
+}
+
+async fn log_abuse_and_session_end(db: &sqlx::PgPool, ctx: &SessionContext) {
+    let project_id = match (ctx.project_owner_id, ctx.project_slug.as_deref()) {
+        (Some(owner_id), Some(slug)) => {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT id FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)"
+            )
+            .bind(owner_id)
+            .bind(slug)
+            .fetch_optional(db)
+            .await
+            .ok()
+            .flatten()
+        }
+        _ => None,
+    };
+
+    let Some(project_id) = project_id else {
+        return;
+    };
+
+    let duration_seconds = std::time::Instant::now()
+        .duration_since(ctx.created_at)
+        .as_secs() as i64;
+
+    let _ = sqlx::query(
+        "INSERT INTO analytics_events (project_id, event_type, duration_seconds) VALUES ($1, $2, $3)"
+    )
+    .bind(project_id)
+    .bind(AnalyticsEventType::SessionEnd)
+    .bind(duration_seconds)
+    .execute(db)
+    .await;
+
+    let _ = sqlx::query(
+        "INSERT INTO analytics_events (project_id, event_type, error_type) VALUES ($1, $2, $3)"
+    )
+    .bind(project_id)
+    .bind(AnalyticsEventType::Error)
+    .bind("ABUSE")
+    .execute(db)
+    .await;
 }

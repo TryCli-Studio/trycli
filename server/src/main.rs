@@ -27,8 +27,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Spawn background reaper
     let docker_reaper = state.docker.clone();
     let sessions_reaper = state.sessions.clone();
+    let db_reaper = state.db.clone();
     tokio::spawn(async move {
-        start_background_reaper(docker_reaper, sessions_reaper).await;
+        start_background_reaper(docker_reaper, sessions_reaper, db_reaper).await;
     });
 
     // Create router with all routes
