@@ -108,6 +108,7 @@ pub fn CreatePage() -> impl IntoView {
         move || query_params.with(|params| params.get("name").cloned().unwrap_or_default());
 
     let (container_id, set_container_id) = create_signal("".to_string());
+    let (spawn_error, set_spawn_error) = create_signal(None::<String>);
     let (markdown, set_markdown) = create_signal(r#"#  Welcome to Your TryCLI Environment
 
 This interactive workspace is your project's staging area. On the left is your live terminal, and here on the right is your editable documentation panel.
@@ -182,15 +183,18 @@ After publishing, you can easily distribute your interactive terminal:
                                     if spawn_resp.ok() {
                                         if let Ok(id) = spawn_resp.json::<String>().await {
                                             set_container_id.set(id);
+                                            set_spawn_error.set(None);
+                                        } else {
+                                            set_spawn_error.set(Some("Failed to parse container ID".to_string()));
                                         }
                                     } else {
                                         let status = spawn_resp.status();
                                         let text = spawn_resp.text().await.unwrap_or_default();
-                                        set_container_id.set(format!("ERROR {}: {}", status, text));
+                                        set_spawn_error.set(Some(format!("Spawn failed ({}): {}", status, text)));
                                     }
                                 }
                                 Err(e) => {
-                                    set_container_id.set(format!("NETWORK_FAIL: {}", e));
+                                    set_spawn_error.set(Some(format!("Network error: {}", e)));
                                 }
                             }
                         }
@@ -361,9 +365,20 @@ After publishing, you can easily distribute your interactive terminal:
                                 <span class="terminal-title">"bash — interactive"</span>
                             </div>
                             <div class="terminal-body">
-                                {move || match container_id.get().as_str() {
-                                    "" => view! { <div style="padding: 20px; color: #666;">"Initializing Environment..."</div> }.into_view(),
-                                    id => view! { <TerminalView container_id=id.to_string() /> }.into_view()
+                                {move || {
+                                    if let Some(error) = spawn_error.get() {
+                                        view! {
+                                            <div style="padding: 20px; color: #ef4444;">
+                                                <div style="margin-bottom: 10px; font-weight: bold;">"⚠️ Environment Spawn Error"</div>
+                                                <div style="color: #666;">{error}</div>
+                                            </div>
+                                        }.into_view()
+                                    } else {
+                                        match container_id.get().as_str() {
+                                            "" => view! { <div style="padding: 20px; color: #666;">"Initializing Environment..."</div> }.into_view(),
+                                            id => view! { <TerminalView container_id=id.to_string() /> }.into_view()
+                                        }
+                                    }
                                 }}
                             </div>
                         </div>

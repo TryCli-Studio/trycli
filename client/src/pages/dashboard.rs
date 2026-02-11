@@ -29,40 +29,46 @@ pub fn DashboardPage() -> impl IntoView {
             match auth_req {
                 Ok(resp) => {
                     if resp.ok() {
-                        if let Ok(u) = resp.json::<User>().await {
-                            // user authenticated
-                            set_user.set(Some(u.clone()));
+                        match resp.json::<User>().await {
+                            Ok(u) => {
+                                // user authenticated
+                                set_user.set(Some(u.clone()));
 
-                            let proj_url = format!("{}/api/my-projects", api_base());
-                            let projects_req = Request::get(&proj_url)
-                                .credentials(RequestCredentials::Include)
-                                .send()
-                                .await;
+                                let proj_url = format!("{}/api/my-projects", api_base());
+                                let projects_req = Request::get(&proj_url)
+                                    .credentials(RequestCredentials::Include)
+                                    .send()
+                                    .await;
 
-                            match projects_req {
-                                Ok(p_resp) => {
-                                    if p_resp.ok() {
-                                        if let Ok(projs) =
-                                            p_resp.json::<Vec<ProjectSummary>>().await
-                                        {
-                                            set_projects.set(projs);
-                                            set_error.set(None);
+                                match projects_req {
+                                    Ok(p_resp) => {
+                                        if p_resp.ok() {
+                                            if let Ok(projs) =
+                                                p_resp.json::<Vec<ProjectSummary>>().await
+                                            {
+                                                set_projects.set(projs);
+                                                set_error.set(None);
+                                            } else {
+                                                set_error.set(Some(
+                                                    "Failed to parse project list".to_string(),
+                                                ));
+                                            }
                                         } else {
-                                            set_error.set(Some(
-                                                "Failed to parse project list".to_string(),
-                                            ));
+                                            set_error
+                                                .set(Some("Failed to fetch deployments".to_string()));
                                         }
-                                    } else {
+                                    }
+                                    Err(_) => {
                                         set_error
-                                            .set(Some("Failed to fetch deployments".to_string()));
+                                            .set(Some("Network error connecting to API".to_string()));
                                     }
                                 }
-                                Err(_) => {
-                                    set_error
-                                        .set(Some("Network error connecting to API".to_string()));
-                                }
+                                set_loading.set(false);
                             }
-                            set_loading.set(false);
+                            Err(_) => {
+                                set_loading.set(false);
+                                set_error.set(Some("Failed to parse user data".to_string()));
+                            }
                         }
                     } else {
                         set_loading.set(false);
