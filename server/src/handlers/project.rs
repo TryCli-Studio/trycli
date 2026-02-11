@@ -675,9 +675,9 @@ pub async fn get_embed_key(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
-    // 3. Verify the user is the owner
+    // 3. Verify the user is the owner (return NOT_FOUND to avoid leaking project existence)
     if user.id != owner_id {
-        return Err((StatusCode::FORBIDDEN, "Only project owners can access the embed key".to_string()));
+        return Err((StatusCode::NOT_FOUND, "Project not found".to_string()));
     }
 
     // 4. Generate embed_key if it doesn't exist (lazy generation)
