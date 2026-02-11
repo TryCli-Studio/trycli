@@ -698,13 +698,15 @@ pub async fn get_embed_key(
             )
         })?;
 
-        if let Some((k,)) = new_key_row {
-            embed_key = Some(k);
-        }
+        embed_key = new_key_row.map(|(k,)| k);
     }
 
     // 5. Return the embed_key (should always be present after step 4)
-    let key = embed_key.expect("embed_key should have been generated in step 4");
+    let key = embed_key.ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Failed to retrieve or generate embed key".to_string(),
+    ))?;
+    
     let response = serde_json::json!({
         "embed_key": key
     });

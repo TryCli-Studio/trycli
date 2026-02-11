@@ -288,15 +288,29 @@ pub fn ViewPage() -> impl IntoView {
                                         let username_clone = username();
                                         spawn_local(async move {
                                             let url = format!("{}/api/project/{}/embed-key", api_base(), slug_clone);
-                                            if let Ok(resp) = Request::get(&url).credentials(RequestCredentials::Include).send().await {
-                                                if let Ok(data) = resp.json::<serde_json::Value>().await {
-                                                    let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
-                                                    let vip = if key.is_empty() {
-                                                        String::new()
-                                                    } else {
-                                                        format!("{}/{}/{}?key={}", origin, username_clone, slug_clone, key)
-                                                    };
-                                                    set_vip_link.set(vip);
+                                            match Request::get(&url).credentials(RequestCredentials::Include).send().await {
+                                                Ok(resp) => {
+                                                    match resp.json::<serde_json::Value>().await {
+                                                        Ok(data) => {
+                                                            let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
+                                                            let vip = if key.is_empty() {
+                                                                String::new()
+                                                            } else {
+                                                                format!("{}/{}/{}?key={}", origin, username_clone, slug_clone, key)
+                                                            };
+                                                            set_vip_link.set(vip);
+                                                        }
+                                                        Err(e) => {
+                                                            web_sys::console::error_1(&JsValue::from_str(&format!(
+                                                                "Failed to parse embed_key response: {:?}", e
+                                                            )));
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    web_sys::console::error_1(&JsValue::from_str(&format!(
+                                                        "Failed to fetch embed_key: {:?}", e
+                                                    )));
                                                 }
                                             }
                                         });
