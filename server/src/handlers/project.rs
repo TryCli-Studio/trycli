@@ -61,6 +61,85 @@ fn normalize_url(url_str: &str) -> Option<String> {
     Some(format!("{}://{}{}", scheme, host, normalized_path))
 }
 
+/// Validates CSRF protection by checking Origin/Referer headers against expected frontend URL.
+/// 
+/// This function provides defense-in-depth against CSRF attacks by:
+/// 1. Checking the Origin header (sent by browsers on cross-origin requests)
+/// 2. Falling back to Referer header validation if Origin is not present
+/// 3. Requiring the request to come from the configured FRONTEND_URL
+/// 
+/// # Security
+/// This works in conjunction with SameSite=Strict cookies to prevent CSRF attacks.
+/// An attacker on a different domain cannot forge these headers in a way that would
+/// pass validation.
+/// 
+/// # Returns
+/// - `Ok(())` if the request passes CSRF validation
+/// - `Err((StatusCode, String))` if the request fails validation
+fn validate_csrf_protection(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
+    let frontend_url = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    
+    // Parse the expected origin from FRONTEND_URL
+    let expected_origin = Url::parse(&frontend_url)
+        .ok()
+        .and_then(|u| {
+            let scheme = u.scheme();
+            let host = u.host_str()?;
+            let port = u.port();
+            if let Some(p) = port {
+                Some(format!("{}://{}:{}", scheme, host, p))
+            } else {
+                Some(format!("{}://{}", scheme, host))
+            }
+        })
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid FRONTEND_URL configuration".to_string(),
+            )
+        })?;
+    
+    // Check Origin header first (preferred for CORS requests)
+    if let Some(origin) = headers.get("origin") {
+        let origin_str = origin
+            .to_str()
+            .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid Origin header".to_string()))?;
+        
+        if origin_str == expected_origin {
+            return Ok(());
+        } else {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "CSRF validation failed: Origin mismatch".to_string(),
+            ));
+        }
+    }
+    
+    // Fallback to Referer header
+    if let Some(referer) = headers.get("referer") {
+        let referer_str = referer
+            .to_str()
+            .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid Referer header".to_string()))?;
+        
+        // Check if referer starts with the expected origin
+        if referer_str.starts_with(&expected_origin) {
+            return Ok(());
+        } else {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "CSRF validation failed: Referer mismatch".to_string(),
+            ));
+        }
+    }
+    
+    // No Origin or Referer header found
+    Err((
+        StatusCode::FORBIDDEN,
+        "CSRF validation failed: Missing Origin or Referer header".to_string(),
+    ))
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/my-projects", get(list_user_projects))
@@ -544,10 +623,14 @@ pub async fn get_whitelist(
 /// Add a new URL to a project's whitelist (Guest List).
 pub async fn add_to_whitelist(
     State(state): State<AppState>,
+    headers: HeaderMap,
     session: Session,
     Path(slug): Path<String>,
     Json(payload): Json<WhitelistRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    // CSRF Protection: Validate Origin/Referer headers
+    validate_csrf_protection(&headers)?;
+    
     let user: Option<User> = session
         .get("user")
         .await
@@ -600,10 +683,14 @@ pub async fn add_to_whitelist(
 /// Remove a URL from a project's whitelist (Guest List).
 pub async fn remove_from_whitelist(
     State(state): State<AppState>,
+    headers: HeaderMap,
     session: Session,
     Path(slug): Path<String>,
     Json(payload): Json<WhitelistRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    // CSRF Protection: Validate Origin/Referer headers
+    validate_csrf_protection(&headers)?;
+    
     let user: Option<User> = session
         .get("user")
         .await
