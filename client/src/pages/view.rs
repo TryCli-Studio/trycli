@@ -196,8 +196,22 @@ pub fn ViewPage() -> impl IntoView {
                 .json(&serde_json::json!({ "allowed_url": url }));
 
             if let Ok(builder) = req {
-                let _ = builder.send().await;
-                whitelist_resource.refetch();
+                match builder.send().await {
+                    Ok(resp) => {
+                        if resp.ok() {
+                            whitelist_resource.refetch();
+                        } else {
+                            web_sys::console::log_1(&JsValue::from_str(&format!(
+                                "Failed to add URL to whitelist: HTTP {}", resp.status()
+                            )));
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::log_1(&JsValue::from_str(&format!(
+                            "Failed to add URL to whitelist: {:?}", e
+                        )));
+                    }
+                }
             }
         }
     });
@@ -211,8 +225,22 @@ pub fn ViewPage() -> impl IntoView {
                 .json(&serde_json::json!({ "allowed_url": url }));
 
             if let Ok(builder) = req {
-                let _ = builder.send().await;
-                whitelist_resource.refetch();
+                match builder.send().await {
+                    Ok(resp) => {
+                        if resp.ok() {
+                            whitelist_resource.refetch();
+                        } else {
+                            web_sys::console::log_1(&JsValue::from_str(&format!(
+                                "Failed to remove URL from whitelist: HTTP {}", resp.status()
+                            )));
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::log_1(&JsValue::from_str(&format!(
+                            "Failed to remove URL from whitelist: {:?}", e
+                        )));
+                    }
+                }
             }
         }
     });
