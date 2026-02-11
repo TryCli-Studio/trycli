@@ -340,8 +340,9 @@ pub async fn get_project(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
     // 1. Load project + security metadata (case-insensitive for username/slug)
-    let row_result = sqlx::query_as::<_, (i64, String, String, String, i64, Option<String>)>(
-        "SELECT id, image_tag, markdown, shell, owner_id, embed_key \
+    // Query returns: (image_tag, markdown, shell, owner_id, embed_key, id)
+    let row_result = sqlx::query_as::<_, (String, String, String, i64, Option<String>, i64)>(
+        "SELECT image_tag, markdown, shell, owner_id, embed_key, id \
          FROM projects \
          WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
     )
@@ -350,7 +351,7 @@ pub async fn get_project(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    let (project_id, image_tag, markdown, shell, owner_id, mut embed_key) = match row_result {
+    let (image_tag, markdown, shell, owner_id, mut embed_key, project_id) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
