@@ -17,10 +17,48 @@ use futures::StreamExt;
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest, WhitelistRequest};
 use std::collections::HashMap;
+use url::Url;
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
     q: String,
+}
+
+/// Normalizes a URL by extracting scheme + host + path (without query params or fragments).
+/// 
+/// This prevents bypass attempts using query parameters or fragments. For example:
+/// - `https://example.com/path?bypass=1` -> `https://example.com/path`
+/// - `https://example.com/path#fragment` -> `https://example.com/path`
+/// - `https://example.com/path/` -> `https://example.com/path`
+/// 
+/// # Security
+/// Only http and https URLs with valid hosts are accepted. URLs without hosts or
+/// with other schemes are rejected to prevent security issues.
+/// 
+/// # Returns
+/// - `Some(normalized_url)` if the URL is valid and has http/https scheme with a host
+/// - `None` if the URL cannot be parsed, lacks a host, or uses a non-http(s) scheme
+fn normalize_url(url_str: &str) -> Option<String> {
+    let url = Url::parse(url_str).ok()?;
+    
+    // Only accept http and https schemes for security
+    let scheme = url.scheme();
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    
+    // Require a valid host for http(s) URLs
+    let host = url.host_str()?;
+    let path = url.path();
+    
+    // Normalize trailing slashes for consistency
+    let normalized_path = if path == "/" || path.is_empty() {
+        "/"
+    } else {
+        path.trim_end_matches('/')
+    };
+    
+    Some(format!("{}://{}{}", scheme, host, normalized_path))
 }
 
 pub fn routes() -> Router<AppState> {
@@ -280,24 +318,33 @@ pub async fn get_project(
 
             // Optional boolean, safely unwrapped later
             let whitelist_allowed: Option<bool> = if let Some(referer_url) = referer {
-                let exists_row: Option<(bool,)> = sqlx::query_as(
-                    "SELECT TRUE FROM project_whitelists \
-                     WHERE project_id = $1 AND allowed_url = $2 \
-                     LIMIT 1",
-                )
-                .bind(project_id)
-                .bind(&referer_url)
-                .fetch_optional(&state.db)
-                .await
-                .map_err(|e| {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("Whitelist DB Error: {}", e),
+                // Normalize the Referer URL to prevent bypasses via query params or fragments
+                let normalized_referer = normalize_url(&referer_url);
+                
+                if let Some(normalized) = normalized_referer {
+                    let exists_row: Option<(bool,)> = sqlx::query_as(
+                        "SELECT TRUE FROM project_whitelists \
+                         WHERE project_id = $1 AND allowed_url = $2 \
+                         LIMIT 1",
                     )
-                })?;
+                    .bind(project_id)
+                    .bind(&normalized)
+                    .fetch_optional(&state.db)
+                    .await
+                    .map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Whitelist DB Error: {}", e),
+                        )
+                    })?;
 
-                // TRUE row exists => allowed; otherwise false
-                Some(exists_row.is_some())
+                    // TRUE row exists => allowed; otherwise false
+                    Some(exists_row.is_some())
+                } else {
+                    // If URL parsing fails, deny access and log for security monitoring
+                    tracing::warn!("Referer normalization failed for project {}: {}", project_id, referer_url);
+                    Some(false)
+                }
             } else {
                 None
             };
@@ -525,6 +572,12 @@ pub async fn add_to_whitelist(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
+    // Normalize the URL to prevent bypasses via query params or fragments
+    let normalized_url = normalize_url(trimmed_url).ok_or((
+        StatusCode::BAD_REQUEST,
+        "Invalid URL format. URL must use http or https scheme and include a valid host.".to_string(),
+    ))?;
+
     // Unique(project_id, allowed_url) is enforced by the DB; ignore conflicts
     let result = sqlx::query(
         "INSERT INTO project_whitelists (project_id, allowed_url) \
@@ -532,7 +585,7 @@ pub async fn add_to_whitelist(
          ON CONFLICT (project_id, allowed_url) DO NOTHING",
     )
     .bind(project_id)
-    .bind(trimmed_url)
+    .bind(&normalized_url)
     .execute(&state.db)
     .await;
 
@@ -561,6 +614,12 @@ pub async fn remove_from_whitelist(
         return Err((StatusCode::BAD_REQUEST, "allowed_url is required".to_string()));
     }
 
+    // Normalize the URL to match how it was stored
+    let normalized_url = normalize_url(trimmed_url).ok_or((
+        StatusCode::BAD_REQUEST,
+        "Invalid URL format. URL must use http or https scheme and include a valid host.".to_string(),
+    ))?;
+
     let delete_result = sqlx::query(
         "DELETE FROM project_whitelists pw \
          USING projects p \
@@ -571,7 +630,7 @@ pub async fn remove_from_whitelist(
     )
     .bind(user.id)
     .bind(&slug)
-    .bind(trimmed_url)
+    .bind(&normalized_url)
     .execute(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
