@@ -18,6 +18,7 @@ enum ProjectState {
 #[component]
 pub fn EmbedPage() -> impl IntoView {
     let params = use_params_map();
+    let query_params = use_query_map();
     let username = move || params.get().get("username").cloned().unwrap_or_default();
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();
     let (started, set_started) = create_signal(false);
@@ -25,10 +26,15 @@ pub fn EmbedPage() -> impl IntoView {
     // Resource now returns ProjectState
     let project_data = create_resource(
         move || (started.get(), username(), slug()), 
-        |(is_started, u, s)| async move {
+        move |(is_started, u, s)| async move {
             if !is_started { return ProjectState::Loading; } 
             
-            let url = format!("{}/api/project/{}/{}", api_base(), u, s);
+            let key = query_params.get_untracked().get("key").cloned().unwrap_or_default();
+            let url = if key.is_empty() {
+                format!("{}/api/project/{}/{}", api_base(), u, s)
+            } else {
+                format!("{}/api/project/{}/{}?key={}", api_base(), u, s, key)
+            };
             let req = Request::get(&url).send().await;
             
             match req {

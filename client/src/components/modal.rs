@@ -162,7 +162,8 @@ pub fn EmbedModal(
                                     </button>
                                 </div>
                                 <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
-                                    "Share privately. This bypasses the Guest List and should never be embedded publicly."
+                                    <strong style="color: #dc2626;">"Security warning:"</strong>
+                                    " This VIP link bypasses the Guest List and must only be shared privately. Do NOT embed it on public websites, iframes, or forums; anyone with this link can access your terminal."
                                 </p>
                             </div>
 
