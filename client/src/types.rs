@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)] 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ProjectSummary {
     pub slug: String,
     pub image_tag: String,

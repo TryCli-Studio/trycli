@@ -1,7 +1,11 @@
+use crate::components::protected::ProtectedRoute;
+use crate::pages::{
+    admin::AdminPage, analytics::AnalyticsPage, blogs::BlogsPage, create::CreatePage,
+    dashboard::DashboardPage, docs::DocsPage, embed::EmbedPage, home::LandingPage,
+    policy::PolicyPage, view::ViewPage,
+};
 use leptos::*;
 use leptos_router::*;
-use crate::components::protected::ProtectedRoute;
-use crate::pages::{home::LandingPage, dashboard::DashboardPage, create::CreatePage, view::ViewPage, embed::EmbedPage, docs::DocsPage, blogs::BlogsPage, analytics::AnalyticsPage, admin::AdminPage, policy::PolicyPage};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -23,8 +27,8 @@ pub fn App() -> impl IntoView {
                         <AnalyticsPage />
                     </ProtectedRoute>
                 } />
-                
-                
+
+
                 <Route path="/new" view=move || view! {
                     <ProtectedRoute>
                         <CreatePage />

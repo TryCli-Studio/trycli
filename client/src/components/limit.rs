@@ -13,18 +13,18 @@ pub fn LimitReached() -> impl IntoView {
                     <br/>
                     "Please try again later or contact the owner."
                 </p>
-                
+
                 <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
                     <p style="color: var(--text-main); font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: 600;">
                         "Are you the owner?"
                     </p>
-                    <a href="mailto:tryclistudio@gmail.com" 
+                    <a href="mailto:tryclistudio@gmail.com"
                        class="btn-secondary btn-action"
                        style="width: 100%; max-width: 300px; text-decoration: none; justify-content: center">
                         "Request More Compute"
                     </a>
-                    <a href="https://ko-fi.com/V7V21TRPL5" 
-                       target="_blank" 
+                    <a href="https://ko-fi.com/V7V21TRPL5"
+                       target="_blank"
                        rel="noopener noreferrer"
                        class="btn-secondary"
                        style="width: 100%; max-width: 300px; justify-content: center; color: #ffdd00; border-color: #FFDD00; font-weight: 200;">

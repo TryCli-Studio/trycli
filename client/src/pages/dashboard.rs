@@ -1,14 +1,14 @@
+use crate::api::api_base;
+use crate::components::modal::ConfirmModal;
+use crate::components::navbar::Navbar;
+use crate::types::{ProjectSummary, User};
+use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
-use gloo_net::http::Request;
-use web_sys::RequestCredentials;
-use wasm_bindgen::JsValue;
-use wasm_bindgen::prelude::*;
 use std::rc::Rc;
-use crate::types::{User, ProjectSummary};
-use crate::api::api_base;
-use crate::components::navbar::Navbar;
-use crate::components::modal::ConfirmModal;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsValue;
+use web_sys::RequestCredentials;
 
 #[component]
 pub fn DashboardPage() -> impl IntoView {
@@ -17,56 +17,64 @@ pub fn DashboardPage() -> impl IntoView {
     let (loading, set_loading) = create_signal(true);
     let (error, set_error) = create_signal(None::<String>);
 
-    create_resource(|| (), move |_| async move {
+    create_resource(
+        || (),
+        move |_| async move {
+            let url = format!("{}/api/me", api_base());
+            let auth_req = Request::get(&url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await;
 
-        let url = format!("{}/api/me", api_base());
-        let auth_req = Request::get(&url)
-            .credentials(RequestCredentials::Include)
-            .send()
-            .await;
+            match auth_req {
+                Ok(resp) => {
+                    if resp.ok() {
+                        if let Ok(u) = resp.json::<User>().await {
+                            // user authenticated
+                            set_user.set(Some(u.clone()));
 
-        match auth_req {
-            Ok(resp) => {
-                if resp.ok() {
-                    if let Ok(u) = resp.json::<User>().await {
-                        // user authenticated
-                        set_user.set(Some(u.clone()));
+                            let proj_url = format!("{}/api/my-projects", api_base());
+                            let projects_req = Request::get(&proj_url)
+                                .credentials(RequestCredentials::Include)
+                                .send()
+                                .await;
 
-                        let proj_url = format!("{}/api/my-projects", api_base());
-                        let projects_req = Request::get(&proj_url)
-                            .credentials(RequestCredentials::Include)
-                            .send()
-                            .await;
-
-                        match projects_req {
-                            Ok(p_resp) => {
-                                if p_resp.ok() {
-                                    if let Ok(projs) = p_resp.json::<Vec<ProjectSummary>>().await {
-                                        set_projects.set(projs);
-                                        set_error.set(None);
+                            match projects_req {
+                                Ok(p_resp) => {
+                                    if p_resp.ok() {
+                                        if let Ok(projs) =
+                                            p_resp.json::<Vec<ProjectSummary>>().await
+                                        {
+                                            set_projects.set(projs);
+                                            set_error.set(None);
+                                        } else {
+                                            set_error.set(Some(
+                                                "Failed to parse project list".to_string(),
+                                            ));
+                                        }
                                     } else {
-                                        set_error.set(Some("Failed to parse project list".to_string()));
+                                        set_error
+                                            .set(Some("Failed to fetch deployments".to_string()));
                                     }
-                                } else {
-                                    set_error.set(Some("Failed to fetch deployments".to_string()));
+                                }
+                                Err(_) => {
+                                    set_error
+                                        .set(Some("Network error connecting to API".to_string()));
                                 }
                             }
-                            Err(_) => {
-                                set_error.set(Some("Network error connecting to API".to_string()));
-                            }
+                            set_loading.set(false);
                         }
+                    } else {
                         set_loading.set(false);
                     }
-                } else {
+                }
+                Err(_) => {
                     set_loading.set(false);
+                    set_error.set(Some("Authentication check failed".to_string()));
                 }
             }
-            Err(_) => {
-                set_loading.set(false);
-                set_error.set(Some("Authentication check failed".to_string()));
-            }
-        }
-    });
+        },
+    );
 
     // Search state and debounce logic
     let (search_input, set_search_input) = create_signal(String::new());
@@ -85,7 +93,7 @@ pub fn DashboardPage() -> impl IntoView {
         spawn_local(async move {
             let encoded_query = js_sys::encode_uri_component(&query_clone).to_string();
             let search_url = format!("{}/api/search-projects?q={}", api_base(), encoded_query);
-            
+
             match Request::get(&search_url)
                 .credentials(RequestCredentials::Include)
                 .send()
@@ -126,7 +134,7 @@ pub fn DashboardPage() -> impl IntoView {
             });
             if let Ok(timer_id) = window.set_timeout_with_callback_and_timeout_and_arguments_0(
                 closure.as_ref().unchecked_ref(),
-                300
+                300,
             ) {
                 set_debounce_timer.set(Some(timer_id));
                 closure.forget();
@@ -140,13 +148,13 @@ pub fn DashboardPage() -> impl IntoView {
                 {move || match user.get() {
                     Some(u) => view! {
                         <div style="display: flex; align-items: center; gap: 16px;">
-                            <img src=u.avatar_url 
+                            <img src=u.avatar_url
                                  style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
                             <span style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                         </div>
-                        <a href=format!("{}/auth/logout", api_base()) 
-                           class="btn-secondary btn-action btn-logout" 
-                           rel="external"  
+                        <a href=format!("{}/auth/logout", api_base())
+                           class="btn-secondary btn-action btn-logout"
+                           rel="external"
                            style="text-decoration: none; font-size: 0.9rem;">
                            "Logout"
                         </a>
@@ -171,7 +179,7 @@ pub fn DashboardPage() -> impl IntoView {
                                     <div class="hero-content">
                                         <h1 class="hero-title">"Workspace Overview"</h1>
                                         <p class="hero-subtitle">"Manage your interactive sandboxes, monitor deployments, and publish new snapshots."</p>
-                                        <DashboardSearch 
+                                        <DashboardSearch
                                             search_input=search_input
                                             set_search_input=set_search_input
                                             show_suggestions=show_suggestions
@@ -186,13 +194,13 @@ pub fn DashboardPage() -> impl IntoView {
                                 <div class="dashboard-section">
                                     <div class="section-header">
                                         <h2>"Active Deployments"</h2>
-                                        
-                                        
+
+
                                         <div style="display: flex; gap: 12px; align-items: center;">
                                             <A href="/analytics" class="btn-secondary btn-action">
                                                 "Analytics"
                                             </A>
-                                            
+
                                             <A href="/new" class="btn-secondary btn-action">
                                                 "+ Initialize Environment"
                                             </A>
@@ -204,7 +212,7 @@ pub fn DashboardPage() -> impl IntoView {
                                         set_error=set_error
                                         set_loading=set_loading
                                         projects=projects
-                                        set_projects=set_projects 
+                                        set_projects=set_projects
                                         user_login=user_login_rc.clone()
                                     />
                                 </div>
@@ -244,8 +252,8 @@ fn DashboardSearch(
     let user_login_key = user_login.clone();
     view! {
         <div class="input-hero-wrapper" style="position: relative;">
-            <input type="text" 
-                   class="input-hero" 
+            <input type="text"
+                   class="input-hero"
                    placeholder="Search repositories or initialize a new sandbox..."
                    value=search_input.get()
                    on:input=move |ev| {
@@ -313,7 +321,7 @@ fn DashboardSearch(
                            set_show_suggestions.set(false);
                        }, std::time::Duration::from_millis(200));
                    } />
-            
+
             {
                 let nav = navigate.clone();
                 let user_login_list = user_login.clone();
@@ -323,7 +331,7 @@ fn DashboardSearch(
                     let input_val = search_input.get();
                     let user_login_clone = user_login_list.clone();
                     let navigate_fn = nav.clone();
-                    
+
                     view! {
                         <div style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-panel); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 10; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);">
                             {if results.is_empty() && !input_val.is_empty() {
@@ -332,7 +340,7 @@ fn DashboardSearch(
                                 view! {
                                     <div style="padding: 16px; color: var(--text-muted);">
                                         <p style="margin: 0 0 8px 0; font-size: 0.9rem;">"No existing environment found."</p>
-                                        <button class="btn-secondary btn-action" 
+                                        <button class="btn-secondary btn-action"
                                                 style=move || {
                                                     let base = "font-size: 0.9rem; padding: 8px 12px; width: 100%; text-align: left;";
                                                     if active_index.get() == 0 {
@@ -405,10 +413,9 @@ fn DashboardProjectList(
     set_error: WriteSignal<Option<String>>,
     set_loading: WriteSignal<bool>,
     projects: ReadSignal<Vec<ProjectSummary>>,
-    set_projects: WriteSignal<Vec<ProjectSummary>>, 
+    set_projects: WriteSignal<Vec<ProjectSummary>>,
     user_login: Rc<String>,
 ) -> impl IntoView {
-
     let (confirm_open, set_confirm_open) = create_signal(false);
     let (confirm_slug, set_confirm_slug) = create_signal(String::new());
     let (confirm_message, set_confirm_message) = create_signal(String::new());
@@ -444,9 +451,8 @@ fn DashboardProjectList(
                             });
                         } else {
                         }
-                    },
-                    Err(_) => {
                     }
+                    Err(_) => {}
                 }
             });
         })
@@ -500,7 +506,7 @@ fn DashboardProjectList(
                                 children=move |proj| {
                                     let login = user_login_clone.as_ref().clone();
                                     let delete_slug = proj.slug.clone();
-                                    
+
                                     view! {
                                         <div class="project-card">
                                             <div class="card-header">
@@ -514,7 +520,7 @@ fn DashboardProjectList(
                                                    class="btn-card">
                                                     "Launch Viewer"
                                                 </A>
-                                                <button 
+                                                <button
                                                     class="btn-danger"
                                                     on:click=move |_| handle_delete(delete_slug.clone())>
                                                     "Terminate"

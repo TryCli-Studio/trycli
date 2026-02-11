@@ -1,10 +1,10 @@
+use crate::api::api_base;
+use crate::components::navbar::Navbar;
+use crate::types::User;
+use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::A;
-use gloo_net::http::Request;
 use web_sys::RequestCredentials;
-use crate::components::navbar::Navbar;
-use crate::api::api_base;
-use crate::types::User;
 
 #[component]
 pub fn DocsPage() -> impl IntoView {
@@ -13,21 +13,24 @@ pub fn DocsPage() -> impl IntoView {
     let (user, set_user) = create_signal(None::<User>);
     let (auth_checked, set_auth_checked) = create_signal(false);
 
-    create_resource(|| (), move |_| async move {
-        let url = format!("{}/api/me", api_base());
-        if let Ok(resp) = Request::get(&url)
-            .credentials(RequestCredentials::Include)
-            .send()
-            .await
-        {
-            if resp.ok() {
-                if let Ok(u) = resp.json::<User>().await {
-                    set_user.set(Some(u));
+    create_resource(
+        || (),
+        move |_| async move {
+            let url = format!("{}/api/me", api_base());
+            if let Ok(resp) = Request::get(&url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await
+            {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        set_user.set(Some(u));
+                    }
                 }
             }
-        }
-        set_auth_checked.set(true);
-    });
+            set_auth_checked.set(true);
+        },
+    );
 
     view! {
         <div class="docs-container">
@@ -38,8 +41,8 @@ pub fn DocsPage() -> impl IntoView {
                         if auth_checked.get() {
                             if let Some(u) = user.get() {
                                 view! {
-                                    <img src=u.avatar_url 
-                                         style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" 
+                                    <img src=u.avatar_url
+                                         style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);"
                                          alt="User Avatar" />
                                 }.into_view()
                             } else {
@@ -141,7 +144,7 @@ pub fn DocsPage() -> impl IntoView {
                 // Main Documentation Content
                 <main class="docs-content">
                     <h1>"TryCli Studio User Documentation"</h1>
-                    
+
                     <section id="introduction">
                         <h2>"1. Introduction"</h2>
                         <p>"TryCli Studio is a platform for developers to build, host, and share interactive Command Line Interface (CLI) demos directly in the browser. It removes the need for users to install dependencies locally by spinning up isolated, ephemeral Docker containers on demand."</p>
@@ -150,7 +153,7 @@ pub fn DocsPage() -> impl IntoView {
 
                     <section id="getting-started">
                         <h2>"2. Getting Started"</h2>
-                        
+
                         <h3 id="authentication">"Authentication"</h3>
                         <p>"To create projects, you must be logged in. We use GitHub OAuth for secure and quick authentication."</p>
                         <ol>
@@ -181,7 +184,7 @@ pub fn DocsPage() -> impl IntoView {
 
                         <h3 id="setup-wizard">"The Setup Wizard"</h3>
                         <p>"When you first load the Studio, the terminal will automatically launch the Setup Wizard. You will be prompted to configure your environment using your keyboard:"</p>
-                        
+
                         <p><strong>"Select Base Image:"</strong></p>
                         <ul>
                             <li><strong>"Ubuntu 22.04:"</strong>" Best for general compatibility and heavier tools."</li>
@@ -204,11 +207,11 @@ pub fn DocsPage() -> impl IntoView {
                             <li>"Run standard Linux commands: "<code>"apt-get update"</code>", "<code>"curl"</code>", "<code>"wget"</code>", "<code>"git clone"</code>"."</li>
                             <li>"Install your specific CLI tool."</li>
                         </ul>
-                        
+
                         <p><strong>"Example:"</strong></p>
                         <pre><code>"apt-get update && apt-get install -y curl
-curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
-                        
+    curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
+
                         <p class="tip"><strong>"Tip:"</strong>" Clean up temporary files (like downloaded zips) to keep your project image small."</p>
 
                         <h3 id="writing-guide">"Writing the Guide"</h3>
@@ -224,7 +227,7 @@ curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
                     <section id="publishing">
                         <h2>"4. Publishing Your Demo"</h2>
                         <p>"Once your environment is set up and your guide is written:"</p>
-                        
+
                         <ol>
                             <li>
                                 <strong>"Set a Slug:"</strong>" Enter a unique URL identifier for your project in the top navigation bar (e.g., "<code>"my-awesome-cli"</code>")."
@@ -259,7 +262,7 @@ curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
 
                         <h3 id="deleting-projects">"Deleting Projects"</h3>
                         <p>"You can permanently delete any of your projects from the Dashboard."</p>
-                        
+
                         <p><strong>"To delete a project:"</strong></p>
                         <ol>
                             <li>"Navigate to your Dashboard."</li>
@@ -275,7 +278,7 @@ curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
                             <li>"Make the public URL ("<code>"/<username>/<slug>"</code>") inaccessible"</li>
                             <li>"Break any existing embeds of this project"</li>
                         </ul>
-                        
+
                         <p class="tip"><strong>"Tip:"</strong>" If you just want to update your project, use the \"Re-publish\" feature instead of deleting and recreating it. This preserves your project's URL."</p>
                     </section>
 
@@ -310,7 +313,7 @@ curl -fsSL https://my-tool.com/install.sh | sh"</code></pre>
                     <section id="security">
                         <h2>"7. Security & Sandbox"</h2>
                         <p>"We take security seriously. While you (the creator) have broad permissions during the setup phase, the Viewer Containers (what your users see) are strictly sandboxed:"</p>
-                        
+
                         <ul>
                             <li><strong>"Network Isolation:"</strong>" Viewer containers run on a restricted bridge network. They cannot access internal services or other user containers."</li>
                             <li><strong>"Resource Limits:"</strong>" Each session is capped at 512MB RAM and 1.0 CPU Core to prevent abuse."</li>

@@ -1,18 +1,18 @@
+use crate::api::api_base;
+use crate::components::limit::LimitReached;
+use crate::components::modal::EmbedModal;
+use crate::components::navbar::Navbar;
+use crate::components::terminal::TerminalView;
+use crate::types::User;
+use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
-use gloo_net::http::Request;
-use web_sys::RequestCredentials;
-use wasm_bindgen::prelude::*;
-use std::rc::Rc;
+use pulldown_cmark::{html, Options, Parser};
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use pulldown_cmark::{Parser, Options, html};
-use crate::api::api_base;
-use crate::components::terminal::TerminalView;
-use crate::components::limit::LimitReached;
-use crate::components::navbar::Navbar;
-use crate::components::modal::EmbedModal;
-use crate::types::User;
-use serde::{Serialize, Deserialize};
+use std::rc::Rc;
+use wasm_bindgen::prelude::*;
+use web_sys::RequestCredentials;
 
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 enum ProjectState {
@@ -29,7 +29,7 @@ pub fn render_markdown(text: &str) -> String {
     options.insert(Options::ENABLE_TABLES);
     let parser = Parser::new_ext(text, options);
     let mut html_output = String::new();
-    html::push_html(&mut html_output, parser); 
+    html::push_html(&mut html_output, parser);
     html_output
 }
 
@@ -40,18 +40,20 @@ fn setup_resize_divider() {
         .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
     {
         let is_dragging = Rc::new(RefCell::new(false));
-        
+
         let on_mousedown = {
             let is_dragging = is_dragging.clone();
             wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
                 *is_dragging.borrow_mut() = true;
             }) as Box<dyn Fn(web_sys::MouseEvent)>)
         };
-        
+
         let on_mousemove = {
             let is_dragging = is_dragging.clone();
             wasm_bindgen::closure::Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
-                if !*is_dragging.borrow() { return; }
+                if !*is_dragging.borrow() {
+                    return;
+                }
                 if let Some(workspace) = web_sys::window()
                     .and_then(|w| w.document())
                     .and_then(|d| d.query_selector(".workspace").ok().flatten())
@@ -61,36 +63,55 @@ fn setup_resize_divider() {
                     let workspace_left = workspace.offset_left() as f64;
                     let relative_x = e.client_x() as f64 - workspace_left;
                     let percentage = (relative_x / workspace_width * 100.0).max(20.0).min(80.0);
-                    
+
                     if let Ok(panes) = workspace.query_selector_all(".pane") {
                         if panes.length() >= 2 {
-                            if let Some(p1) = panes.get(0).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                            if let Some(p1) = panes
+                                .get(0)
+                                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                            {
                                 p1.style().set_property("flex", "0 1 auto").ok();
-                                p1.style().set_property("width", &format!("{}%", percentage)).ok();
+                                p1.style()
+                                    .set_property("width", &format!("{}%", percentage))
+                                    .ok();
                             }
-                            if let Some(p2) = panes.get(1).and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok()) {
+                            if let Some(p2) = panes
+                                .get(1)
+                                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                            {
                                 p2.style().set_property("flex", "0 1 auto").ok();
-                                p2.style().set_property("width", &format!("{}%", 100.0 - percentage)).ok();
+                                p2.style()
+                                    .set_property("width", &format!("{}%", 100.0 - percentage))
+                                    .ok();
                             }
                         }
                     }
                 }
             }) as Box<dyn Fn(web_sys::MouseEvent)>)
         };
-        
+
         let on_mouseup = {
             let is_dragging = is_dragging.clone();
             wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
                 *is_dragging.borrow_mut() = false;
             }) as Box<dyn Fn(web_sys::MouseEvent)>)
         };
-        
-        divider.add_event_listener_with_callback("mousedown", on_mousedown.as_ref().unchecked_ref()).ok();
+
+        divider
+            .add_event_listener_with_callback("mousedown", on_mousedown.as_ref().unchecked_ref())
+            .ok();
         on_mousedown.forget();
-        
+
         if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-            document.add_event_listener_with_callback("mousemove", on_mousemove.as_ref().unchecked_ref()).ok();
-            document.add_event_listener_with_callback("mouseup", on_mouseup.as_ref().unchecked_ref()).ok();
+            document
+                .add_event_listener_with_callback(
+                    "mousemove",
+                    on_mousemove.as_ref().unchecked_ref(),
+                )
+                .ok();
+            document
+                .add_event_listener_with_callback("mouseup", on_mouseup.as_ref().unchecked_ref())
+                .ok();
             on_mousemove.forget();
             on_mouseup.forget();
         }
@@ -103,43 +124,54 @@ pub fn ViewPage() -> impl IntoView {
     let query_params = use_query_map();
     let username = move || params.get().get("username").cloned().unwrap_or_default();
     let slug = move || params.get().get("slug").cloned().unwrap_or_default();
-    
+
     let (user, set_user) = create_signal(None::<User>);
     let (embed_modal_open, set_embed_modal_open) = create_signal(false);
     let (iframe_code, set_iframe_code) = create_signal(String::new());
     let (smart_link, set_smart_link) = create_signal(String::new());
     let (vip_link, set_vip_link) = create_signal(String::new());
-    
+
     let (whitelist, set_whitelist) = create_signal(Vec::<String>::new());
 
     // Auth Resource
-    let auth_resource = create_resource(|| (), move |_| async move {
-        let req = Request::get(&format!("{}/api/me", api_base()))
-            .credentials(RequestCredentials::Include)
-            .send().await;
+    let auth_resource = create_resource(
+        || (),
+        move |_| async move {
+            let req = Request::get(&format!("{}/api/me", api_base()))
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await;
 
-        if let Ok(resp) = req {
-            if resp.ok() {
-                 if let Ok(u) = resp.json::<User>().await {
-                     set_user.set(Some(u));
-                 }
+            if let Ok(resp) = req {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        set_user.set(Some(u));
+                    }
+                }
             }
-        }
-    });
+        },
+    );
 
     // Project Data Resource (with VIP key and Referer security)
     let project_resource = create_resource(
-        move || (username(), slug(), auth_resource.get()), 
+        move || (username(), slug(), auth_resource.get()),
         move |(u, s, _)| async move {
-            let key = query_params.get_untracked().get("key").cloned().unwrap_or_default();
+            let key = query_params
+                .get_untracked()
+                .get("key")
+                .cloned()
+                .unwrap_or_default();
             let url = if key.is_empty() {
                 format!("{}/api/project/{}/{}", api_base(), u, s)
             } else {
                 format!("{}/api/project/{}/{}?key={}", api_base(), u, s, key)
             };
 
-            let req = Request::get(&url).credentials(RequestCredentials::Include).send().await;
-            
+            let req = Request::get(&url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await;
+
             match req {
                 Ok(resp) => {
                     if resp.status() == 403 {
@@ -147,16 +179,17 @@ pub fn ViewPage() -> impl IntoView {
                     } else if resp.status() == 429 {
                         ProjectState::LimitReached
                     } else if resp.ok() {
-                        resp.json::<serde_json::Value>().await
+                        resp.json::<serde_json::Value>()
+                            .await
                             .map(ProjectState::Ready)
                             .unwrap_or(ProjectState::NotFound)
                     } else {
                         ProjectState::NotFound
                     }
-                },
-                Err(_) => ProjectState::NotFound
+                }
+                Err(_) => ProjectState::NotFound,
             }
-        }
+        },
     );
 
     // Whitelist Resource for Owners
@@ -165,23 +198,27 @@ pub fn ViewPage() -> impl IntoView {
         move |(state, s)| async move {
             if let Some(ProjectState::Ready(_)) = state {
                 let url = format!("{}/api/project/{}/whitelist", api_base(), s);
-                if let Ok(resp) = Request::get(&url).credentials(RequestCredentials::Include).send().await {
+                if let Ok(resp) = Request::get(&url)
+                    .credentials(RequestCredentials::Include)
+                    .send()
+                    .await
+                {
                     if let Ok(list) = resp.json::<Vec<String>>().await {
                         set_whitelist.set(list);
                     }
                 }
             }
-        }
+        },
     );
 
     let is_owner = move || {
         let current_user = user.get();
         if let Some(ProjectState::Ready(p)) = project_resource.get() {
-             let project_owner_id = p.get("owner_id").and_then(|id| id.as_i64());
-             match current_user {
-                 Some(u) => Some(u.id) == project_owner_id,
-                 None => false
-             }
+            let project_owner_id = p.get("owner_id").and_then(|id| id.as_i64());
+            match current_user {
+                Some(u) => Some(u.id) == project_owner_id,
+                None => false,
+            }
         } else {
             false
         }
@@ -219,18 +256,18 @@ pub fn ViewPage() -> impl IntoView {
 
     view! {
         <>
-            <EmbedModal 
-                show=embed_modal_open.into() 
-                title="Share Project".to_string().into() 
-                iframe_code=iframe_code.into() 
+            <EmbedModal
+                show=embed_modal_open.into()
+                title="Share Project".to_string().into()
+                iframe_code=iframe_code.into()
                 smart_link=smart_link.into()
                 vip_link=vip_link.into()
                 whitelist=whitelist.into()
                 on_add_url=Callback::new(move |url: String| add_whitelist_item.dispatch(url))
                 on_remove_url=Callback::new(move |url: String| remove_whitelist_item.dispatch(url))
-                on_close=Callback::new(move |_| set_embed_modal_open.set(false)) 
+                on_close=Callback::new(move |_| set_embed_modal_open.set(false))
             />
-            
+
             <Navbar>
                 <div class="controls">
                     {move || if is_owner() {
@@ -245,7 +282,7 @@ pub fn ViewPage() -> impl IntoView {
                                     if let Some(ProjectState::Ready(data)) = project_resource.get() {
                                         let token = data.get("embed_token").and_then(|v| v.as_str()).unwrap_or_default();
                                         let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
-                                        
+
                                         // Public embed uses whitelist + domain check only
                                         let public_url = format!("{}/embed/{}/{}", origin, username(), slug());
                                         let smart_url = format!("{}/e/{}", api_base(), token);
@@ -278,7 +315,7 @@ pub fn ViewPage() -> impl IntoView {
                     let cid = data["container_id"].as_str().unwrap_or_default().to_string();
                     let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                     let html_output = render_markdown(&md_raw);
-                    
+
                     create_effect(move |_| {
                         if let Some(window) = web_sys::window() {
                             let callback = wasm_bindgen::closure::Closure::once(move || {
@@ -288,7 +325,7 @@ pub fn ViewPage() -> impl IntoView {
                             callback.forget();
                         }
                     });
-                    
+
                     view! {
                         <div style="display: flex; flex-direction: column; height: calc(100vh - 60px);">
                             <div class="workspace" style="flex: 1;">
@@ -320,14 +357,14 @@ pub fn ViewPage() -> impl IntoView {
                     </div>
                 }.into_view(),
                 Some(ProjectState::LimitReached) => view! { <LimitReached /> }.into_view(),
-                Some(ProjectState::NotFound) => view! { 
-                    <div style="color: var(--text-muted); text-align: center; margin-top: 100px;">"Project not found."</div> 
+                Some(ProjectState::NotFound) => view! {
+                    <div style="color: var(--text-muted); text-align: center; margin-top: 100px;">"Project not found."</div>
                 }.into_view(),
-                _ => view! { 
+                _ => view! {
                     <div style="padding: 50px; text-align: center;">
                          <div class="spinner" style="margin: 0 auto;"></div>
                          <p style="margin-top: 1rem; color: var(--text-muted);">"PREPARING ENVIRONMENT..."</p>
-                    </div> 
+                    </div>
                 }.into_view()
             }}
         </>
