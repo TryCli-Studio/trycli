@@ -279,11 +279,11 @@ pub fn ViewPage() -> impl IntoView {
                     let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                     let html_output = render_markdown(&md_raw);
                     
-                    let mounted = create_signal(false);
+                    let (is_mounted, set_mounted) = create_signal(false);
                     
                     create_effect(move |_| {
-                        if !mounted.0.get() {
-                            mounted.1.set(true);
+                        if !is_mounted.get() {
+                            set_mounted.set(true);
                             if let Some(window) = web_sys::window() {
                                 let callback = wasm_bindgen::closure::Closure::once(move || {
                                     setup_resize_divider();
