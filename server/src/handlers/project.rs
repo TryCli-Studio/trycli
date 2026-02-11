@@ -254,7 +254,7 @@ pub async fn publish_handler(
 pub async fn get_project(
     Path((username, slug)): Path<(String, String)>, 
     State(state): State<AppState>,
-    session: Session, // Session is used to check ownership for secure embeds
+    session: Session, // Session is used to detect owner (bypass checks), lazily create embed_key for owners, and return embed_token/embed_key to them; non-owner secure embeds use VIP key + Referer whitelist
     Query(params): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
