@@ -221,9 +221,10 @@ pub async fn publish_handler(
 
     // 6. Update Database with new embed_token logic
     // gen_random_uuid() requires Postgres 13+. If older, ensure pgcrypto extension is enabled.
+    // Generate embed_key at creation time to ensure VIP links work immediately
     sqlx::query("
-            INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell, embed_token) 
-            VALUES ($1, $2, $3, $4, $5, $6, gen_random_uuid()::text) 
+            INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell, embed_token, embed_key) 
+            VALUES ($1, $2, $3, $4, $5, $6, gen_random_uuid()::text, encode(gen_random_bytes(24), 'base64')) 
             ON CONFLICT (owner_username, slug) 
             DO UPDATE SET image_tag = $2, markdown = $3, shell = $6
         ")
