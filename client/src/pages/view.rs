@@ -284,6 +284,7 @@ pub fn ViewPage() -> impl IntoView {
                                         set_smart_link.set(smart_url);
                                         
                                         // Fetch embed_key from dedicated endpoint to avoid exposure in main response
+                                        let origin_clone = origin.clone();
                                         let slug_clone = slug();
                                         let username_clone = username();
                                         spawn_local(async move {
@@ -296,20 +297,20 @@ pub fn ViewPage() -> impl IntoView {
                                                             let vip = if key.is_empty() {
                                                                 String::new()
                                                             } else {
-                                                                format!("{}/{}/{}?key={}", origin, username_clone, slug_clone, key)
+                                                                format!("{}/{}/{}?key={}", origin_clone, username_clone, slug_clone, key)
                                                             };
                                                             set_vip_link.set(vip);
                                                         }
                                                         Err(e) => {
                                                             web_sys::console::error_1(&JsValue::from_str(&format!(
-                                                                "Failed to parse embed_key response: {:?}", e
+                                                                "Failed to parse embed_key response: {}", e
                                                             )));
                                                         }
                                                     }
                                                 }
                                                 Err(e) => {
                                                     web_sys::console::error_1(&JsValue::from_str(&format!(
-                                                        "Failed to fetch embed_key: {:?}", e
+                                                        "Failed to fetch embed_key from server: {}", e
                                                     )));
                                                 }
                                             }
