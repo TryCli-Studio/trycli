@@ -214,7 +214,7 @@ pub fn EmbedModal(
                             <div style="margin-bottom: 24px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <label style="color:var(--text-main); font-weight:600; font-size: 0.9rem;">
-                                        "Option 3: Guest List (Authorized URLs)"
+                                        "Guest List (Authorized URLs)"
                                     </label>
                                     <span style="font-size: 0.8rem; color: var(--text-muted);">
                                         "Only these pages can auto-launch your terminal."
