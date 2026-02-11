@@ -373,14 +373,14 @@ After publishing, you can easily distribute your interactive terminal:
                                 {move || {
                                     if let Some(error) = spawn_error.get() {
                                         view! {
-                                            <div style="padding: 20px; color: #ef4444;">
-                                                <div style="margin-bottom: 10px; font-weight: bold;">"⚠️ Environment Spawn Error"</div>
-                                                <div style="color: #666;">{error}</div>
+                                            <div style="padding: 20px; color: var(--text-main);">
+                                                <div style="margin-bottom: 10px; font-weight: bold; color: #ef4444;">"⚠️ Environment Spawn Error"</div>
+                                                <div style="color: var(--text-muted);">{error}</div>
                                             </div>
                                         }.into_view()
                                     } else {
                                         match container_id.get().as_str() {
-                                            "" => view! { <div style="padding: 20px; color: #666;">"Initializing Environment..."</div> }.into_view(),
+                                            "" => view! { <div style="padding: 20px; color: var(--text-muted);">"Initializing Environment..."</div> }.into_view(),
                                             id => view! { <TerminalView container_id=id.to_string() /> }.into_view()
                                         }
                                     }
