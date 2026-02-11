@@ -21,6 +21,9 @@ use std::collections::HashMap;
 // Maximum number of whitelist entries allowed per project
 const MAX_WHITELIST_ENTRIES: i64 = 100;
 
+// Rate limit for whitelist operations (requests per minute per user)
+pub const WHITELIST_RATE_LIMIT_PER_MINUTE: u32 = 20;
+
 #[derive(Deserialize)]
 pub struct SearchQuery {
     q: String,
@@ -469,7 +472,7 @@ pub async fn get_whitelist(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     // Apply rate limiting: 20 requests per minute per user
-    let rate_limiter = state.get_whitelist_rate_limiter(user.id);
+    let rate_limiter = state.get_or_create_whitelist_rate_limiter(user.id);
     if rate_limiter.check().is_err() {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
@@ -519,7 +522,7 @@ pub async fn add_to_whitelist(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     // Apply rate limiting: 20 requests per minute per user
-    let rate_limiter = state.get_whitelist_rate_limiter(user.id);
+    let rate_limiter = state.get_or_create_whitelist_rate_limiter(user.id);
     if rate_limiter.check().is_err() {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
@@ -546,35 +549,43 @@ pub async fn add_to_whitelist(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
-    // Check current whitelist entry count to prevent storage exhaustion
-    let count_row: (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM project_whitelists WHERE project_id = $1",
-    )
-    .bind(project_id)
-    .fetch_one(&state.db)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
-
-    if count_row.0 >= MAX_WHITELIST_ENTRIES {
-        return Err((
-            StatusCode::FORBIDDEN,
-            format!("Maximum whitelist entries ({}) reached for this project", MAX_WHITELIST_ENTRIES)
-        ));
-    }
-
-    // Unique(project_id, allowed_url) is enforced by the DB; ignore conflicts
+    // Use a single query to check count and insert atomically to prevent race conditions
+    // This INSERT will only succeed if the count is below the limit
     let result = sqlx::query(
         "INSERT INTO project_whitelists (project_id, allowed_url) \
-         VALUES ($1, $2) \
+         SELECT $1, $2 \
+         WHERE (SELECT COUNT(*) FROM project_whitelists WHERE project_id = $1) < $3 \
          ON CONFLICT (project_id, allowed_url) DO NOTHING",
     )
     .bind(project_id)
     .bind(trimmed_url)
+    .bind(MAX_WHITELIST_ENTRIES)
     .execute(&state.db)
-    .await;
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
-    if let Err(e) = result {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)));
+    // Check if the insert was successful or if limit was reached
+    if result.rows_affected() == 0 {
+        // Check if it's because of the limit or because it already exists
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM project_whitelists WHERE project_id = $1 AND allowed_url = $2)",
+        )
+        .bind(project_id)
+        .bind(trimmed_url)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+        if exists.0 {
+            // Entry already exists, this is acceptable
+            return Ok(StatusCode::CREATED);
+        } else {
+            // Must have hit the limit
+            return Err((
+                StatusCode::FORBIDDEN,
+                format!("Maximum whitelist entries ({}) reached for this project", MAX_WHITELIST_ENTRIES)
+            ));
+        }
     }
 
     Ok(StatusCode::CREATED)
@@ -594,7 +605,7 @@ pub async fn remove_from_whitelist(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     // Apply rate limiting: 20 requests per minute per user
-    let rate_limiter = state.get_whitelist_rate_limiter(user.id);
+    let rate_limiter = state.get_or_create_whitelist_rate_limiter(user.id);
     if rate_limiter.check().is_err() {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,

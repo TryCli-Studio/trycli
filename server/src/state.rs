@@ -5,6 +5,7 @@ use std::time::Instant;
 use dashmap::DashMap;
 use governor::{Quota, RateLimiter, clock::DefaultClock, state::{InMemoryState, NotKeyed}};
 use std::num::NonZeroU32;
+use crate::handlers::project::WHITELIST_RATE_LIMIT_PER_MINUTE;
 
 // New Struct to track container details AND ownership
 #[derive(Clone, Debug)]
@@ -43,13 +44,12 @@ impl AppState {
         }
     }
 
-    /// Get or create a rate limiter for a user (20 requests per minute for whitelist operations)
-    pub fn get_whitelist_rate_limiter(&self, user_id: i64) -> Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>> {
+    /// Get or create a rate limiter for a user's whitelist operations
+    pub fn get_or_create_whitelist_rate_limiter(&self, user_id: i64) -> Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>> {
         self.whitelist_rate_limiters
             .entry(user_id)
             .or_insert_with(|| {
-                // 20 requests per 60 seconds
-                let quota = Quota::per_minute(NonZeroU32::new(20).unwrap());
+                let quota = Quota::per_minute(NonZeroU32::new(WHITELIST_RATE_LIMIT_PER_MINUTE).unwrap());
                 Arc::new(RateLimiter::direct(quota))
             })
             .clone()
