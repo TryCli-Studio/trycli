@@ -33,7 +33,7 @@ pub fn EmbedPage() -> impl IntoView {
             
             match req {
                 Ok(resp) => {
-                    if resp.status() == 403{
+                    if resp.status() == 403 {
                         ProjectState::Unauthorized
                     } else if resp.status() == 429 {
                         ProjectState::LimitReached
