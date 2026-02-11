@@ -279,13 +279,18 @@ pub fn ViewPage() -> impl IntoView {
                     let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                     let html_output = render_markdown(&md_raw);
                     
+                    let mounted = create_signal(false);
+                    
                     create_effect(move |_| {
-                        if let Some(window) = web_sys::window() {
-                            let callback = wasm_bindgen::closure::Closure::once(move || {
-                                setup_resize_divider();
-                            });
-                            window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
-                            callback.forget();
+                        if !mounted.0.get() {
+                            if let Some(window) = web_sys::window() {
+                                let callback = wasm_bindgen::closure::Closure::once(move || {
+                                    setup_resize_divider();
+                                    mounted.1.set(true);
+                                });
+                                window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
+                                callback.forget();
+                            }
                         }
                     });
                     
