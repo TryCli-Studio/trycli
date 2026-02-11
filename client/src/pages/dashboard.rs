@@ -54,13 +54,15 @@ pub fn DashboardPage() -> impl IntoView {
                                                 ));
                                             }
                                         } else {
-                                            set_error
-                                                .set(Some("Failed to fetch deployments".to_string()));
+                                            set_error.set(Some(
+                                                "Failed to fetch deployments".to_string(),
+                                            ));
                                         }
                                     }
                                     Err(_) => {
-                                        set_error
-                                            .set(Some("Network error connecting to API".to_string()));
+                                        set_error.set(Some(
+                                            "Network error connecting to API".to_string(),
+                                        ));
                                     }
                                 }
                                 set_loading.set(false);

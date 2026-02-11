@@ -185,12 +185,17 @@ After publishing, you can easily distribute your interactive terminal:
                                             set_container_id.set(id);
                                             set_spawn_error.set(None);
                                         } else {
-                                            set_spawn_error.set(Some("Failed to parse container ID".to_string()));
+                                            set_spawn_error.set(Some(
+                                                "Failed to parse container ID".to_string(),
+                                            ));
                                         }
                                     } else {
                                         let status = spawn_resp.status();
                                         let text = spawn_resp.text().await.unwrap_or_default();
-                                        set_spawn_error.set(Some(format!("Spawn failed ({}): {}", status, text)));
+                                        set_spawn_error.set(Some(format!(
+                                            "Spawn failed ({}): {}",
+                                            status, text
+                                        )));
                                     }
                                 }
                                 Err(e) => {
