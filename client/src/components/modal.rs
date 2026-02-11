@@ -143,7 +143,7 @@ pub fn EmbedModal(
                                         view! {
                                             <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
                                                 <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">
-                                                    "🔒 VIP link is being generated..."
+                                                    "VIP link is being generated..."
                                                 </p>
                                                 <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 8px;">
                                                     "This may take a moment. The link will appear here once ready."
