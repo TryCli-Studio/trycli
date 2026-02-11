@@ -3,6 +3,7 @@ use sqlx::postgres::PgPoolOptions;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use crate::state::AppState;
+use dashmap::DashMap;
 
 pub async fn setup_database_and_docker() -> Result<AppState, Box<dyn std::error::Error>> {
     // 1. Docker setup 
@@ -22,6 +23,7 @@ pub async fn setup_database_and_docker() -> Result<AppState, Box<dyn std::error:
         github_id: std::env::var("GITHUB_CLIENT_ID").expect("Missing GITHUB_CLIENT_ID"),
         github_secret: std::env::var("GITHUB_CLIENT_SECRET").expect("Missing GITHUB_CLIENT_SECRET"),
         sessions: Arc::new(Mutex::new(HashMap::new())),
+        whitelist_rate_limiters: Arc::new(DashMap::new()),
     };
 
     Ok(state)

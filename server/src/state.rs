@@ -2,6 +2,10 @@ use bollard::Docker;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::collections::HashMap;
 use std::time::Instant;
+use dashmap::DashMap;
+use governor::{Quota, RateLimiter, clock::DefaultClock, state::{InMemoryState, NotKeyed}};
+use std::num::NonZeroU32;
+use crate::handlers::project::WHITELIST_RATE_LIMIT_PER_MINUTE;
 
 // New Struct to track container details AND ownership
 #[derive(Clone, Debug)]
@@ -25,6 +29,8 @@ pub struct AppState {
     pub github_id: String,
     pub github_secret: String,
     pub sessions: SessionMap,
+    // Rate limiter for whitelist operations: per-user tracking
+    pub whitelist_rate_limiters: Arc<DashMap<i64, Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>>>,
 }
 
 impl AppState {
@@ -36,5 +42,19 @@ impl AppState {
                 poisoned.into_inner()
             }
         }
+    }
+
+    /// Get or create a rate limiter for a user's whitelist operations
+    pub fn get_or_create_whitelist_rate_limiter(&self, user_id: i64) -> Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>> {
+        self.whitelist_rate_limiters
+            .entry(user_id)
+            .or_insert_with(|| {
+                let quota = Quota::per_minute(
+                    NonZeroU32::new(WHITELIST_RATE_LIMIT_PER_MINUTE)
+                        .expect("WHITELIST_RATE_LIMIT_PER_MINUTE must be non-zero")
+                );
+                Arc::new(RateLimiter::direct(quota))
+            })
+            .clone()
     }
 }

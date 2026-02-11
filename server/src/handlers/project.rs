@@ -19,6 +19,12 @@ use crate::models::{User, ProjectSummary, PublishRequest, WhitelistRequest};
 use std::collections::HashMap;
 use url::Url;
 
+// Maximum number of whitelist entries allowed per project
+const MAX_WHITELIST_ENTRIES: i64 = 100;
+
+// Rate limit for whitelist operations (requests per minute per user)
+pub const WHITELIST_RATE_LIMIT_PER_MINUTE: u32 = 20;
+
 #[derive(Deserialize)]
 pub struct SearchQuery {
     q: String,
@@ -592,6 +598,15 @@ pub async fn get_whitelist(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
+    // Apply rate limiting: 20 requests per minute per user
+    let rate_limiter = state.get_or_create_whitelist_rate_limiter(user.id);
+    if rate_limiter.check().is_err() {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded. Please try again later.".to_string()
+        ));
+    }
+
     // Resolve project_id for this owner + slug
     let project_row: Option<(i64,)> = sqlx::query_as(
         "SELECT id FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)",
@@ -637,6 +652,15 @@ pub async fn add_to_whitelist(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
+    // Apply rate limiting: 20 requests per minute per user
+    let rate_limiter = state.get_or_create_whitelist_rate_limiter(user.id);
+    if rate_limiter.check().is_err() {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded. Please try again later.".to_string()
+        ));
+    }
+
     let trimmed_url = payload.allowed_url.trim();
     if trimmed_url.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "allowed_url is required".to_string()));
@@ -662,20 +686,65 @@ pub async fn add_to_whitelist(
         "Invalid URL format. URL must use http or https scheme and include a valid host.".to_string(),
     ))?;
 
-    // Unique(project_id, allowed_url) is enforced by the DB; ignore conflicts
-    let result = sqlx::query(
-        "INSERT INTO project_whitelists (project_id, allowed_url) \
-         VALUES ($1, $2) \
-         ON CONFLICT (project_id, allowed_url) DO NOTHING",
+    // Use a database transaction with table-level advisory lock to prevent race conditions
+    let mut tx = state.db.begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Transaction Error: {}", e)))?;
+
+    // Get an advisory lock for this project's whitelist to prevent concurrent modifications
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(project_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Lock Error: {}", e)))?;
+
+    // Check if entry already exists (using normalized URL)
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM project_whitelists WHERE project_id = $1 AND allowed_url = $2)",
     )
     .bind(project_id)
     .bind(&normalized_url)
-    .execute(&state.db)
-    .await;
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
-    if let Err(e) = result {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)));
+    if exists.0 {
+        // Entry already exists, commit transaction and return success
+        tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Commit Error: {}", e)))?;
+        return Ok(StatusCode::OK); // 200 OK - idempotent operation, entry already exists
     }
+
+    // Check current count
+    let count_row: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM project_whitelists WHERE project_id = $1",
+    )
+    .bind(project_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    if count_row.0 >= MAX_WHITELIST_ENTRIES {
+        // Transaction will automatically rollback when dropped
+        return Err((
+            StatusCode::FORBIDDEN,
+            format!("Maximum whitelist entries ({}) reached for this project", MAX_WHITELIST_ENTRIES)
+        ));
+    }
+
+    // Insert the new entry (normalized)
+    sqlx::query(
+        "INSERT INTO project_whitelists (project_id, allowed_url) VALUES ($1, $2)",
+    )
+    .bind(project_id)
+    .bind(normalized_url)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Insert Error: {}", e)))?;
+
+    // Commit transaction
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Commit Error: {}", e)))?;
 
     Ok(StatusCode::CREATED)
 }
@@ -696,6 +765,15 @@ pub async fn remove_from_whitelist(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    // Apply rate limiting: 20 requests per minute per user
+    let rate_limiter = state.get_or_create_whitelist_rate_limiter(user.id);
+    if rate_limiter.check().is_err() {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded. Please try again later.".to_string()
+        ));
+    }
 
     let trimmed_url = payload.allowed_url.trim();
     if trimmed_url.is_empty() {
