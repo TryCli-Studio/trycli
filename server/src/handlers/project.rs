@@ -18,6 +18,9 @@ use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest, WhitelistRequest};
 use std::collections::HashMap;
 
+// Maximum number of whitelist entries allowed per project
+const MAX_WHITELIST_ENTRIES: i64 = 100;
+
 #[derive(Deserialize)]
 pub struct SearchQuery {
     q: String,
@@ -465,6 +468,15 @@ pub async fn get_whitelist(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
+    // Apply rate limiting: 20 requests per minute per user
+    let rate_limiter = state.get_whitelist_rate_limiter(user.id);
+    if rate_limiter.check().is_err() {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded. Please try again later.".to_string()
+        ));
+    }
+
     // Resolve project_id for this owner + slug
     let project_row: Option<(i64,)> = sqlx::query_as(
         "SELECT id FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)",
@@ -506,6 +518,15 @@ pub async fn add_to_whitelist(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
+    // Apply rate limiting: 20 requests per minute per user
+    let rate_limiter = state.get_whitelist_rate_limiter(user.id);
+    if rate_limiter.check().is_err() {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded. Please try again later.".to_string()
+        ));
+    }
+
     let trimmed_url = payload.allowed_url.trim();
     if trimmed_url.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "allowed_url is required".to_string()));
@@ -524,6 +545,22 @@ pub async fn add_to_whitelist(
         Some(row) => row,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
+
+    // Check current whitelist entry count to prevent storage exhaustion
+    let count_row: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM project_whitelists WHERE project_id = $1",
+    )
+    .bind(project_id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    if count_row.0 >= MAX_WHITELIST_ENTRIES {
+        return Err((
+            StatusCode::FORBIDDEN,
+            format!("Maximum whitelist entries ({}) reached for this project", MAX_WHITELIST_ENTRIES)
+        ));
+    }
 
     // Unique(project_id, allowed_url) is enforced by the DB; ignore conflicts
     let result = sqlx::query(
@@ -555,6 +592,15 @@ pub async fn remove_from_whitelist(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    // Apply rate limiting: 20 requests per minute per user
+    let rate_limiter = state.get_whitelist_rate_limiter(user.id);
+    if rate_limiter.check().is_err() {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded. Please try again later.".to_string()
+        ));
+    }
 
     let trimmed_url = payload.allowed_url.trim();
     if trimmed_url.is_empty() {
