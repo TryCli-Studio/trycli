@@ -3,6 +3,7 @@ use leptos::*;
 pub mod types;
 pub mod api;
 pub mod app;
+pub mod hooks;
 pub mod components {
     pub mod terminal;
     pub mod protected;

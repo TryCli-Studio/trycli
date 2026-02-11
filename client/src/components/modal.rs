@@ -1,4 +1,6 @@
 use leptos::*;
+use wasm_bindgen::JsCast;
+use web_sys::HtmlElement;
 
 #[component]
 pub fn Modal(
@@ -16,15 +18,40 @@ pub fn Modal(
             let button_label = button_label.clone();
             let show = show.clone();
             if show.get() {
+                let button_label_for_blocking = button_label.clone();
+                let is_blocking = move || button_label_for_blocking.get().is_empty();
                 view! {
-                    <div class="modal-overlay" role="dialog" aria-modal="true">
+                    <div 
+                        class="modal-overlay" 
+                        role="dialog" 
+                        aria-modal="true"
+                        on:click=move |ev: ev::MouseEvent| {
+                            // Only close on overlay click if not a blocking modal
+                            if !is_blocking() {
+                                if let Some(target) = ev.target().and_then(|t| t.dyn_into::<HtmlElement>().ok()) {
+                                    if target.class_list().contains("modal-overlay") {
+                                        on_close.call(());
+                                    }
+                                }
+                            }
+                        }
+                    >
                         <div class="modal-card">
                             <h3 class="modal-title">{move || title.get()}</h3>
                             <div class="modal-body">{move || body.get()}</div>
                             <div class="modal-actions">
-                                <button class="btn-secondary btn-action" on:click=move |_| on_close.call(())>
-                                    {move || button_label.get()}
-                                </button>
+                                {move || {
+                                    let label = button_label.get();
+                                    if !label.is_empty() {
+                                        view! {
+                                            <button class="btn-secondary btn-action" on:click=move |_| on_close.call(())>
+                                                {label}
+                                            </button>
+                                        }.into_view()
+                                    } else {
+                                        view! { <></> }.into_view()
+                                    }
+                                }}
                             </div>
                         </div>
                     </div>
