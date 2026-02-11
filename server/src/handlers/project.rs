@@ -549,44 +549,66 @@ pub async fn add_to_whitelist(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
-    // Use a single query to check count and insert atomically to prevent race conditions
-    // This INSERT will only succeed if the count is below the limit
-    let result = sqlx::query(
-        "INSERT INTO project_whitelists (project_id, allowed_url) \
-         SELECT $1, $2 \
-         WHERE (SELECT COUNT(*) FROM project_whitelists WHERE project_id = $1) < $3 \
-         ON CONFLICT (project_id, allowed_url) DO NOTHING",
+    // Use a database transaction with table-level advisory lock to prevent race conditions
+    let mut tx = state.db.begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Transaction Error: {}", e)))?;
+
+    // Get an advisory lock for this project's whitelist to prevent concurrent modifications
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(project_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Lock Error: {}", e)))?;
+
+    // Check if entry already exists
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM project_whitelists WHERE project_id = $1 AND allowed_url = $2)",
     )
     .bind(project_id)
     .bind(trimmed_url)
-    .bind(MAX_WHITELIST_ENTRIES)
-    .execute(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
-    // Check if the insert was successful or if limit was reached
-    if result.rows_affected() == 0 {
-        // Check if it's because of the limit or because it already exists
-        let exists: (bool,) = sqlx::query_as(
-            "SELECT EXISTS(SELECT 1 FROM project_whitelists WHERE project_id = $1 AND allowed_url = $2)",
-        )
-        .bind(project_id)
-        .bind(trimmed_url)
-        .fetch_one(&state.db)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
-
-        if exists.0 {
-            // Entry already exists, this is acceptable
-            return Ok(StatusCode::CREATED);
-        } else {
-            // Must have hit the limit
-            return Err((
-                StatusCode::FORBIDDEN,
-                format!("Maximum whitelist entries ({}) reached for this project", MAX_WHITELIST_ENTRIES)
-            ));
-        }
+    if exists.0 {
+        // Entry already exists, return success
+        tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Commit Error: {}", e)))?;
+        return Ok(StatusCode::CREATED);
     }
+
+    // Check current count
+    let count_row: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM project_whitelists WHERE project_id = $1",
+    )
+    .bind(project_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    if count_row.0 >= MAX_WHITELIST_ENTRIES {
+        // Rollback transaction and return error
+        tx.rollback().await.ok();
+        return Err((
+            StatusCode::FORBIDDEN,
+            format!("Maximum whitelist entries ({}) reached for this project", MAX_WHITELIST_ENTRIES)
+        ));
+    }
+
+    // Insert the new entry
+    sqlx::query(
+        "INSERT INTO project_whitelists (project_id, allowed_url) VALUES ($1, $2)",
+    )
+    .bind(project_id)
+    .bind(trimmed_url)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Insert Error: {}", e)))?;
+
+    // Commit transaction
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Commit Error: {}", e)))?;
 
     Ok(StatusCode::CREATED)
 }
