@@ -25,23 +25,40 @@ pub struct SearchQuery {
 }
 
 /// Normalizes a URL by extracting scheme + host + path (without query params or fragments).
-/// This prevents bypass attempts using query parameters or fragments.
-/// Returns None if the URL cannot be parsed.
+/// 
+/// This prevents bypass attempts using query parameters or fragments. For example:
+/// - `https://example.com/path?bypass=1` -> `https://example.com/path`
+/// - `https://example.com/path#fragment` -> `https://example.com/path`
+/// - `https://example.com/path/` -> `https://example.com/path`
+/// 
+/// # Security
+/// Only http and https URLs with valid hosts are accepted. URLs without hosts or
+/// with other schemes are rejected to prevent security issues.
+/// 
+/// # Returns
+/// - `Some(normalized_url)` if the URL is valid and has http/https scheme with a host
+/// - `None` if the URL cannot be parsed, lacks a host, or uses a non-http(s) scheme
 fn normalize_url(url_str: &str) -> Option<String> {
-    Url::parse(url_str).ok().map(|url| {
-        let scheme = url.scheme();
-        let host = url.host_str().unwrap_or("");
-        let path = url.path();
-        
-        // Normalize trailing slashes for consistency
-        let normalized_path = if path == "/" || path.is_empty() {
-            "/"
-        } else {
-            path.trim_end_matches('/')
-        };
-        
-        format!("{}://{}{}", scheme, host, normalized_path)
-    })
+    let url = Url::parse(url_str).ok()?;
+    
+    // Only accept http and https schemes for security
+    let scheme = url.scheme();
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    
+    // Require a valid host for http(s) URLs
+    let host = url.host_str()?;
+    let path = url.path();
+    
+    // Normalize trailing slashes for consistency
+    let normalized_path = if path == "/" || path.is_empty() {
+        "/"
+    } else {
+        path.trim_end_matches('/')
+    };
+    
+    Some(format!("{}://{}{}", scheme, host, normalized_path))
 }
 
 pub fn routes() -> Router<AppState> {
