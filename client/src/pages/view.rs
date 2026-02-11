@@ -161,13 +161,22 @@ pub fn ViewPage() -> impl IntoView {
 
     // Whitelist Resource for Owners
     let whitelist_resource = create_resource(
-        move || (project_resource.get(), slug()),
-        move |(state, s)| async move {
-            if let Some(ProjectState::Ready(_)) = state {
-                let url = format!("{}/api/project/{}/whitelist", api_base(), s);
-                if let Ok(resp) = Request::get(&url).credentials(RequestCredentials::Include).send().await {
-                    if let Ok(list) = resp.json::<Vec<String>>().await {
-                        set_whitelist.set(list);
+        move || (project_resource.get(), user.get(), slug()),
+        move |(state, current_user, s)| async move {
+            if let Some(ProjectState::Ready(p)) = state {
+                // Only fetch whitelist if the current user is the owner
+                let project_owner_id = p.get("owner_id").and_then(|id| id.as_i64());
+                let is_owner = match current_user {
+                    Some(u) => Some(u.id) == project_owner_id,
+                    None => false
+                };
+                
+                if is_owner {
+                    let url = format!("{}/api/project/{}/whitelist", api_base(), s);
+                    if let Ok(resp) = Request::get(&url).credentials(RequestCredentials::Include).send().await {
+                        if let Ok(list) = resp.json::<Vec<String>>().await {
+                            set_whitelist.set(list);
+                        }
                     }
                 }
             }
