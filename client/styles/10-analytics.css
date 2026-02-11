@@ -46,12 +46,14 @@
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 12px;
-    overflow: hidden;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     margin-bottom: 40px;
 }
 
 .data-table {
     width: 100%;
+    min-width: 600px;
     border-collapse: collapse;
     font-size: 0.95rem;
 }
@@ -110,4 +112,30 @@
     height: 100%;
     background: var(--text-main);
     border-radius: 3px;
+}
+
+/* Truncate long text (e.g., Container IDs) */
+.truncate-cell {
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+    .data-table th,
+    .data-table td {
+        padding: 12px 16px;
+        font-size: 0.85rem;
+    }
+    
+    .stat-value {
+        font-size: 2rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 16px;
+    }
 }
