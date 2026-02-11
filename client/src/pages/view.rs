@@ -201,13 +201,13 @@ pub fn ViewPage() -> impl IntoView {
                         if resp.ok() {
                             whitelist_resource.refetch();
                         } else {
-                            web_sys::console::log_1(&JsValue::from_str(&format!(
+                            web_sys::console::error_1(&JsValue::from_str(&format!(
                                 "Failed to add URL to whitelist: HTTP {}", resp.status()
                             )));
                         }
                     }
                     Err(e) => {
-                        web_sys::console::log_1(&JsValue::from_str(&format!(
+                        web_sys::console::error_1(&JsValue::from_str(&format!(
                             "Failed to add URL to whitelist: {:?}", e
                         )));
                     }
@@ -230,13 +230,13 @@ pub fn ViewPage() -> impl IntoView {
                         if resp.ok() {
                             whitelist_resource.refetch();
                         } else {
-                            web_sys::console::log_1(&JsValue::from_str(&format!(
+                            web_sys::console::error_1(&JsValue::from_str(&format!(
                                 "Failed to remove URL from whitelist: HTTP {}", resp.status()
                             )));
                         }
                     }
                     Err(e) => {
-                        web_sys::console::log_1(&JsValue::from_str(&format!(
+                        web_sys::console::error_1(&JsValue::from_str(&format!(
                             "Failed to remove URL from whitelist: {:?}", e
                         )));
                     }
