@@ -325,7 +325,7 @@ fn DashboardSearch(
                     let navigate_fn = nav.clone();
                     
                     view! {
-                        <div style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-panel); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 10; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);">
+                        <div style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-panel); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; max-height: 300px; overflow-y: auto; z-index: 1; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);">
                             {if results.is_empty() && !input_val.is_empty() {
                                 let input_val_copy = input_val.clone();
                                 let input_val_display = input_val.clone();

@@ -17,6 +17,18 @@
     border-bottom: 1px solid var(--border);
 }
 
+@media (max-width: 768px) {
+    .dashboard-hero {
+        padding: 40px 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-hero {
+        padding: 30px 16px;
+    }
+}
+
 .hero-content {
     max-width: 600px;
     margin: 0 auto;
@@ -29,6 +41,13 @@
     margin: 0 0 16px 0;
     color: var(--text-main);
     letter-spacing: -1px;
+    word-break: break-word;
+}
+
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2rem;
+    }
 }
 
 .hero-subtitle {
@@ -45,11 +64,25 @@
     padding: 60px 40px;
 }
 
+@media (max-width: 768px) {
+    .dashboard-section {
+        padding: 40px 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard-section {
+        padding: 30px 16px;
+    }
+}
+
 .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 32px;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
 .section-header h2 {
@@ -57,6 +90,37 @@
     font-weight: 700;
     margin: 0;
     color: var(--text-main);
+    flex: 1;
+    min-width: 200px;
+}
+
+@media (max-width: 768px) {
+    .section-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .section-header h2 {
+        font-size: 1.4rem;
+        margin-bottom: 12px;
+    }
+
+    .section-header > div {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    .section-header > div > a {
+        width: 100%;
+        justify-content: center;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 }
 
 /* Project Cards Grid */
@@ -64,6 +128,13 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 24px;
+}
+
+@media (max-width: 480px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
 }
 
 .project-card {
