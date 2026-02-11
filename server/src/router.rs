@@ -13,7 +13,7 @@ pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Erro
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false) 
-        .with_same_site(tower_sessions::cookie::SameSite::Lax)
+        .with_same_site(tower_sessions::cookie::SameSite::Strict)
         .with_expiry(Expiry::OnInactivity(time::Duration::minutes(60)));
 
     // 1. DYNAMIC ORIGIN: Reads from env, defaults to localhost for dev

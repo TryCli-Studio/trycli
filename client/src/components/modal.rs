@@ -134,58 +134,38 @@ pub fn EmbedModal(
                                         view! { <span style="opacity: 0;">"Placeholder"</span> }.into_view()
                                     }}
                                 </div>
-                                {move || {
-                                    let link = vip_link.get();
-                                    let vip_link_for_input = vip_link.clone();
-                                    let vip_link_for_button = vip_link_for_click.clone();
-                                    if link.is_empty() {
-                                        view! {
-                                            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
-                                                <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">
-                                                    "🔒 VIP link is being generated..."
-                                                </p>
-                                                <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 8px;">
-                                                    "Refresh this page to see your private VIP link once it's ready."
-                                                </p>
-                                            </div>
-                                        }.into_view()
-                                    } else {
-                                        view! {
-                                            <>
-                                                <div class="input-hero-wrapper" style="display: flex; gap: 0;">
-                                                    <input
-                                                        type="text"
-                                                        class="input-slug"
-                                                        style="flex: 1; font-family: var(--font-mono); font-size: 0.85rem; border-top-right-radius: 0; border-bottom-right-radius: 0; padding: 10px;"
-                                                        readonly
-                                                        node_ref=vip_ref
-                                                        prop:value=move || vip_link_for_input.get()
-                                                    />
-                                                    <button
-                                                        class="btn-secondary"
-                                                        style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; width: 50px; display: flex; align-items: center; justify-content: center;"
-                                                        aria-label="Copy VIP link"
-                                                        on:click=move |_| {
-                                                            let text = vip_link_for_button.get();
-                                                            let _ = window().navigator().clipboard().write_text(&text);
-                                                            if let Some(el) = vip_ref.get() { el.select(); }
-                                                            set_copied_vip.set(true);
-                                                            set_timeout(move || set_copied_vip.set(false), std::time::Duration::from_millis(2000));
-                                                        }
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
-                                                    "Share privately. This bypasses the Guest List and should never be embedded publicly."
-                                                </p>
-                                            </>
-                                        }.into_view()
-                                    }
-                                }}
+
+                                <div class="input-hero-wrapper" style="display: flex; gap: 0;">
+                                    <input
+                                        type="text"
+                                        class="input-slug" 
+                                        style="flex: 1; font-family: var(--font-mono); font-size: 0.85rem; border-top-right-radius: 0; border-bottom-right-radius: 0; padding: 10px;"
+                                        readonly
+                                        node_ref=vip_ref
+                                        prop:value=move || vip_link.get()
+                                    />
+                                    <button
+                                        class="btn-secondary"
+                                        style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; width: 50px; display: flex; align-items: center; justify-content: center;"
+                                        aria-label="Copy VIP link"
+                                        on:click=move |_| {
+                                            let text = vip_link_for_click.get();
+                                            let _ = window().navigator().clipboard().write_text(&text);
+                                            if let Some(el) = vip_ref.get() { el.select(); }
+                                            set_copied_vip.set(true);
+                                            set_timeout(move || set_copied_vip.set(false), std::time::Duration::from_millis(2000));
+                                        }
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
+                                    <strong style="color: #dc2626;">"Security warning:"</strong>
+                                    " This VIP link bypasses the Guest List and must only be shared privately. Do NOT embed it on public websites, iframes, or forums; anyone with this link can access your terminal."
+                                </p>
                             </div>
 
                             // --- SECTION 3: SMART LINK ---

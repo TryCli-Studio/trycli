@@ -49,7 +49,7 @@ pub struct AnalyticsDashboardData {
     pub active_sessions: Vec<LiveSessionMetric>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct User {
     pub id: i64,
     pub login: String,

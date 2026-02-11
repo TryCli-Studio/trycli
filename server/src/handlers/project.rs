@@ -17,10 +17,133 @@ use futures::StreamExt;
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest, WhitelistRequest};
 use std::collections::HashMap;
+use url::Url;
+
+// Maximum number of whitelist entries allowed per project
+const MAX_WHITELIST_ENTRIES: i64 = 100;
+
+// Rate limit for whitelist operations (requests per minute per user)
+pub const WHITELIST_RATE_LIMIT_PER_MINUTE: u32 = 20;
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
     q: String,
+}
+
+/// Normalizes a URL by extracting scheme + host + path (without query params or fragments).
+/// 
+/// This prevents bypass attempts using query parameters or fragments. For example:
+/// - `https://example.com/path?bypass=1` -> `https://example.com/path`
+/// - `https://example.com/path#fragment` -> `https://example.com/path`
+/// - `https://example.com/path/` -> `https://example.com/path`
+/// 
+/// # Security
+/// Only http and https URLs with valid hosts are accepted. URLs without hosts or
+/// with other schemes are rejected to prevent security issues.
+/// 
+/// # Returns
+/// - `Some(normalized_url)` if the URL is valid and has http/https scheme with a host
+/// - `None` if the URL cannot be parsed, lacks a host, or uses a non-http(s) scheme
+fn normalize_url(url_str: &str) -> Option<String> {
+    let url = Url::parse(url_str).ok()?;
+    
+    // Only accept http and https schemes for security
+    let scheme = url.scheme();
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    
+    // Require a valid host for http(s) URLs
+    let host = url.host_str()?;
+    let path = url.path();
+    
+    // Normalize trailing slashes for consistency
+    let normalized_path = if path == "/" || path.is_empty() {
+        "/"
+    } else {
+        path.trim_end_matches('/')
+    };
+    
+    Some(format!("{}://{}{}", scheme, host, normalized_path))
+}
+
+/// Validates CSRF protection by checking Origin/Referer headers against expected frontend URL.
+/// 
+/// This function provides defense-in-depth against CSRF attacks by:
+/// 1. Checking the Origin header (sent by browsers on cross-origin requests)
+/// 2. Falling back to Referer header validation if Origin is not present
+/// 3. Requiring the request to come from the configured FRONTEND_URL
+/// 
+/// # Security
+/// This works in conjunction with SameSite=Strict cookies to prevent CSRF attacks.
+/// An attacker on a different domain cannot forge these headers in a way that would
+/// pass validation.
+/// 
+/// # Returns
+/// - `Ok(())` if the request passes CSRF validation
+/// - `Err((StatusCode, String))` if the request fails validation
+fn validate_csrf_protection(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
+    let frontend_url = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    
+    // Parse the expected origin from FRONTEND_URL
+    let expected_origin = Url::parse(&frontend_url)
+        .ok()
+        .and_then(|u| {
+            let scheme = u.scheme();
+            let host = u.host_str()?;
+            let port = u.port();
+            if let Some(p) = port {
+                Some(format!("{}://{}:{}", scheme, host, p))
+            } else {
+                Some(format!("{}://{}", scheme, host))
+            }
+        })
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid FRONTEND_URL configuration".to_string(),
+            )
+        })?;
+    
+    // Check Origin header first (preferred for CORS requests)
+    if let Some(origin) = headers.get("origin") {
+        let origin_str = origin
+            .to_str()
+            .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid Origin header".to_string()))?;
+        
+        if origin_str == expected_origin {
+            return Ok(());
+        } else {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "CSRF validation failed: Origin mismatch".to_string(),
+            ));
+        }
+    }
+    
+    // Fallback to Referer header
+    if let Some(referer) = headers.get("referer") {
+        let referer_str = referer
+            .to_str()
+            .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid Referer header".to_string()))?;
+        
+        // Check if referer starts with the expected origin
+        if referer_str.starts_with(&expected_origin) {
+            return Ok(());
+        } else {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "CSRF validation failed: Referer mismatch".to_string(),
+            ));
+        }
+    }
+    
+    // No Origin or Referer header found
+    Err((
+        StatusCode::FORBIDDEN,
+        "CSRF validation failed: Missing Origin or Referer header".to_string(),
+    ))
 }
 
 pub fn routes() -> Router<AppState> {
@@ -28,6 +151,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/my-projects", get(list_user_projects))
         .route("/api/project/:username/:slug", get(get_project))
         .route("/api/project/:slug", delete(delete_project))
+        .route("/api/project/:slug/embed-key", get(get_embed_key))
         .route(
             "/api/project/:slug/whitelist",
             get(get_whitelist).post(add_to_whitelist).delete(remove_from_whitelist),
@@ -183,9 +307,10 @@ pub async fn publish_handler(
 
     // 6. Update Database with new embed_token logic
     // gen_random_uuid() requires Postgres 13+. If older, ensure pgcrypto extension is enabled.
+    // Generate embed_key at creation time to ensure VIP links work immediately
     sqlx::query("
-            INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell, embed_token) 
-            VALUES ($1, $2, $3, $4, $5, $6, gen_random_uuid()::text) 
+            INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell, embed_token, embed_key) 
+            VALUES ($1, $2, $3, $4, $5, $6, gen_random_uuid()::text, encode(gen_random_bytes(24), 'base64')) 
             ON CONFLICT (owner_username, slug) 
             DO UPDATE SET image_tag = $2, markdown = $3, shell = $6
         ")
@@ -215,14 +340,15 @@ pub async fn publish_handler(
 pub async fn get_project(
     Path((username, slug)): Path<(String, String)>, 
     State(state): State<AppState>,
-    session: Session, // Session is used to check ownership for secure embeds
+    session: Session, // Session is used to detect owner (bypass checks), lazily create embed_key for owners, and return embed_token/embed_key to them; non-owner secure embeds use VIP key + Referer whitelist
     Query(params): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     
     // 1. Load project + security metadata (case-insensitive for username/slug)
-    let row_result = sqlx::query_as::<_, (i64, String, String, String, i64, Option<String>)>(
-        "SELECT id, image_tag, markdown, shell, owner_id, embed_key \
+    // Query returns: (image_tag, markdown, shell, owner_id, embed_key, id)
+    let row_result = sqlx::query_as::<_, (String, String, String, i64, Option<String>, i64)>(
+        "SELECT image_tag, markdown, shell, owner_id, embed_key, id \
          FROM projects \
          WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
     )
@@ -231,7 +357,7 @@ pub async fn get_project(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    let (project_id, image_tag, markdown, shell, owner_id, mut embed_key) = match row_result {
+    let (image_tag, markdown, shell, owner_id, mut embed_key, project_id) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
@@ -280,24 +406,33 @@ pub async fn get_project(
 
             // Optional boolean, safely unwrapped later
             let whitelist_allowed: Option<bool> = if let Some(referer_url) = referer {
-                let exists_row: Option<(bool,)> = sqlx::query_as(
-                    "SELECT TRUE FROM project_whitelists \
-                     WHERE project_id = $1 AND allowed_url = $2 \
-                     LIMIT 1",
-                )
-                .bind(project_id)
-                .bind(&referer_url)
-                .fetch_optional(&state.db)
-                .await
-                .map_err(|e| {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("Whitelist DB Error: {}", e),
+                // Normalize the Referer URL to prevent bypasses via query params or fragments
+                let normalized_referer = normalize_url(&referer_url);
+                
+                if let Some(normalized) = normalized_referer {
+                    let exists_row: Option<(bool,)> = sqlx::query_as(
+                        "SELECT TRUE FROM project_whitelists \
+                         WHERE project_id = $1 AND allowed_url = $2 \
+                         LIMIT 1",
                     )
-                })?;
+                    .bind(project_id)
+                    .bind(&normalized)
+                    .fetch_optional(&state.db)
+                    .await
+                    .map_err(|e| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Whitelist DB Error: {}", e),
+                        )
+                    })?;
 
-                // TRUE row exists => allowed; otherwise false
-                Some(exists_row.is_some())
+                    // TRUE row exists => allowed; otherwise false
+                    Some(exists_row.is_some())
+                } else {
+                    // If URL parsing fails, deny access and log for security monitoring
+                    tracing::warn!("Referer normalization failed for project {}: {}", project_id, referer_url);
+                    Some(false)
+                }
             } else {
                 None
             };
@@ -344,7 +479,9 @@ pub async fn get_project(
         // We will insert container_id below
     });
 
-    // If owner, fetch and attach the secret token + VIP embed_key for the Share / Embed modal
+    // If owner, fetch and attach the secret token for the Share / Embed modal
+    // Note: embed_key is now fetched separately via /api/project/:slug/embed-key endpoint
+    // to prevent accidental exposure in browser dev tools
     if is_owner {
         let token_record: Option<(String,)> = sqlx::query_as(
             "SELECT embed_token FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)"
@@ -358,10 +495,6 @@ pub async fn get_project(
 
         if let Some((token,)) = token_record {
             response_json["embed_token"] = serde_json::Value::String(token);
-        }
-
-        if let Some(key) = embed_key {
-            response_json["embed_key"] = serde_json::Value::String(key);
         }
     }
 
@@ -465,6 +598,15 @@ pub async fn get_whitelist(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
+    // Apply rate limiting: 20 requests per minute per user
+    let rate_limiter = state.get_or_create_whitelist_rate_limiter(user.id);
+    if rate_limiter.check().is_err() {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded. Please try again later.".to_string()
+        ));
+    }
+
     // Resolve project_id for this owner + slug
     let project_row: Option<(i64,)> = sqlx::query_as(
         "SELECT id FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)",
@@ -496,15 +638,28 @@ pub async fn get_whitelist(
 /// Add a new URL to a project's whitelist (Guest List).
 pub async fn add_to_whitelist(
     State(state): State<AppState>,
+    headers: HeaderMap,
     session: Session,
     Path(slug): Path<String>,
     Json(payload): Json<WhitelistRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    // CSRF Protection: Validate Origin/Referer headers
+    validate_csrf_protection(&headers)?;
+    
     let user: Option<User> = session
         .get("user")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    // Apply rate limiting: 20 requests per minute per user
+    let rate_limiter = state.get_or_create_whitelist_rate_limiter(user.id);
+    if rate_limiter.check().is_err() {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded. Please try again later.".to_string()
+        ));
+    }
 
     let trimmed_url = payload.allowed_url.trim();
     if trimmed_url.is_empty() {
@@ -525,20 +680,71 @@ pub async fn add_to_whitelist(
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
-    // Unique(project_id, allowed_url) is enforced by the DB; ignore conflicts
-    let result = sqlx::query(
-        "INSERT INTO project_whitelists (project_id, allowed_url) \
-         VALUES ($1, $2) \
-         ON CONFLICT (project_id, allowed_url) DO NOTHING",
+    // Normalize the URL to prevent bypasses via query params or fragments
+    let normalized_url = normalize_url(trimmed_url).ok_or((
+        StatusCode::BAD_REQUEST,
+        "Invalid URL format. URL must use http or https scheme and include a valid host.".to_string(),
+    ))?;
+
+    // Use a database transaction with table-level advisory lock to prevent race conditions
+    let mut tx = state.db.begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Transaction Error: {}", e)))?;
+
+    // Get an advisory lock for this project's whitelist to prevent concurrent modifications
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(project_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Lock Error: {}", e)))?;
+
+    // Check if entry already exists (using normalized URL)
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM project_whitelists WHERE project_id = $1 AND allowed_url = $2)",
     )
     .bind(project_id)
-    .bind(trimmed_url)
-    .execute(&state.db)
-    .await;
+    .bind(&normalized_url)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
-    if let Err(e) = result {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)));
+    if exists.0 {
+        // Entry already exists, commit transaction and return success
+        tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Commit Error: {}", e)))?;
+        return Ok(StatusCode::OK); // 200 OK - idempotent operation, entry already exists
     }
+
+    // Check current count
+    let count_row: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM project_whitelists WHERE project_id = $1",
+    )
+    .bind(project_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    if count_row.0 >= MAX_WHITELIST_ENTRIES {
+        // Transaction will automatically rollback when dropped
+        return Err((
+            StatusCode::FORBIDDEN,
+            format!("Maximum whitelist entries ({}) reached for this project", MAX_WHITELIST_ENTRIES)
+        ));
+    }
+
+    // Insert the new entry (normalized)
+    sqlx::query(
+        "INSERT INTO project_whitelists (project_id, allowed_url) VALUES ($1, $2)",
+    )
+    .bind(project_id)
+    .bind(normalized_url)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Insert Error: {}", e)))?;
+
+    // Commit transaction
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Commit Error: {}", e)))?;
 
     Ok(StatusCode::CREATED)
 }
@@ -546,20 +752,39 @@ pub async fn add_to_whitelist(
 /// Remove a URL from a project's whitelist (Guest List).
 pub async fn remove_from_whitelist(
     State(state): State<AppState>,
+    headers: HeaderMap,
     session: Session,
     Path(slug): Path<String>,
     Json(payload): Json<WhitelistRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    // CSRF Protection: Validate Origin/Referer headers
+    validate_csrf_protection(&headers)?;
+    
     let user: Option<User> = session
         .get("user")
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
+    // Apply rate limiting: 20 requests per minute per user
+    let rate_limiter = state.get_or_create_whitelist_rate_limiter(user.id);
+    if rate_limiter.check().is_err() {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded. Please try again later.".to_string()
+        ));
+    }
+
     let trimmed_url = payload.allowed_url.trim();
     if trimmed_url.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "allowed_url is required".to_string()));
     }
+
+    // Normalize the URL to match how it was stored
+    let normalized_url = normalize_url(trimmed_url).ok_or((
+        StatusCode::BAD_REQUEST,
+        "Invalid URL format. URL must use http or https scheme and include a valid host.".to_string(),
+    ))?;
 
     let delete_result = sqlx::query(
         "DELETE FROM project_whitelists pw \
@@ -571,7 +796,7 @@ pub async fn remove_from_whitelist(
     )
     .bind(user.id)
     .bind(&slug)
-    .bind(trimmed_url)
+    .bind(&normalized_url)
     .execute(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
@@ -581,6 +806,78 @@ pub async fn remove_from_whitelist(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Get the embed_key for a project (owner-only endpoint).
+/// 
+/// This endpoint requires authentication and only returns the embed_key to the project owner.
+/// Separating this from the main project response prevents accidental exposure via browser
+/// dev tools or network inspection when viewing the project normally.
+pub async fn get_embed_key(
+    State(state): State<AppState>,
+    session: Session,
+    Path(slug): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // 1. Verify user is authenticated
+    let user: Option<User> = session
+        .get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    // 2. Fetch project and verify ownership
+    let row_result = sqlx::query_as::<_, (i64, i64, Option<String>)>(
+        "SELECT id, owner_id, embed_key \
+         FROM projects \
+         WHERE LOWER(slug) = LOWER($1)"
+    )
+    .bind(&slug)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
+
+    let (project_id, owner_id, mut embed_key) = match row_result {
+        Some(r) => r,
+        None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
+    };
+
+    // 3. Verify the user is the owner (return NOT_FOUND to avoid leaking project existence)
+    if user.id != owner_id {
+        return Err((StatusCode::NOT_FOUND, "Project not found".to_string()));
+    }
+
+    // 4. Generate embed_key if it doesn't exist (lazy generation)
+    if embed_key.is_none() {
+        let new_key_row: Option<(String,)> = sqlx::query_as(
+            "UPDATE projects \
+             SET embed_key = encode(gen_random_bytes(24), 'base64') \
+             WHERE id = $1 \
+             RETURNING embed_key",
+        )
+        .bind(project_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to generate embed key: {}", e),
+            )
+        })?;
+
+        embed_key = new_key_row.map(|(k,)| k);
+    }
+
+    // 5. Return the embed_key (should always be present after step 4)
+    let key = embed_key.ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Failed to retrieve or generate embed key".to_string(),
+    ))?;
+    
+    let response = serde_json::json!({
+        "embed_key": key
+    });
+
+    Ok(Json(response))
 }
 
 pub async fn delete_project(

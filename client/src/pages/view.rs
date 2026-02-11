@@ -194,17 +194,22 @@ pub fn ViewPage() -> impl IntoView {
 
     // Whitelist Resource for Owners
     let whitelist_resource = create_resource(
-        move || (project_resource.get(), slug()),
-        move |(state, s)| async move {
-            if let Some(ProjectState::Ready(_)) = state {
-                let url = format!("{}/api/project/{}/whitelist", api_base(), s);
-                if let Ok(resp) = Request::get(&url)
-                    .credentials(RequestCredentials::Include)
-                    .send()
-                    .await
-                {
-                    if let Ok(list) = resp.json::<Vec<String>>().await {
-                        set_whitelist.set(list);
+        move || (project_resource.get(), user.get(), slug()),
+        move |(state, current_user, s)| async move {
+            if let Some(ProjectState::Ready(p)) = state {
+                // Only fetch whitelist if the current user is the owner
+                let project_owner_id = p.get("owner_id").and_then(|id| id.as_i64());
+                let is_owner = match current_user {
+                    Some(u) => Some(u.id) == project_owner_id,
+                    None => false
+                };
+                
+                if is_owner {
+                    let url = format!("{}/api/project/{}/whitelist", api_base(), s);
+                    if let Ok(resp) = Request::get(&url).credentials(RequestCredentials::Include).send().await {
+                        if let Ok(list) = resp.json::<Vec<String>>().await {
+                            set_whitelist.set(list);
+                        }
                     }
                 }
             }
@@ -233,8 +238,22 @@ pub fn ViewPage() -> impl IntoView {
                 .json(&serde_json::json!({ "allowed_url": url }));
 
             if let Ok(builder) = req {
-                let _ = builder.send().await;
-                whitelist_resource.refetch();
+                match builder.send().await {
+                    Ok(resp) => {
+                        if resp.ok() {
+                            whitelist_resource.refetch();
+                        } else {
+                            web_sys::console::error_1(&JsValue::from_str(&format!(
+                                "Failed to add URL to whitelist: HTTP {}", resp.status()
+                            )));
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&JsValue::from_str(&format!(
+                            "Failed to add URL to whitelist: {:?}", e
+                        )));
+                    }
+                }
             }
         }
     });
@@ -248,8 +267,22 @@ pub fn ViewPage() -> impl IntoView {
                 .json(&serde_json::json!({ "allowed_url": url }));
 
             if let Ok(builder) = req {
-                let _ = builder.send().await;
-                whitelist_resource.refetch();
+                match builder.send().await {
+                    Ok(resp) => {
+                        if resp.ok() {
+                            whitelist_resource.refetch();
+                        } else {
+                            web_sys::console::error_1(&JsValue::from_str(&format!(
+                                "Failed to remove URL from whitelist: HTTP {}", resp.status()
+                            )));
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&JsValue::from_str(&format!(
+                            "Failed to remove URL from whitelist: {:?}", e
+                        )));
+                    }
+                }
             }
         }
     });
@@ -281,23 +314,50 @@ pub fn ViewPage() -> impl IntoView {
                                     let origin = window().location().origin().unwrap_or_else(|_| "http://localhost:8080".to_string());
                                     if let Some(ProjectState::Ready(data)) = project_resource.get() {
                                         let token = data.get("embed_token").and_then(|v| v.as_str()).unwrap_or_default();
-                                        let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
-
+                                        
                                         // Public embed uses whitelist + domain check only
                                         let public_url = format!("{}/embed/{}/{}", origin, username(), slug());
                                         let smart_url = format!("{}/e/{}", api_base(), token);
-                                        let vip = if key.is_empty() {
-                                            String::new()
-                                        } else {
-                                            format!("{}/{}/{}?key={}", origin, username(), slug(), key)
-                                        };
 
                                         set_iframe_code.set(format!(
                                             "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
                                             public_url
                                         ));
                                         set_smart_link.set(smart_url);
-                                        set_vip_link.set(vip);
+                                        
+                                        // Fetch embed_key from dedicated endpoint to avoid exposure in main response
+                                        let origin_clone = origin.clone();
+                                        let slug_clone = slug();
+                                        let username_clone = username();
+                                        spawn_local(async move {
+                                            let url = format!("{}/api/project/{}/embed-key", api_base(), slug_clone);
+                                            match Request::get(&url).credentials(RequestCredentials::Include).send().await {
+                                                Ok(resp) => {
+                                                    match resp.json::<serde_json::Value>().await {
+                                                        Ok(data) => {
+                                                            let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
+                                                            let vip = if key.is_empty() {
+                                                                String::new()
+                                                            } else {
+                                                                format!("{}/{}/{}?key={}", origin_clone, username_clone, slug_clone, key)
+                                                            };
+                                                            set_vip_link.set(vip);
+                                                        }
+                                                        Err(e) => {
+                                                            web_sys::console::error_1(&JsValue::from_str(&format!(
+                                                                "Failed to parse embed_key response: {}", e
+                                                            )));
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    web_sys::console::error_1(&JsValue::from_str(&format!(
+                                                        "Failed to fetch embed_key from server: {}", e
+                                                    )));
+                                                }
+                                            }
+                                        });
+                                        
                                         set_embed_modal_open.set(true);
                                     }
                                 }>
@@ -315,14 +375,19 @@ pub fn ViewPage() -> impl IntoView {
                     let cid = data["container_id"].as_str().unwrap_or_default().to_string();
                     let md_raw = data["markdown"].as_str().unwrap_or_default().to_string();
                     let html_output = render_markdown(&md_raw);
-
+                    
+                    let (is_mounted, set_mounted) = create_signal(false);
+                    
                     create_effect(move |_| {
-                        if let Some(window) = web_sys::window() {
-                            let callback = wasm_bindgen::closure::Closure::once(move || {
-                                setup_resize_divider();
-                            });
-                            window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
-                            callback.forget();
+                        if !is_mounted.get() {
+                            set_mounted.set(true);
+                            if let Some(window) = web_sys::window() {
+                                let callback = wasm_bindgen::closure::Closure::once(move || {
+                                    setup_resize_divider();
+                                });
+                                window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
+                                callback.forget();
+                            }
                         }
                     });
 
