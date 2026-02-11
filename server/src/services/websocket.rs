@@ -14,7 +14,7 @@ use tokio::time::Duration;
 use uuid::Uuid;
 use tower_sessions::Session; 
 use crate::state::{AppState, SessionContext}; 
-use crate::models::User; 
+use crate::models::{User, AnalyticsEventType, log_analytics_event}; 
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade, 
@@ -404,6 +404,12 @@ async fn attach_to_container(
         }).await;
 
         // --- HANDOFF PROTOCOL: Only delete if NOT publishing ---
+        // Capture session context for analytics before removing
+        let session_ctx = {
+            let map = state.lock_sessions();
+            map.get(&session_id).cloned()
+        };
+
         let should_delete = {
             let mut map = state.lock_sessions();
             if let Some(ctx) = map.get(&session_id) {
@@ -420,6 +426,32 @@ async fn attach_to_container(
 
         if should_delete {
             println!("Cleaning up session: {}", session_id);
+            
+            // Log session end event for viewer sessions (not builders)
+            if let Some(ctx) = session_ctx {
+                if ctx.project_slug.is_some() && ctx.project_owner_id.is_some() {
+                    let duration = ctx.created_at.elapsed().as_secs() as i64;
+                    
+                    // Lookup project_id from slug and owner
+                    if let (Some(owner_id), Some(slug)) = (ctx.project_owner_id, &ctx.project_slug) {
+                        let db_clone = state.db.clone();
+                        let slug_clone = slug.clone();
+                        tokio::spawn(async move {
+                            if let Ok(Some(project_id)) = sqlx::query_scalar::<_, i64>(
+                                "SELECT id FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)"
+                            )
+                            .bind(owner_id)
+                            .bind(&slug_clone)
+                            .fetch_optional(&db_clone)
+                            .await
+                            {
+                                log_analytics_event(&db_clone, project_id, AnalyticsEventType::SessionEnd, Some(duration), None).await;
+                            }
+                        });
+                    }
+                }
+            }
+            
             let _ = state.docker.remove_container(&container_name, Some(
                 bollard::container::RemoveContainerOptions { force: true, ..Default::default() }
             )).await;

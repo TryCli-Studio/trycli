@@ -98,3 +98,27 @@ pub enum OEmbedResponse {
         thumbnail_url: Option<String>,
     }
 }
+
+// Helper function to log analytics events across multiple handlers
+pub async fn log_analytics_event(
+    db: &sqlx::PgPool,
+    project_id: i64,
+    event_type: AnalyticsEventType,
+    duration: Option<i64>,
+    error: Option<String>,
+) {
+    let result = sqlx::query(
+        "INSERT INTO analytics_events (project_id, event_type, duration_seconds, error_type) 
+         VALUES ($1, $2, $3, $4)"
+    )
+    .bind(project_id)
+    .bind(event_type)
+    .bind(duration)
+    .bind(error)
+    .execute(db)
+    .await;
+
+    if let Err(e) = result {
+        eprintln!("Failed to log analytics event: {}", e);
+    }
+}
