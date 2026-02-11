@@ -272,23 +272,34 @@ pub fn ViewPage() -> impl IntoView {
                                     let origin = window().location().origin().unwrap_or_else(|_| "http://localhost:8080".to_string());
                                     if let Some(ProjectState::Ready(data)) = project_resource.get() {
                                         let token = data.get("embed_token").and_then(|v| v.as_str()).unwrap_or_default();
-                                        let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
                                         
                                         // Public embed uses whitelist + domain check only
                                         let public_url = format!("{}/embed/{}/{}", origin, username(), slug());
                                         let smart_url = format!("{}/e/{}", api_base(), token);
-                                        let vip = if key.is_empty() {
-                                            String::new()
-                                        } else {
-                                            format!("{}/{}/{}?key={}", origin, username(), slug(), key)
-                                        };
 
                                         set_iframe_code.set(format!(
                                             "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
                                             public_url
                                         ));
                                         set_smart_link.set(smart_url);
-                                        set_vip_link.set(vip);
+                                        
+                                        // Fetch embed_key from dedicated endpoint to avoid exposure in main response
+                                        let slug_clone = slug();
+                                        spawn_local(async move {
+                                            let url = format!("{}/api/project/{}/embed-key", api_base(), slug_clone);
+                                            if let Ok(resp) = Request::get(&url).credentials(RequestCredentials::Include).send().await {
+                                                if let Ok(data) = resp.json::<serde_json::Value>().await {
+                                                    let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
+                                                    let vip = if key.is_empty() {
+                                                        String::new()
+                                                    } else {
+                                                        format!("{}/{}/{}?key={}", origin, username(), slug_clone, key)
+                                                    };
+                                                    set_vip_link.set(vip);
+                                                }
+                                            }
+                                        });
+                                        
                                         set_embed_modal_open.set(true);
                                     }
                                 }>

@@ -66,6 +66,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/my-projects", get(list_user_projects))
         .route("/api/project/:username/:slug", get(get_project))
         .route("/api/project/:slug", delete(delete_project))
+        .route("/api/project/:slug/embed-key", get(get_embed_key))
         .route(
             "/api/project/:slug/whitelist",
             get(get_whitelist).post(add_to_whitelist).delete(remove_from_whitelist),
@@ -392,7 +393,9 @@ pub async fn get_project(
         // We will insert container_id below
     });
 
-    // If owner, fetch and attach the secret token + VIP embed_key for the Share / Embed modal
+    // If owner, fetch and attach the secret token for the Share / Embed modal
+    // Note: embed_key is now fetched separately via /api/project/:slug/embed-key endpoint
+    // to prevent accidental exposure in browser dev tools
     if is_owner {
         let token_record: Option<(String,)> = sqlx::query_as(
             "SELECT embed_token FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)"
@@ -406,10 +409,6 @@ pub async fn get_project(
 
         if let Some((token,)) = token_record {
             response_json["embed_token"] = serde_json::Value::String(token);
-        }
-
-        if let Some(key) = embed_key {
-            response_json["embed_key"] = serde_json::Value::String(key);
         }
     }
 
@@ -641,6 +640,75 @@ pub async fn remove_from_whitelist(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Get the embed_key for a project (owner-only endpoint).
+/// 
+/// This endpoint requires authentication and only returns the embed_key to the project owner.
+/// Separating this from the main project response prevents accidental exposure via browser
+/// dev tools or network inspection when viewing the project normally.
+pub async fn get_embed_key(
+    State(state): State<AppState>,
+    session: Session,
+    Path(slug): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // 1. Verify user is authenticated
+    let user: Option<User> = session
+        .get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    // 2. Fetch project and verify ownership
+    let row_result = sqlx::query_as::<_, (i64, i64, Option<String>)>(
+        "SELECT id, owner_id, embed_key \
+         FROM projects \
+         WHERE LOWER(slug) = LOWER($1)"
+    )
+    .bind(&slug)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
+
+    let (project_id, owner_id, mut embed_key) = match row_result {
+        Some(r) => r,
+        None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
+    };
+
+    // 3. Verify the user is the owner
+    if user.id != owner_id {
+        return Err((StatusCode::FORBIDDEN, "Only project owners can access the embed key".to_string()));
+    }
+
+    // 4. Generate embed_key if it doesn't exist (lazy generation)
+    if embed_key.is_none() {
+        let new_key_row: Option<(String,)> = sqlx::query_as(
+            "UPDATE projects \
+             SET embed_key = encode(gen_random_bytes(24), 'base64') \
+             WHERE id = $1 \
+             RETURNING embed_key",
+        )
+        .bind(project_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to generate embed key: {}", e),
+            )
+        })?;
+
+        if let Some((k,)) = new_key_row {
+            embed_key = Some(k);
+        }
+    }
+
+    // 5. Return the embed_key
+    let response = serde_json::json!({
+        "embed_key": embed_key.unwrap_or_default()
+    });
+
+    Ok(Json(response))
 }
 
 pub async fn delete_project(
