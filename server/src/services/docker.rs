@@ -147,8 +147,8 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap, 
         for (session_id, container_name, ctx) in abandoned_sessions {
             println!("Reaper: Killing Abandoned Session {} (Never connected)", session_id);
             
-            // Log session end event for viewer sessions before cleanup
-            if ctx.project_slug.is_some() && ctx.project_owner_id.is_some() {
+            // Only log session end event if WebSocket actually connected (not a zombie)
+            if ctx.is_ws_connected && ctx.project_slug.is_some() && ctx.project_owner_id.is_some() {
                 let duration = ctx.created_at.elapsed().as_secs() as i64;
                 
                 if let (Some(owner_id), Some(slug)) = (ctx.project_owner_id, &ctx.project_slug) {

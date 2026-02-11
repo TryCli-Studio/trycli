@@ -15,7 +15,7 @@ use uuid::Uuid;
 use serde::Deserialize;
 use futures::StreamExt;
 use crate::state::{AppState, SessionContext};
-use crate::models::{User, ProjectSummary, PublishRequest, AnalyticsEventType, log_analytics_event};
+use crate::models::{User, ProjectSummary, PublishRequest};
 use std::collections::HashMap;
 
 #[derive(Deserialize)]
@@ -221,27 +221,12 @@ pub async fn get_project(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
 
-    let (project_id, image_tag, markdown, shell, owner_id) = match row_result {
+    let (_project_id, image_tag, markdown, shell, owner_id) = match row_result {
         Some(r) => r,
         None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
     };
 
-    // 2. Increment View Count asynchronously AND log analytics event
-    let db_clone = state.db.clone();
-    let slug_clone = slug.clone();
-    let username_clone = username.clone();
-    tokio::spawn(async move {
-        // Update the simple counter
-        let _ = sqlx::query("UPDATE projects SET view_count = view_count + 1 WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)")
-            .bind(&username_clone)
-            .bind(&slug_clone)
-            .execute(&db_clone)
-            .await;
-        
-        // Log the View event to analytics_events for time-based metrics
-        log_analytics_event(&db_clone, project_id, AnalyticsEventType::View, None, None).await;
-    });
-
+    // 2. Check active viewer limits (view counting moved to WebSocket connection)
     {
         let sessions = state.lock_sessions();
         let active_viewers = sessions.values()

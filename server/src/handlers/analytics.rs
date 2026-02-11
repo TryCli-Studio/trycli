@@ -63,11 +63,11 @@ pub async fn get_analytics(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // 3. Calculate Live Sessions & Uptime
+    // 3. Calculate Live Sessions & Uptime (only show sessions that actually connected)
     let active_sessions = {
         let sessions = state.lock_sessions();
         sessions.values()
-            .filter(|ctx| ctx.project_owner_id == Some(user.id) && ctx.project_slug.is_some())
+            .filter(|ctx| ctx.project_owner_id == Some(user.id) && ctx.project_slug.is_some() && ctx.is_ws_connected)
             .map(|ctx| {
                 LiveSessionMetric {
                     slug: ctx.project_slug.clone().unwrap_or_default(),
