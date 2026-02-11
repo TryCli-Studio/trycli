@@ -572,9 +572,9 @@ pub async fn add_to_whitelist(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
     if exists.0 {
-        // Entry already exists, return success
+        // Entry already exists, commit transaction and return success
         tx.commit().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Commit Error: {}", e)))?;
-        return Ok(StatusCode::CREATED);
+        return Ok(StatusCode::OK); // 200 OK - idempotent operation, entry already exists
     }
 
     // Check current count
@@ -587,8 +587,7 @@ pub async fn add_to_whitelist(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
     if count_row.0 >= MAX_WHITELIST_ENTRIES {
-        // Rollback transaction and return error
-        tx.rollback().await.ok();
+        // Transaction will automatically rollback when dropped
         return Err((
             StatusCode::FORBIDDEN,
             format!("Maximum whitelist entries ({}) reached for this project", MAX_WHITELIST_ENTRIES)

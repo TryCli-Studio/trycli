@@ -49,7 +49,10 @@ impl AppState {
         self.whitelist_rate_limiters
             .entry(user_id)
             .or_insert_with(|| {
-                let quota = Quota::per_minute(NonZeroU32::new(WHITELIST_RATE_LIMIT_PER_MINUTE).unwrap());
+                let quota = Quota::per_minute(
+                    NonZeroU32::new(WHITELIST_RATE_LIMIT_PER_MINUTE)
+                        .expect("WHITELIST_RATE_LIMIT_PER_MINUTE must be non-zero")
+                );
                 Arc::new(RateLimiter::direct(quota))
             })
             .clone()
