@@ -341,7 +341,8 @@ pub async fn get_project(
                     // TRUE row exists => allowed; otherwise false
                     Some(exists_row.is_some())
                 } else {
-                    // If URL parsing fails, deny access
+                    // If URL parsing fails, deny access and log for security monitoring
+                    tracing::warn!("Referer normalization failed for project {}: {}", project_id, referer_url);
                     Some(false)
                 }
             } else {
@@ -572,8 +573,10 @@ pub async fn add_to_whitelist(
     };
 
     // Normalize the URL to prevent bypasses via query params or fragments
-    let normalized_url = normalize_url(trimmed_url)
-        .ok_or((StatusCode::BAD_REQUEST, "Invalid URL format".to_string()))?;
+    let normalized_url = normalize_url(trimmed_url).ok_or((
+        StatusCode::BAD_REQUEST,
+        "Invalid URL format. URL must use http or https scheme and include a valid host.".to_string(),
+    ))?;
 
     // Unique(project_id, allowed_url) is enforced by the DB; ignore conflicts
     let result = sqlx::query(
@@ -612,8 +615,10 @@ pub async fn remove_from_whitelist(
     }
 
     // Normalize the URL to match how it was stored
-    let normalized_url = normalize_url(trimmed_url)
-        .ok_or((StatusCode::BAD_REQUEST, "Invalid URL format".to_string()))?;
+    let normalized_url = normalize_url(trimmed_url).ok_or((
+        StatusCode::BAD_REQUEST,
+        "Invalid URL format. URL must use http or https scheme and include a valid host.".to_string(),
+    ))?;
 
     let delete_result = sqlx::query(
         "DELETE FROM project_whitelists pw \
