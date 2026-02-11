@@ -84,6 +84,29 @@ trunk serve --open
     * Copy the URL (e.g., `http://localhost:8080/project/my-cool-tool`).
     * Send it to users. They will get a fresh clone of the environment you set up!
 
+## Security Architecture
+
+### Embed Authorization
+
+TryCli Studio implements a dual-layer security model for embedded projects:
+
+1. **VIP Pass (embed_key):** A private key that grants unrestricted access to embedded projects. Only project owners have access to this key.
+2. **Guest List (whitelist):** A list of authorized URLs that can embed the project publicly.
+
+#### Embed Key Protection
+
+To prevent accidental exposure of the `embed_key` through browser dev tools or network inspection:
+
+* The `embed_key` is **not** included in the main project response (`/api/project/:username/:slug`)
+* Instead, a dedicated authenticated endpoint (`/api/project/:slug/embed-key`) is used to retrieve the key
+* This endpoint requires authentication and verifies project ownership
+* The key is only fetched when the user explicitly clicks the "Share / Embed" button
+
+This separation ensures that:
+* Screen sharing during project viewing won't expose the key
+* Browser extensions or network logs won't capture the key during normal browsing
+* The key is only retrieved when intentionally needed for sharing purposes
+
 ## Troubleshooting
 
 * **"Container ID not found":** Ensure you wait for the terminal to initialize before clicking Publish.
