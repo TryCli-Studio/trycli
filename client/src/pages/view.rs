@@ -285,6 +285,7 @@ pub fn ViewPage() -> impl IntoView {
                                         
                                         // Fetch embed_key from dedicated endpoint to avoid exposure in main response
                                         let slug_clone = slug();
+                                        let username_clone = username();
                                         spawn_local(async move {
                                             let url = format!("{}/api/project/{}/embed-key", api_base(), slug_clone);
                                             if let Ok(resp) = Request::get(&url).credentials(RequestCredentials::Include).send().await {
@@ -293,7 +294,7 @@ pub fn ViewPage() -> impl IntoView {
                                                     let vip = if key.is_empty() {
                                                         String::new()
                                                     } else {
-                                                        format!("{}/{}/{}?key={}", origin, username(), slug_clone, key)
+                                                        format!("{}/{}/{}?key={}", origin, username_clone, slug_clone, key)
                                                     };
                                                     set_vip_link.set(vip);
                                                 }

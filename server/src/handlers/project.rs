@@ -703,9 +703,10 @@ pub async fn get_embed_key(
         }
     }
 
-    // 5. Return the embed_key
+    // 5. Return the embed_key (should always be present after step 4)
+    let key = embed_key.expect("embed_key should have been generated in step 4");
     let response = serde_json::json!({
-        "embed_key": embed_key.unwrap_or_default()
+        "embed_key": key
     });
 
     Ok(Json(response))
