@@ -283,10 +283,10 @@ pub fn ViewPage() -> impl IntoView {
                     
                     create_effect(move |_| {
                         if !mounted.0.get() {
+                            mounted.1.set(true);
                             if let Some(window) = web_sys::window() {
                                 let callback = wasm_bindgen::closure::Closure::once(move || {
                                     setup_resize_divider();
-                                    mounted.1.set(true);
                                 });
                                 window.request_animation_frame(callback.as_ref().unchecked_ref()).ok();
                                 callback.forget();
