@@ -52,7 +52,7 @@ pub fn EmbedModal(
     let (copied_link, set_copied_link) = create_signal(false);
     let (copied_vip, set_copied_vip) = create_signal(false);
     let (new_url, set_new_url) = create_signal(String::new());
-    
+
     let iframe_ref = create_node_ref::<leptos::html::Textarea>();
     let link_ref = create_node_ref::<leptos::html::Input>();
     let vip_ref = create_node_ref::<leptos::html::Input>();
@@ -81,7 +81,7 @@ pub fn EmbedModal(
                                 <h3 class="modal-title" style="margin: 0; font-size: 1.25rem;">{move || title.get()}</h3>
                                 <button class="btn-nav" on:click=move |_| on_close.call(()) style="font-size: 1.5rem; line-height: 1;">"×"</button>
                             </div>
-                            
+
                             // --- SECTION 1: IFRAME ---
                             <div style="margin-bottom: 24px; position: relative;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
@@ -134,6 +134,7 @@ pub fn EmbedModal(
                                         view! { <span style="opacity: 0;">"Placeholder"</span> }.into_view()
                                     }}
                                 </div>
+
                                 <div class="input-hero-wrapper" style="display: flex; gap: 0;">
                                     <input
                                         type="text"
@@ -182,7 +183,7 @@ pub fn EmbedModal(
                                 <div class="input-hero-wrapper" style="display: flex; gap: 0;">
                                     <input
                                         type="text"
-                                        class="input-slug" 
+                                        class="input-slug"
                                         style="flex: 1; font-family: var(--font-mono); font-size: 0.85rem; border-top-right-radius: 0; border-bottom-right-radius: 0; padding: 10px;"
                                         readonly
                                         node_ref=link_ref

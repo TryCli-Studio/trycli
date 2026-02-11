@@ -1,26 +1,26 @@
 use leptos::*;
 
-pub mod types;
 pub mod api;
 pub mod app;
+pub mod types;
 pub mod components {
-    pub mod terminal;
-    pub mod protected;
     pub mod limit;
-    pub mod navbar;
     pub mod modal;
+    pub mod navbar;
+    pub mod protected;
+    pub mod terminal;
 }
 pub mod pages {
-    pub mod home;
-    pub mod dashboard;
-    pub mod create;
-    pub mod view;
-    pub mod embed;
-    pub mod docs;
-    pub mod blogs;
-    pub mod analytics;
     pub mod admin;
+    pub mod analytics;
+    pub mod blogs;
+    pub mod create;
+    pub mod dashboard;
+    pub mod docs;
+    pub mod embed;
+    pub mod home;
     pub mod policy;
+    pub mod view;
 }
 
 pub use app::App;
