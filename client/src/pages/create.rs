@@ -11,6 +11,7 @@ use crate::types::User;
 use crate::components::terminal::TerminalView;
 use crate::components::navbar::Navbar;
 use crate::components::modal::Modal;
+use crate::hooks::use_landscape_lock;
 
 // Simple resize divider setup
 fn setup_resize_divider() {
@@ -82,6 +83,7 @@ fn setup_resize_divider() {
 
 #[component]
 pub fn CreatePage() -> impl IntoView {
+    let is_portrait = use_landscape_lock();
     let query_params = use_query_map();
     let pre_filled_name = move || {
         query_params.with(|params| {
@@ -252,6 +254,13 @@ After publishing, you can easily distribute your interactive terminal:
         })
     };
     view! {
+        <Modal
+            show=is_portrait.into()
+            title="Rotate Device".to_string().into()
+            body="Please rotate your device to Landscape mode for the best experience.".to_string().into()
+            button_label="".to_string().into()
+            on_close=Callback::new(|_| {})
+        />
         <Modal
             show=modal_open.into()
             title=modal_title.into()
