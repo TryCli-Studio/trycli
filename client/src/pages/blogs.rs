@@ -1,10 +1,10 @@
+use crate::api::api_base;
+use crate::components::navbar::Navbar;
+use crate::types::User;
+use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::A;
-use gloo_net::http::Request;
 use web_sys::RequestCredentials;
-use crate::components::navbar::Navbar;
-use crate::api::api_base;
-use crate::types::User;
 
 #[component]
 pub fn BlogsPage() -> impl IntoView {
@@ -12,21 +12,24 @@ pub fn BlogsPage() -> impl IntoView {
     let (user, set_user) = create_signal(None::<User>);
     let (auth_checked, set_auth_checked) = create_signal(false);
 
-    create_resource(|| (), move |_| async move {
-        let url = format!("{}/api/me", api_base());
-        if let Ok(resp) = Request::get(&url)
-            .credentials(RequestCredentials::Include)
-            .send()
-            .await
-        {
-            if resp.ok() {
-                if let Ok(u) = resp.json::<User>().await {
-                    set_user.set(Some(u));
+    create_resource(
+        || (),
+        move |_| async move {
+            let url = format!("{}/api/me", api_base());
+            if let Ok(resp) = Request::get(&url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await
+            {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        set_user.set(Some(u));
+                    }
                 }
             }
-        }
-        set_auth_checked.set(true);
-    });
+            set_auth_checked.set(true);
+        },
+    );
 
     view! {
         <div style="min-height: 100vh; background: var(--bg-dark); display: flex; flex-direction: column; overflow-x: hidden;">
@@ -37,8 +40,8 @@ pub fn BlogsPage() -> impl IntoView {
                         if auth_checked.get() {
                             if let Some(u) = user.get() {
                                 view! {
-                                    <img src=u.avatar_url 
-                                         style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" 
+                                    <img src=u.avatar_url
+                                         style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);"
                                          alt="User Avatar" />
                                 }.into_view()
                             } else {

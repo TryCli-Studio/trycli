@@ -1,11 +1,11 @@
-use leptos::*;
-use leptos_router::use_navigate;
-use gloo_net::http::Request;
-use web_sys::RequestCredentials;
-use serde::{Deserialize, Serialize};
 use crate::api::api_base;
 use crate::components::navbar::Navbar;
 use crate::types::ProjectSummary;
+use gloo_net::http::Request;
+use leptos::*;
+use leptos_router::use_navigate;
+use serde::{Deserialize, Serialize};
+use web_sys::RequestCredentials;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ContainerInfo {
@@ -35,11 +35,14 @@ pub fn AdminPage() -> impl IntoView {
     // Actions are Copy, so we can use 'refresh_action' everywhere without cloning
     let refresh_action = create_action(move |_: &()| {
         // FIX: Clone navigate here so the async block owns this copy
-        let navigate = navigate.clone(); 
-        
+        let navigate = navigate.clone();
+
         async move {
             let url = format!("{}/api/admin/stats", api_base());
-            let req = Request::get(&url).credentials(RequestCredentials::Include).send().await;
+            let req = Request::get(&url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await;
 
             match req {
                 Ok(resp) => {
@@ -54,12 +57,16 @@ pub fn AdminPage() -> impl IntoView {
                             set_stats.set(Some(data));
                         }
                     }
-                },
+                }
                 Err(_) => {}
             }
-            
+
             let p_url = format!("{}/api/admin/projects", api_base());
-            if let Ok(resp) = Request::get(&p_url).credentials(RequestCredentials::Include).send().await {
+            if let Ok(resp) = Request::get(&p_url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await
+            {
                 if let Ok(data) = resp.json::<Vec<ProjectSummary>>().await {
                     set_projects.set(data);
                 }
@@ -76,9 +83,17 @@ pub fn AdminPage() -> impl IntoView {
     let kill_container = create_action(move |id: &String| {
         let id = id.clone();
         async move {
-            if !window().confirm_with_message(&format!("Kill container {}?", id)).unwrap_or(false) { return; }
+            if !window()
+                .confirm_with_message(&format!("Kill container {}?", id))
+                .unwrap_or(false)
+            {
+                return;
+            }
             let url = format!("{}/api/admin/container/{}", api_base(), id);
-            let _ = Request::delete(&url).credentials(RequestCredentials::Include).send().await;
+            let _ = Request::delete(&url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await;
             refresh_action.dispatch(()); // Trigger refresh
         }
     });
@@ -87,9 +102,20 @@ pub fn AdminPage() -> impl IntoView {
     let delete_project = create_action(move |slug: &String| {
         let slug = slug.clone();
         async move {
-            if !window().confirm_with_message(&format!("DELETE project '{}'?\nThis deletes the DB entry AND Docker image.", slug)).unwrap_or(false) { return; }
+            if !window()
+                .confirm_with_message(&format!(
+                    "DELETE project '{}'?\nThis deletes the DB entry AND Docker image.",
+                    slug
+                ))
+                .unwrap_or(false)
+            {
+                return;
+            }
             let url = format!("{}/api/admin/project/{}", api_base(), slug);
-            let _ = Request::delete(&url).credentials(RequestCredentials::Include).send().await;
+            let _ = Request::delete(&url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await;
             refresh_action.dispatch(()); // Trigger refresh
         }
     });
@@ -107,11 +133,11 @@ pub fn AdminPage() -> impl IntoView {
                     <div>
                         <Navbar>
                             <div style="display:flex; align-items:center; gap: 16px; margin-left: auto;">
-                                <span class="badge" 
+                                <span class="badge"
                                       style="border: 1px solid #ef4444; color: #ef4444; margin: 0; padding: 4px 12px; font-size: 0.75rem; letter-spacing: 0.05em;">
                                     "ADMIN MODE"
                                 </span>
-                                <button class="btn-secondary" 
+                                <button class="btn-secondary"
                                         style="font-size: 0.85rem; padding: 6px 12px; height: 32px; display: flex; align-items: center;"
                                         on:click=move |_| refresh_action.dispatch(())>
                                     "Refresh Data"
@@ -202,7 +228,7 @@ pub fn AdminPage() -> impl IntoView {
                                             projects.get().into_iter().map(|p| {
                                                 let slug = p.slug.clone();
                                                 let owner = p.owner_username.clone();
-                                                
+
                                                 view! {
                                                     <tr>
                                                         <td style="font-weight: bold; color: #fff;">{p.slug.clone()}</td>
@@ -210,9 +236,9 @@ pub fn AdminPage() -> impl IntoView {
                                                         <td style="font-family: monospace; color: #666; font-size: 0.85rem;">{p.image_tag}</td>
                                                         <td>
                                                             <div style="display:flex; gap: 8px;">
-                                                                <a href=format!("/{}/{}", owner, p.slug) 
-                                                                   target="_blank" 
-                                                                   class="btn-secondary" 
+                                                                <a href=format!("/{}/{}", owner, p.slug)
+                                                                   target="_blank"
+                                                                   class="btn-secondary"
                                                                    style="font-size: 0.75rem; padding: 4px 8px; text-decoration:none;">
                                                                    "View"
                                                                 </a>

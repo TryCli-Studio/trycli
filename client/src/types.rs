@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)] 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ProjectSummary {
     pub slug: String,
     pub image_tag: String,
@@ -49,7 +49,7 @@ pub struct AnalyticsDashboardData {
     pub active_sessions: Vec<LiveSessionMetric>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct User {
     pub id: i64,
     pub login: String,

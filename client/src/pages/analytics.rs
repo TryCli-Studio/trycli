@@ -1,10 +1,10 @@
+use crate::api::api_base;
+use crate::components::navbar::Navbar;
+use crate::types::{AnalyticsDashboardData, User};
+use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::A;
-use gloo_net::http::Request;
 use web_sys::RequestCredentials;
-use crate::components::navbar::Navbar;
-use crate::api::api_base;
-use crate::types::{User, AnalyticsDashboardData};
 
 fn format_uptime(seconds: u64) -> String {
     if seconds < 60 {
@@ -26,66 +26,69 @@ pub fn AnalyticsPage() -> impl IntoView {
     let (_user, set_user) = create_signal(None::<User>);
     let (data, set_data) = create_signal(None::<AnalyticsDashboardData>);
     let (error, set_error) = create_signal(None::<String>);
-    
+
     // Auth & Data Fetch
-    let _analytics_resource = create_resource(|| (), move |_| async move {
-        // 1. Check Auth
-        let auth_url = format!("{}/api/me", api_base());
-        let auth_resp = Request::get(&auth_url)
-            .credentials(RequestCredentials::Include)
-            .send()
-            .await;
+    let _analytics_resource = create_resource(
+        || (),
+        move |_| async move {
+            // 1. Check Auth
+            let auth_url = format!("{}/api/me", api_base());
+            let auth_resp = Request::get(&auth_url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await;
 
-        let resp = match auth_resp {
-            Ok(r) if r.ok() => r,
-            Ok(r) => {
-                set_error.set(Some(format!("Auth failed: {}", r.status())));
-                return;
+            let resp = match auth_resp {
+                Ok(r) if r.ok() => r,
+                Ok(r) => {
+                    set_error.set(Some(format!("Auth failed: {}", r.status())));
+                    return;
+                }
+                Err(e) => {
+                    set_error.set(Some(format!("Auth error: {}", e)));
+                    return;
+                }
+            };
+
+            let user = match resp.json::<User>().await {
+                Ok(u) => u,
+                Err(_) => {
+                    set_error.set(Some("Invalid user response".to_string()));
+                    return;
+                }
+            };
+
+            set_user.set(Some(user));
+
+            // 2. Fetch Analytics
+            let analytics_url = format!("{}/api/analytics", api_base());
+            match Request::get(&analytics_url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await
+            {
+                // Success case: Status is 200-299
+                Ok(r) if r.ok() => {
+                    if let Ok(d) = r.json::<AnalyticsDashboardData>().await {
+                        set_data.set(Some(d));
+                    } else {
+                        set_error.set(Some("Invalid analytics response".to_string()));
+                    }
+                }
+                // Fallback case: Status is NOT 200-299 (e.g. 401, 403, 500)
+                // This replaces your 'else' block
+                Ok(r) => {
+                    if r.status() == 401 || r.status() == 403 {
+                        set_error.set(Some("Please log in to view analytics".to_string()));
+                    } else {
+                        set_error.set(Some(format!("Analytics failed: {}", r.status())));
+                    }
+                }
+                // Network error case
+                Err(e) => set_error.set(Some(format!("Analytics error: {}", e))),
             }
-            Err(e) => {
-                set_error.set(Some(format!("Auth error: {}", e)));
-                return;
-            }
-        };
-
-        let user = match resp.json::<User>().await {
-            Ok(u) => u,
-            Err(_) => {
-                set_error.set(Some("Invalid user response".to_string()));
-                return;
-            }
-        };
-
-        set_user.set(Some(user));
-
-        // 2. Fetch Analytics
-let analytics_url = format!("{}/api/analytics", api_base());
-match Request::get(&analytics_url)
-    .credentials(RequestCredentials::Include)
-    .send()
-    .await 
-{
-    // Success case: Status is 200-299
-    Ok(r) if r.ok() => {
-        if let Ok(d) = r.json::<AnalyticsDashboardData>().await {
-            set_data.set(Some(d));
-        } else {
-            set_error.set(Some("Invalid analytics response".to_string()));
-        }
-    }
-    // Fallback case: Status is NOT 200-299 (e.g. 401, 403, 500)
-    // This replaces your 'else' block
-    Ok(r) => {
-        if r.status() == 401 || r.status() == 403 {
-            set_error.set(Some("Please log in to view analytics".to_string()));
-        } else {
-            set_error.set(Some(format!("Analytics failed: {}", r.status())));
-        }
-    }
-    // Network error case
-    Err(e) => set_error.set(Some(format!("Analytics error: {}", e))),
-}
-    });
+        },
+    );
 
     view! {
         <div style="min-height: 100vh; background: var(--bg-dark);">
@@ -225,7 +228,7 @@ match Request::get(&analytics_url)
                                         } else {
                                             0.0
                                         };
-                                        
+
                                         view! {
                                             <tr>
                                                 <td style="font-weight: 600;">{proj.slug}</td>

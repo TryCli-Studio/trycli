@@ -69,13 +69,20 @@ pub fn EmbedModal(
     title: MaybeSignal<String>,
     iframe_code: MaybeSignal<String>,
     smart_link: MaybeSignal<String>,
+    vip_link: MaybeSignal<String>,
+    whitelist: MaybeSignal<Vec<String>>,
+    on_add_url: Callback<String>,
+    on_remove_url: Callback<String>,
     on_close: Callback<()>,
 ) -> impl IntoView {
     let (copied_iframe, set_copied_iframe) = create_signal(false);
     let (copied_link, set_copied_link) = create_signal(false);
-    
+    let (copied_vip, set_copied_vip) = create_signal(false);
+    let (new_url, set_new_url) = create_signal(String::new());
+
     let iframe_ref = create_node_ref::<leptos::html::Textarea>();
     let link_ref = create_node_ref::<leptos::html::Input>();
+    let vip_ref = create_node_ref::<leptos::html::Input>();
 
     view! {
         {move || {
@@ -83,10 +90,15 @@ pub fn EmbedModal(
             let title = title.clone();
             let iframe_code = iframe_code.clone();
             let smart_link = smart_link.clone();
+            let vip_link = vip_link.clone();
+            let whitelist = whitelist.clone();
             let on_close = on_close.clone();
+            let on_add_url = on_add_url.clone();
+            let on_remove_url = on_remove_url.clone();
 
             let iframe_code_for_click = iframe_code.clone();
             let smart_link_for_click = smart_link.clone();
+            let vip_link_for_click = vip_link.clone();
 
             if show.get() {
                 view! {
@@ -96,7 +108,7 @@ pub fn EmbedModal(
                                 <h3 class="modal-title" style="margin: 0; font-size: 1.25rem;">{move || title.get()}</h3>
                                 <button class="btn-nav" on:click=move |_| on_close.call(()) style="font-size: 1.5rem; line-height: 1;">"×"</button>
                             </div>
-                            
+
                             // --- SECTION 1: IFRAME ---
                             <div style="margin-bottom: 24px; position: relative;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
@@ -137,11 +149,79 @@ pub fn EmbedModal(
                                 </div>
                             </div>
 
-                            // --- SECTION 2: SMART LINK ---
+                            // --- SECTION 2: PRIVATE VIP LINK ---
+                            <div style="margin-bottom: 24px; position: relative;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <label style="color:var(--text-main); font-weight:600; font-size: 0.9rem;">
+                                        "Option 2: Private VIP Link"
+                                    </label>
+                                    {move || if copied_vip.get() {
+                                        view! { <span style="color: #22c55e; font-size: 0.8rem; font-weight: 600; animation: fadeIn 0.2s;">"✓ Copied!"</span> }.into_view()
+                                    } else {
+                                        view! { <span style="opacity: 0;">"Placeholder"</span> }.into_view()
+                                    }}
+                                </div>
+
+                                {move || {
+                                    let link = vip_link.get();
+                                    let vip_link_for_input = vip_link.clone();
+                                    let vip_link_for_button = vip_link_for_click.clone();
+                                    if link.is_empty() {
+                                        view! {
+                                            <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center;">
+                                                <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">
+                                                    "VIP link is being generated..."
+                                                </p>
+                                                <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 8px;">
+                                                    "This may take a moment. The link will appear here once ready."
+                                                </p>
+                                            </div>
+                                        }.into_view()
+                                    } else {
+                                        view! {
+                                            <>
+                                                <div class="input-hero-wrapper" style="display: flex; gap: 0;">
+                                                    <input
+                                                        type="text"
+                                                        class="input-slug" 
+                                                        style="flex: 1; font-family: var(--font-mono); font-size: 0.85rem; border-top-right-radius: 0; border-bottom-right-radius: 0; padding: 10px;"
+                                                        readonly
+                                                        node_ref=vip_ref
+                                                        prop:value=move || vip_link_for_input.get()
+                                                    />
+                                                    <button
+                                                        class="btn-secondary"
+                                                        style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; width: 50px; display: flex; align-items: center; justify-content: center;"
+                                                        aria-label="Copy VIP link"
+                                                        on:click=move |_| {
+                                                            let text = vip_link_for_button.get();
+                                                            let _ = window().navigator().clipboard().write_text(&text);
+                                                            if let Some(el) = vip_ref.get() { el.select(); }
+                                                            set_copied_vip.set(true);
+                                                            set_timeout(move || set_copied_vip.set(false), std::time::Duration::from_millis(2000));
+                                                        }
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
+                                                    <strong style="color: #dc2626;">"Security warning:"</strong>
+                                                    " This VIP link bypasses the Guest List and must only be shared privately. Do NOT embed it on public websites, iframes, or forums; anyone with this link can access your terminal."
+                                                </p>
+                                            </>
+                                        }.into_view()
+                                    }
+                                }}
+                            </div>
+
+                            // --- SECTION 3: SMART LINK ---
                             <div style="margin-bottom: 32px; position: relative;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                                     <label style="color:var(--text-main); font-weight:600; font-size: 0.9rem;">
-                                        "Option 2: Smart Link (Medium, Reddit)"
+                                        "Option 3: Smart Link (Medium, Reddit)"
                                     </label>
                                     {move || if copied_link.get() {
                                         view! { <span style="color: #22c55e; font-size: 0.8rem; font-weight: 600; animation: fadeIn 0.2s;">"✓ Copied!"</span> }.into_view()
@@ -152,7 +232,7 @@ pub fn EmbedModal(
                                 <div class="input-hero-wrapper" style="display: flex; gap: 0;">
                                     <input
                                         type="text"
-                                        class="input-slug" 
+                                        class="input-slug"
                                         style="flex: 1; font-family: var(--font-mono); font-size: 0.85rem; border-top-right-radius: 0; border-bottom-right-radius: 0; padding: 10px;"
                                         readonly
                                         node_ref=link_ref
@@ -179,6 +259,65 @@ pub fn EmbedModal(
                                 <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
                                     "Paste directly into Medium or Reddit to expand."
                                 </p>
+                            </div>
+
+                            // --- SECTION 4: Guest List / Whitelist ---
+                            <div style="margin-bottom: 24px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <label style="color:var(--text-main); font-weight:600; font-size: 0.9rem;">
+                                        "Guest List (Authorized URLs)"
+                                    </label>
+                                    <span style="font-size: 0.8rem; color: var(--text-muted);">
+                                        "Only these pages can auto-launch your terminal."
+                                    </span>
+                                </div>
+                                <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                                    <input
+                                        type="text"
+                                        class="input-slug"
+                                        style="flex: 1;"
+                                        placeholder="https://medium.com/@user/article-slug"
+                                        prop:value=new_url
+                                        on:input=move |ev| set_new_url.set(event_target_value(&ev))
+                                    />
+                                    <button
+                                        class="btn-primary"
+                                        on:click=move |_| {
+                                            let url = new_url.get();
+                                            if !url.is_empty() {
+                                                on_add_url.call(url);
+                                                set_new_url.set(String::new());
+                                            }
+                                        }
+                                        prop:disabled=move || new_url.get().is_empty()
+                                    >
+                                        "Add URL"
+                                    </button>
+                                </div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                    <For
+                                        each=move || whitelist.get()
+                                        key=|u| u.clone()
+                                        children=move |url| {
+                                            let on_remove_url = on_remove_url.clone();
+                                            view! {
+                                                <span class="badge" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                                                    {url.clone()}
+                                                    <button
+                                                        class="btn-nav"
+                                                        style="padding: 0; color: #ef4444; font-weight: bold; font-size: 0.9rem;"
+                                                        aria-label="Remove URL"
+                                                        on:click=move |_| {
+                                                            on_remove_url.call(url.clone());
+                                                        }
+                                                    >
+                                                        "×"
+                                                    </button>
+                                                </span>
+                                            }
+                                        }
+                                    />
+                                </div>
                             </div>
 
                             <div class="modal-actions">

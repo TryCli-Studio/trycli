@@ -9,6 +9,7 @@ pub struct ProjectSummary {
     pub view_count: i64, 
     #[serde(default)] 
     pub owner_username: String,
+    pub embed_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -18,6 +19,11 @@ pub struct AnalyticsProjectSummary {
     pub view_count: i64,
     pub avg_session_duration: f64,
     pub error_count: i64,
+}
+
+#[derive(Deserialize)]
+pub struct WhitelistRequest {
+    pub allowed_url: String,
 }
 
 #[derive(Serialize)]
@@ -48,15 +54,6 @@ pub enum AnalyticsEventType {
     Error,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct AnalyticsEvent {
-    pub id: i64,
-    pub project_id: i64,
-    pub event_type: AnalyticsEventType,
-    pub duration_seconds: Option<i64>,
-    pub error_type: Option<String>,
-    pub created_at: time::OffsetDateTime,
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {

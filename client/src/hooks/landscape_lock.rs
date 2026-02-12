@@ -31,7 +31,7 @@ pub fn use_landscape_lock() -> ReadSignal<bool> {
                     let width = window.inner_width().ok().and_then(|w| w.as_f64()).unwrap_or(0.0);
                     let portrait = height > width;
                     
-                    if let Ok(mut setter) = set_portrait_clone1.try_borrow_mut() {
+                    if let Ok(setter) = set_portrait_clone1.try_borrow_mut() {
                         setter.set(portrait);
                     }
                 }
@@ -46,7 +46,7 @@ pub fn use_landscape_lock() -> ReadSignal<bool> {
                     let width = window.inner_width().ok().and_then(|w| w.as_f64()).unwrap_or(0.0);
                     let portrait = height > width;
                     
-                    if let Ok(mut setter) = set_portrait_clone2.try_borrow_mut() {
+                    if let Ok(setter) = set_portrait_clone2.try_borrow_mut() {
                         setter.set(portrait);
                     }
                 }

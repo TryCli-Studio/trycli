@@ -1,10 +1,10 @@
+use crate::api::api_base;
+use crate::components::navbar::Navbar;
+use crate::types::User;
+use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::A;
-use gloo_net::http::Request;
 use web_sys::RequestCredentials;
-use crate::components::navbar::Navbar;
-use crate::api::api_base;
-use crate::types::User;
 
 #[component]
 pub fn PolicyPage() -> impl IntoView {
@@ -13,21 +13,24 @@ pub fn PolicyPage() -> impl IntoView {
     let (user, set_user) = create_signal(None::<User>);
     let (auth_checked, set_auth_checked) = create_signal(false);
 
-    create_resource(|| (), move |_| async move {
-        let url = format!("{}/api/me", api_base());
-        if let Ok(resp) = Request::get(&url)
-            .credentials(RequestCredentials::Include)
-            .send()
-            .await
-        {
-            if resp.ok() {
-                if let Ok(u) = resp.json::<User>().await {
-                    set_user.set(Some(u));
+    create_resource(
+        || (),
+        move |_| async move {
+            let url = format!("{}/api/me", api_base());
+            if let Ok(resp) = Request::get(&url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await
+            {
+                if resp.ok() {
+                    if let Ok(u) = resp.json::<User>().await {
+                        set_user.set(Some(u));
+                    }
                 }
             }
-        }
-        set_auth_checked.set(true);
-    });
+            set_auth_checked.set(true);
+        },
+    );
 
     view! {
         <div class="docs-container">
@@ -37,8 +40,8 @@ pub fn PolicyPage() -> impl IntoView {
                         if auth_checked.get() {
                             if let Some(u) = user.get() {
                                 view! {
-                                    <img src=u.avatar_url 
-                                         style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" 
+                                    <img src=u.avatar_url
+                                         style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);"
                                          alt="User Avatar" />
                                 }.into_view()
                             } else {
@@ -120,7 +123,7 @@ pub fn PolicyPage() -> impl IntoView {
                 <main class="docs-content">
                     <h1>"TryCLI Terms of Service"</h1>
                     <p class="text-sm text-gray-500">"Last Updated: February 9, 2026"</p>
-                    
+
                     <section id="introduction">
                         <h2>"1. Introduction and Acceptance of Terms"</h2>
                         <p>"These Terms of Service (\"Terms\") constitute a binding legal agreement between you (\"Publisher,\" \"User,\" or \"You\") and TryCLI (\"Platform,\" \"We,\" or \"Us\"). By accessing, registering for, or using the TryCLI platform, including our browser-based sandbox environment, live-syncing Markdown editor, and related developer tools (collectively, the \"Services\"), you acknowledge that you have read, understood, and agree to be bound by these Terms."</p>
@@ -129,7 +132,7 @@ pub fn PolicyPage() -> impl IntoView {
 
                     <section id="nature-of-service">
                         <h2>"2. Nature of the Service: Passive Conduit"</h2>
-                        
+
                         <h3>"2.1 Platform Status"</h3>
                         <p>"You acknowledge and agree that TryCLI operates solely as a technological intermediary and hosting platform. We provide the infrastructure (containerized environments) for the execution of code and the display of documentation. We do not create, select, or modify the content, code, or applications (\"User Content\") uploaded or executed by Publishers."</p>
 
@@ -160,7 +163,7 @@ pub fn PolicyPage() -> impl IntoView {
                         <h2>"4. Proprietary Rights and License"</h2>
                         <h3>"4.1 Your Content"</h3>
                         <p>"You retain all ownership rights to the User Content you create, upload, or execute on TryCLI."</p>
-                        
+
                         <h3>"4.2 License to Host"</h3>
                         <p>"By submitting User Content to the Service, you grant TryCLI a worldwide, non-exclusive, royalty-free license to use, reproduce, modify, adapt, publish, and display such content solely for the purpose of providing the Services (e.g., running your code in a container, displaying your Markdown tutorial)."</p>
                     </section>
@@ -178,10 +181,10 @@ pub fn PolicyPage() -> impl IntoView {
                     <section id="disclaimer">
                         <h2>"6. Disclaimer of Warranties"</h2>
                         <p><strong>"THE SERVICES ARE PROVIDED ON AN \"AS IS\" AND \"AS AVAILABLE\" BASIS, WITHOUT ANY WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED."</strong></p>
-                        
+
                         <h3>"6.1 No Warranty of Functionality"</h3>
                         <p>"TryCLI does not warrant that the Services will be uninterrupted, secure, or error-free, or that any defects will be corrected. We do not guarantee that code which runs in our sandbox environment will function correctly in other environments or on local machines (\"Works on My Machine\" disclaimer)."</p>
-                        
+
                         <h3>"6.2 Data Persistence"</h3>
                         <p>"TryCLI is a sandbox environment designed for development and testing. We do not guarantee the permanent persistence of data, container states, or file systems. You are responsible for backing up your own data."</p>
                     </section>
