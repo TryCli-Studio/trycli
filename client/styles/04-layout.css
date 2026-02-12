@@ -106,16 +106,29 @@
     }
 
     .resize-divider {
-        display: none;
+        display: flex;
+        height: 16px;
+        width: 100%;
+        cursor: row-resize;
+        touch-action: none;
+        position: relative;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
     }
 
-    .workspace .pane:first-child {
-        order: 2;
+    .resize-divider::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--text-muted);
     }
 
-    .workspace .pane:last-child {
-        order: 1;
-    }
 }
 
 .modal-card {

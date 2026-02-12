@@ -21,6 +21,93 @@ fn setup_resize_divider() {
     {
         let is_dragging = Rc::new(RefCell::new(false));
 
+        let handle_move = {
+            let is_dragging = is_dragging.clone();
+            move |x: f64, y: f64| {
+                if !*is_dragging.borrow() {
+                    return;
+                }
+
+                if let Some(window) = web_sys::window() {
+                    if let Some(workspace) = window
+                        .document()
+                        .and_then(|d| d.query_selector(".workspace").ok().flatten())
+                        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                    {
+                        let width = window
+                            .inner_width()
+                            .ok()
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(1024.0);
+
+                        if width <= 768.0 {
+                            let workspace_height = workspace.offset_height() as f64;
+                            let workspace_top = workspace.offset_top() as f64;
+                            let relative_y = y - workspace_top;
+                            let percentage = (relative_y / workspace_height * 100.0).max(20.0).min(80.0);
+
+                            if let Ok(panes) = workspace.query_selector_all(".pane") {
+                                if panes.length() >= 2 {
+                                    if let Some(first_pane) = panes
+                                        .get(0)
+                                        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                                    {
+                                        first_pane.style().set_property("flex", "0 1 auto").ok();
+                                        first_pane.style().set_property("width", "100%").ok();
+                                        first_pane
+                                            .style()
+                                            .set_property("height", &format!("{}%", percentage))
+                                            .ok();
+                                    }
+                                    if let Some(second_pane) = panes
+                                        .get(1)
+                                        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                                    {
+                                        second_pane.style().set_property("flex", "0 1 auto").ok();
+                                        second_pane.style().set_property("width", "100%").ok();
+                                        second_pane
+                                            .style()
+                                            .set_property("height", &format!("{}%", 100.0 - percentage))
+                                            .ok();
+                                    }
+                                }
+                            }
+                        } else {
+                            let workspace_width = workspace.offset_width() as f64;
+                            let workspace_left = workspace.offset_left() as f64;
+                            let relative_x = x - workspace_left;
+                            let percentage = (relative_x / workspace_width * 100.0).max(20.0).min(80.0);
+
+                            if let Ok(panes) = workspace.query_selector_all(".pane") {
+                                if panes.length() >= 2 {
+                                    if let Some(first_pane) = panes
+                                        .get(0)
+                                        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                                    {
+                                        first_pane.style().set_property("flex", "0 1 auto").ok();
+                                        first_pane
+                                            .style()
+                                            .set_property("width", &format!("{}%", percentage))
+                                            .ok();
+                                    }
+                                    if let Some(second_pane) = panes
+                                        .get(1)
+                                        .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
+                                    {
+                                        second_pane.style().set_property("flex", "0 1 auto").ok();
+                                        second_pane
+                                            .style()
+                                            .set_property("width", &format!("{}%", 100.0 - percentage))
+                                            .ok();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
         let on_mousedown = {
             let is_dragging = is_dragging.clone();
             wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
@@ -29,48 +116,30 @@ fn setup_resize_divider() {
         };
 
         let on_mousemove = {
-            let is_dragging = is_dragging.clone();
+            let handle_move = handle_move.clone();
             wasm_bindgen::closure::Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
-                if !*is_dragging.borrow() {
-                    return;
-                }
+                handle_move(e.client_x() as f64, e.client_y() as f64);
+            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+        };
 
-                if let Some(workspace) = web_sys::window()
-                    .and_then(|w| w.document())
-                    .and_then(|d| d.query_selector(".workspace").ok().flatten())
-                    .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-                {
-                    let workspace_width = workspace.offset_width() as f64;
-                    let workspace_left = workspace.offset_left() as f64;
-                    let relative_x = e.client_x() as f64 - workspace_left;
-                    let percentage = (relative_x / workspace_width * 100.0).max(20.0).min(80.0);
-
-                    if let Ok(panes) = workspace.query_selector_all(".pane") {
-                        if panes.length() >= 2 {
-                            if let Some(first_pane) = panes
-                                .get(0)
-                                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-                            {
-                                first_pane.style().set_property("flex", "0 1 auto").ok();
-                                first_pane
-                                    .style()
-                                    .set_property("width", &format!("{}%", percentage))
-                                    .ok();
-                            }
-                            if let Some(second_pane) = panes
-                                .get(1)
-                                .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
-                            {
-                                second_pane.style().set_property("flex", "0 1 auto").ok();
-                                second_pane
-                                    .style()
-                                    .set_property("width", &format!("{}%", 100.0 - percentage))
-                                    .ok();
-                            }
+        let on_touchmove = {
+            let handle_move = handle_move.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |e: web_sys::TouchEvent| {
+                e.prevent_default();
+                if let Ok(touches) = js_sys::Reflect::get(&e, &JsValue::from_str("touches")) {
+                    if let Ok(touch) = js_sys::Reflect::get(&touches, &JsValue::from_f64(0.0)) {
+                        let client_x = js_sys::Reflect::get(&touch, &JsValue::from_str("clientX"))
+                            .ok()
+                            .and_then(|v| v.as_f64());
+                        let client_y = js_sys::Reflect::get(&touch, &JsValue::from_str("clientY"))
+                            .ok()
+                            .and_then(|v| v.as_f64());
+                        if let (Some(x), Some(y)) = (client_x, client_y) {
+                            handle_move(x, y);
                         }
                     }
                 }
-            }) as Box<dyn Fn(web_sys::MouseEvent)>)
+            }) as Box<dyn Fn(web_sys::TouchEvent)>)
         };
 
         let on_mouseup = {
@@ -80,10 +149,30 @@ fn setup_resize_divider() {
             }) as Box<dyn Fn(web_sys::MouseEvent)>)
         };
 
+        let on_touchstart = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |e: web_sys::TouchEvent| {
+                e.prevent_default();
+                *is_dragging.borrow_mut() = true;
+            }) as Box<dyn Fn(web_sys::TouchEvent)>)
+        };
+
+        let on_touchend = {
+            let is_dragging = is_dragging.clone();
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |_e: web_sys::TouchEvent| {
+                *is_dragging.borrow_mut() = false;
+            }) as Box<dyn Fn(web_sys::TouchEvent)>)
+        };
+
         divider
             .add_event_listener_with_callback("mousedown", on_mousedown.as_ref().unchecked_ref())
             .ok();
         on_mousedown.forget();
+
+        divider
+            .add_event_listener_with_callback("touchstart", on_touchstart.as_ref().unchecked_ref())
+            .ok();
+        on_touchstart.forget();
 
         if let Some(document) = web_sys::window().and_then(|w| w.document()) {
             document
@@ -95,8 +184,22 @@ fn setup_resize_divider() {
             document
                 .add_event_listener_with_callback("mouseup", on_mouseup.as_ref().unchecked_ref())
                 .ok();
+            document
+                .add_event_listener_with_callback(
+                    "touchmove",
+                    on_touchmove.as_ref().unchecked_ref(),
+                )
+                .ok();
+            document
+                .add_event_listener_with_callback(
+                    "touchend",
+                    on_touchend.as_ref().unchecked_ref(),
+                )
+                .ok();
             on_mousemove.forget();
             on_mouseup.forget();
+            on_touchmove.forget();
+            on_touchend.forget();
         }
     }
 }
@@ -507,6 +610,13 @@ After publishing, you can easily distribute your interactive terminal:
                 view! {
                     <div class="workspace">
                         <div class="pane" style="width: 50%">
+                             <textarea class="editor-textarea"
+                                spellcheck="false"
+                                on:input=move |ev| set_markdown.set(event_target_value(&ev))
+                             >{markdown}</textarea>
+                        </div>
+                        <div class="resize-divider"></div>
+                        <div class="pane" style="width: 50%">
                             <div class="terminal-header">
                                 <div class="dot red"></div>
                                 <div class="dot yellow"></div>
@@ -530,13 +640,6 @@ After publishing, you can easily distribute your interactive terminal:
                                     }
                                 }}
                             </div>
-                        </div>
-                        <div class="resize-divider"></div>
-                        <div class="pane" style="width: 50%">
-                             <textarea class="editor-textarea"
-                                spellcheck="false"
-                                on:input=move |ev| set_markdown.set(event_target_value(&ev))
-                             >{markdown}</textarea>
                         </div>
                     </div>
                 }.into_view()
