@@ -11,7 +11,6 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
 use web_sys::RequestCredentials;
-use crate::hooks::use_landscape_lock;
 
 // Simple resize divider setup
 fn setup_resize_divider() {
@@ -104,7 +103,6 @@ fn setup_resize_divider() {
 
 #[component]
 pub fn CreatePage() -> impl IntoView {
-    let is_portrait = use_landscape_lock();
     let query_params = use_query_map();
     let pre_filled_name =
         move || query_params.with(|params| params.get("name").cloned().unwrap_or_default());
@@ -158,6 +156,8 @@ After publishing, you can easily distribute your interactive terminal:
     let (modal_title, set_modal_title) = create_signal(String::new());
     let (modal_body, set_modal_body) = create_signal(String::new());
     let (modal_success, set_modal_success) = create_signal(false);
+    let (publish_modal_open, set_publish_modal_open) = create_signal(false);
+    let (menu_open, set_menu_open) = create_signal(false);
 
     create_resource(
         || (),
@@ -214,18 +214,48 @@ After publishing, you can easily distribute your interactive terminal:
         },
     );
     let navigate_modal = use_navigate();
-    let on_publish = Rc::new(move |_: ev::MouseEvent| {
+    let publish_action = Rc::new(move || {
         // Prevent concurrent publish requests
         if is_publishing.get() {
             return;
         }
+        if slug.get().is_empty() || slug_error.get().is_some() {
+            return;
+        }
         set_is_publishing.set(true);
+        set_publish_modal_open.set(false);
 
         spawn_local(async move {
+            let slug_value = slug.get_untracked();
+            let check_url = format!("{}/api/check-slug/{}", api_base(), slug_value);
+            if let Ok(resp) = Request::get(&check_url)
+                .credentials(RequestCredentials::Include)
+                .send()
+                .await
+            {
+                if resp.ok() {
+                    if let Ok(data) = resp.json::<serde_json::Value>().await {
+                        let available = data
+                            .get("available")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        if !available {
+                            set_is_publishing.set(false);
+                            set_modal_title.set("Publish failed".to_string());
+                            set_modal_body
+                                .set("Project with same slug exists, try another one.".to_string());
+                            set_modal_success.set(false);
+                            set_modal_open.set(true);
+                            return;
+                        }
+                    }
+                }
+            }
+
             let mut publish_success = false;
             let body_data = serde_json::json!({
                 "container_id": container_id.get_untracked(),
-                "slug": slug.get_untracked(),
+                "slug": slug_value,
                 "markdown": markdown.get_untracked()
             });
 
@@ -277,6 +307,10 @@ After publishing, you can easily distribute your interactive terminal:
             set_modal_open.set(true);
         });
     });
+    let on_publish = Rc::new({
+        let publish_action = publish_action.clone();
+        move |_: ev::MouseEvent| (publish_action)()
+    });
     let on_modal_close = {
         let navigate = navigate_modal.clone();
         Callback::new(move |_| {
@@ -286,14 +320,46 @@ After publishing, you can easily distribute your interactive terminal:
             }
         })
     };
+    let on_publish_modal = publish_action.clone();
+    let publish_modal_children: ChildrenFn = Rc::new(move || {
+        let on_publish_modal = on_publish_modal.clone();
+        Fragment::from(view! {
+            <input
+                type="text"
+                class="input-slug"
+                style="width: 100%; margin-bottom: 8px;"
+                on:input=move |ev| {
+                    let value = event_target_value(&ev).to_lowercase();
+                    if value.is_empty() || value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                        set_slug.set(value);
+                        set_slug_error.set(None);
+                    } else {
+                        set_slug_error.set(Some("Only letters, numbers, and hyphens allowed".to_string()));
+                    }
+                }
+                prop:value=slug
+            />
+            {move || slug_error.get().map(|err| view! {
+                <span style="color: #ef4444; font-size: 0.75rem; display: block; margin-bottom: 12px;">{err}</span>
+            })}
+            <div class="modal-actions">
+                <button class="btn-secondary btn-action" on:click=move |_| set_publish_modal_open.set(false)>
+                    "Cancel"
+                </button>
+                <button
+                    class="btn-secondary btn-action btn-success"
+                    prop:disabled=move || slug.get().is_empty() || slug_error.get().is_some() || is_publishing.get()
+                    on:click={
+                        let on_publish_modal = on_publish_modal.clone();
+                        move |_| (on_publish_modal)()
+                    }
+                >
+                    {move || if is_publishing.get() { "Publishing..." } else { "Publish" }}
+                </button>
+            </div>
+        }.into_view())
+    });
     view! {
-        <Modal
-            show=is_portrait.into()
-            title="Rotate Device".to_string().into()
-            body="Please rotate your device to Landscape mode for the best experience.".to_string().into()
-            button_label="".to_string().into()
-            on_close=Callback::new(|_| {})
-        />
         <Modal
             show=modal_open.into()
             title=modal_title.into()
@@ -301,46 +367,115 @@ After publishing, you can easily distribute your interactive terminal:
             button_label="Close".to_string().into()
             on_close=on_modal_close
         />
+        <Modal
+            show=publish_modal_open.into()
+            title="Publish Project".to_string().into()
+            body="Enter a URL-friendly slug for your project.".to_string().into()
+            button_label="".to_string().into()
+            on_close=Callback::new(move |_| set_publish_modal_open.set(false))
+            children=publish_modal_children
+        />
         <Navbar>
             <div class="controls">
                 {move || {
                     let on_publish = on_publish.clone();
                     match user.get() {
                     Some(u) => view! {
-                        <div style="display: flex; align-items: center; margin-right: 20px;">
-                            <img src=u.avatar_url
-                                 style="width: 24px; height: 24px; border-radius: 50%; margin-right: 8px; border: 1px solid var(--border);" />
-                            <span style="color: var(--text-muted); font-size: 0.9rem;">
-                                {u.login.clone()}
-                            </span>
-                        </div>
-                        <a href=format!("{}/auth/logout", api_base())
-                            class="btn-secondary btn-action btn-logout"
-                            rel="external"
-                            style="margin-right: 12px; text-decoration: none; font-size: 0.8rem;">
-                            "Logout"
-                        </a>
-                        <span style="color: var(--text-muted); font-size: 0.9rem; margin-right: 8px;">"Project Slug:"</span>
-                        <input type="text" class="input-slug"
-                               on:input=move |ev| {
-                                   let value = event_target_value(&ev);
-                                   let value = value.to_lowercase();
-                                   if value.is_empty() || value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-                                       set_slug.set(value);
-                                       set_slug_error.set(None);
-                                   } else {
-                                       set_slug_error.set(Some("Only letters, numbers, and hyphens allowed".to_string()));
+                        <div class="desktop-only" style="display: flex; align-items: center; gap: 12px;">
+                            {let avatar_url = u.avatar_url.clone();
+                             let login = u.login.clone();
+                             view! {
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <img src=avatar_url
+                                         style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border);" />
+                                    <span style="color: var(--text-muted); font-size: 0.9rem;">
+                                        {login}
+                                    </span>
+                                </div>
+                             }}
+                            <a href=format!("{}/auth/logout", api_base())
+                                class="btn-secondary btn-action btn-logout"
+                                rel="external"
+                                style="text-decoration: none; font-size: 0.8rem;">
+                                "Logout"
+                            </a>
+                            <span style="color: var(--text-muted); font-size: 0.9rem;">"Project Slug:"</span>
+                            <input type="text" class="input-slug"
+                                   on:input=move |ev| {
+                                       let value = event_target_value(&ev).to_lowercase();
+                                       if value.is_empty() || value.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                                           set_slug.set(value);
+                                           set_slug_error.set(None);
+                                       } else {
+                                           set_slug_error.set(Some("Only letters, numbers, and hyphens allowed".to_string()));
+                                       }
                                    }
-                               }
-                               prop:value=slug />
-                        {move || slug_error.get().map(|err| view! {
-                            <span style="color: #ef4444; font-size: 0.75rem; margin-left: 8px;">{err}</span>
-                        })}
-                        <button class="btn-secondary btn-action btn-success" on:click=move |ev| (on_publish)(ev)
-                                prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some() || is_publishing.get()
-                                style=move || if is_publishing.get() { "opacity: 0.6; cursor: not-allowed;" } else { "" }>
-                            {move || if is_publishing.get() { "Publishing..." } else { "Publish" }}
-                        </button>
+                                   prop:value=slug />
+                            {move || slug_error.get().map(|err| view! {
+                                <span style="color: #ef4444; font-size: 0.75rem;">{err}</span>
+                            })}
+                            <button class="btn-secondary btn-action btn-success" on:click=move |ev| (on_publish)(ev)
+                                    prop:disabled=move || container_id.get().is_empty() || slug_error.get().is_some() || is_publishing.get()
+                                    style=move || if is_publishing.get() { "opacity: 0.6; cursor: not-allowed;" } else { "" }>
+                                {move || if is_publishing.get() { "Publishing..." } else { "Publish" }}
+                            </button>
+                        </div>
+                        <div class="mobile-only" style="display: flex; align-items: center; gap: 12px;">
+                            <button class="btn-secondary btn-action btn-success" on:click=move |_| set_publish_modal_open.set(true)>
+                                "Publish"
+                            </button>
+                            {let avatar_url = u.avatar_url.clone();
+                             view! {
+                                <img src=avatar_url
+                                     style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border);" />
+                             }}
+                            <div style="position: relative;">
+                                <button
+                                    class="hamburger-menu create-hamburger"
+                                    on:click=move |e: ev::MouseEvent| {
+                                        e.stop_propagation();
+                                        set_menu_open.set(!menu_open.get());
+                                    }
+                                    aria-label="Toggle menu"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                                    </svg>
+                                </button>
+                                {move || if menu_open.get() {
+                                    view! {
+                                        <div class="dropdown-menu" on:click=move |e: ev::MouseEvent| e.stop_propagation()>
+                                            <a href="/dashboard" class="dropdown-item" style="text-decoration: none;">
+                                                "Dashboard"
+                                            </a>
+                                            <a href="/docs" class="dropdown-item" style="text-decoration: none;">
+                                                "Docs"
+                                            </a>
+                                            <a href="/blogs" class="dropdown-item" style="text-decoration: none;">
+                                                "Blogs"
+                                            </a>
+                                            <a href="https://twitter.com" target="_blank" class="dropdown-item" style="text-decoration: none;">
+                                                "Twitter"
+                                            </a>
+                                            <a href="https://ko-fi.com/tryclistudio" target="_blank" class="dropdown-item" style="text-decoration: none;">
+                                                "Support Us"
+                                            </a>
+                                            <div style="border-top: 1px solid var(--border); margin: 4px 0;"></div>
+                                            <a href=format!("{}/auth/logout", api_base())
+                                               class="dropdown-item dropdown-item-danger"
+                                               rel="external"
+                                               style="text-decoration: none;">
+                                               "Logout"
+                                            </a>
+                                        </div>
+                                    }.into_view()
+                                } else {
+                                    view! { <></> }.into_view()
+                                }}
+                            </div>
+                        </div>
                     }.into_view(),
                     None => view! {
                         <a href=format!("{}/auth/github", api_base()) class="btn-secondary btn-action" style="text-decoration: none;">

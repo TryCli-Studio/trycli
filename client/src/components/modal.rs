@@ -9,6 +9,7 @@ pub fn Modal(
     body: MaybeSignal<String>,
     button_label: MaybeSignal<String>,
     on_close: Callback<()>,
+    #[prop(optional)] children: Option<ChildrenFn>,
 ) -> impl IntoView {
     view! {
         {move || {
@@ -17,6 +18,7 @@ pub fn Modal(
             let body = body.clone();
             let button_label = button_label.clone();
             let show = show.clone();
+            let children = children.clone();
             if show.get() {
                 let button_label_for_blocking = button_label.clone();
                 let is_blocking = move || button_label_for_blocking.get().is_empty();
@@ -39,6 +41,13 @@ pub fn Modal(
                         <div class="modal-card">
                             <h3 class="modal-title">{move || title.get()}</h3>
                             <div class="modal-body">{move || body.get()}</div>
+                            {move || {
+                                if let Some(children) = children.clone() {
+                                    view! { <div class="modal-body">{children()}</div> }.into_view()
+                                } else {
+                                    view! { <></> }.into_view()
+                                }
+                            }}
                             <div class="modal-actions">
                                 {move || {
                                     let label = button_label.get();

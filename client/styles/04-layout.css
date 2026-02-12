@@ -92,25 +92,29 @@
     padding: 16px;
 }
 
-/* Blocking Portrait Lock Modal (Portrait Orientation Only) */
-@media (orientation: portrait) {
-    /* Only prevent scrolling on workspace pages (create/view) in portrait */
-    .workspace ~ * html,
-    .workspace ~ * body,
-    body:has(.workspace) {
-        overflow: hidden;
-        width: 100%;
-        height: 100%;
-    }
-
-    /* Hide workspace content behind modal in portrait mode */
+@media (max-width: 768px) and (orientation: portrait) {
     .workspace {
-        visibility: hidden;
-        opacity: 0;
+        flex-direction: column;
+        height: calc(100vh - 60px);
     }
 
-    .modal-overlay {
-        background: rgba(3, 7, 18, 0.98);
+    .pane {
+        width: 100% !important;
+        height: 50%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .resize-divider {
+        display: none;
+    }
+
+    .workspace .pane:first-child {
+        order: 2;
+    }
+
+    .workspace .pane:last-child {
+        order: 1;
     }
 }
 

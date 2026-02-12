@@ -225,6 +225,18 @@
     }
 }
 
+@media (max-width: 768px) {
+    .desktop-only {
+        display: none !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .mobile-only {
+        display: none !important;
+    }
+}
+
 /* Dashboard hamburger always visible */
 .dashboard-hamburger {
     display: flex !important;

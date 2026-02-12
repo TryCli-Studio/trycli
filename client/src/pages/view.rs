@@ -1,11 +1,9 @@
 use crate::api::api_base;
 use crate::components::limit::LimitReached;
 use crate::components::modal::EmbedModal;
-use crate::components::modal::Modal;
 use crate::components::navbar::Navbar;
 use crate::components::terminal::TerminalView;
 use crate::types::User;
-use crate::hooks::use_landscape_lock;
 use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
@@ -122,7 +120,6 @@ fn setup_resize_divider() {
 
 #[component]
 pub fn ViewPage() -> impl IntoView {
-    let is_portrait = use_landscape_lock();
     let params = use_params_map();
     let query_params = use_query_map();
     let username = move || params.get().get("username").cloned().unwrap_or_default();
@@ -133,6 +130,7 @@ pub fn ViewPage() -> impl IntoView {
     let (iframe_code, set_iframe_code) = create_signal(String::new());
     let (smart_link, set_smart_link) = create_signal(String::new());
     let (vip_link, set_vip_link) = create_signal(String::new());
+    let (menu_open, set_menu_open) = create_signal(false);
 
     let (whitelist, set_whitelist) = create_signal(Vec::<String>::new());
 
@@ -292,13 +290,6 @@ pub fn ViewPage() -> impl IntoView {
 
     view! {
         <>
-            <Modal
-                show=is_portrait.into()
-                title="Rotate Device".to_string().into()
-                body="Please rotate your device to Landscape mode for the best experience.".to_string().into()
-                button_label="".to_string().into()
-                on_close=Callback::new(|_| {})
-            />
             <EmbedModal
                 show=embed_modal_open.into()
                 title="Share Project".to_string().into()
@@ -314,11 +305,15 @@ pub fn ViewPage() -> impl IntoView {
             <Navbar>
                 <div class="controls">
                     {move || if is_owner() {
-                        user.get().map(|u| view! {
-                            <div style="display: flex; align-items: center; gap: 16px;">
+                        user.get().map(|u| {
+                            let avatar_url = u.avatar_url.clone();
+                            let avatar_url_mobile = u.avatar_url.clone();
+                            let login = u.login.clone();
+                            view! {
+                            <div class="desktop-only" style="display: flex; align-items: center; gap: 16px;">
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <img src=u.avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
-                                    <span style="color: var(--text-main); font-weight: 500;">{u.login}</span>
+                                    <img src=avatar_url style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);" />
+                                    <span style="color: var(--text-main); font-weight: 500;">{login}</span>
                                 </div>
                                 <button class="btn-secondary btn-action btn-success" on:click=move |_| {
                                     let origin = window().location().origin().unwrap_or_else(|_| "http://localhost:8080".to_string());
@@ -375,6 +370,98 @@ pub fn ViewPage() -> impl IntoView {
                                 </button>
                                 <a href=format!("{}/auth/logout", api_base()) class="btn-secondary btn-action btn-logout" rel="external" style="text-decoration: none; font-size: 0.9rem;">"Logout"</a>
                             </div>
+                            <div class="mobile-only" style="display: flex; align-items: center; gap: 12px;">
+                                <button class="btn-secondary btn-action btn-success" on:click=move |_| {
+                                    let origin = window().location().origin().unwrap_or_else(|_| "http://localhost:8080".to_string());
+                                    if let Some(ProjectState::Ready(data)) = project_resource.get() {
+                                        let token = data.get("embed_token").and_then(|v| v.as_str()).unwrap_or_default();
+                                        let public_url = format!("{}/embed/{}/{}", origin, username(), slug());
+                                        let smart_url = format!("{}/e/{}", api_base(), token);
+
+                                        set_iframe_code.set(format!(
+                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
+                                            public_url
+                                        ));
+                                        set_smart_link.set(smart_url);
+
+                                        let origin_clone = origin.clone();
+                                        let slug_clone = slug();
+                                        let username_clone = username();
+                                        spawn_local(async move {
+                                            let url = format!("{}/api/project/{}/embed-key", api_base(), slug_clone);
+                                            match Request::get(&url).credentials(RequestCredentials::Include).send().await {
+                                                Ok(resp) => {
+                                                    match resp.json::<serde_json::Value>().await {
+                                                        Ok(data) => {
+                                                            let key = data.get("embed_key").and_then(|v| v.as_str()).unwrap_or_default();
+                                                            let vip = if key.is_empty() {
+                                                                String::new()
+                                                            } else {
+                                                                format!("{}/{}/{}?key={}", origin_clone, username_clone, slug_clone, key)
+                                                            };
+                                                            set_vip_link.set(vip);
+                                                        }
+                                                        Err(e) => {
+                                                            web_sys::console::error_1(&JsValue::from_str(&format!(
+                                                                "Failed to parse embed_key response: {}", e
+                                                            )));
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    web_sys::console::error_1(&JsValue::from_str(&format!(
+                                                        "Failed to fetch embed_key from server: {}", e
+                                                    )));
+                                                }
+                                            }
+                                        });
+
+                                        set_embed_modal_open.set(true);
+                                    }
+                                }>
+                                    "Share"
+                                </button>
+                                <img src=avatar_url_mobile style="width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border);" />
+                                <div style="position: relative;">
+                                    <button
+                                        class="hamburger-menu view-hamburger"
+                                        on:click=move |e: ev::MouseEvent| {
+                                            e.stop_propagation();
+                                            set_menu_open.set(!menu_open.get());
+                                        }
+                                        aria-label="Toggle menu"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                                        </svg>
+                                    </button>
+                                    {move || if menu_open.get() {
+                                        view! {
+                                            <div class="dropdown-menu" on:click=move |e: ev::MouseEvent| e.stop_propagation()>
+                                                <a href="/docs" class="dropdown-item" style="text-decoration: none;">
+                                                    "Docs"
+                                                </a>
+                                                <a href="/blogs" class="dropdown-item" style="text-decoration: none;">
+                                                    "Blogs"
+                                                </a>
+                                                <a href="https://twitter.com" target="_blank" class="dropdown-item" style="text-decoration: none;">
+                                                    "Twitter"
+                                                </a>
+                                                <a href="https://ko-fi.com/tryclistudio" target="_blank" class="dropdown-item" style="text-decoration: none;">
+                                                    "Support Us"
+                                                </a>
+                                                <div style="border-top: 1px solid var(--border); margin: 4px 0;"></div>
+                                                <a href=format!("{}/auth/logout", api_base()) class="dropdown-item dropdown-item-danger" rel="external" style="text-decoration: none;">"Logout"</a>
+                                            </div>
+                                        }.into_view()
+                                    } else {
+                                        view! { <></> }.into_view()
+                                    }}
+                                </div>
+                            </div>
+                        }
                         })
                     } else { None }}
                 </div>
