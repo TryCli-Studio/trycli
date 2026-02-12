@@ -113,9 +113,6 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
     };
 
     if let Some((image_tag, shell)) = pending_spawn {
-        // Send a "Starting..." message to the user
-        let _ = socket.send(Message::Text("\r\n\x1b[33m[TryCLI] Initializing Sandbox...\x1b[0m\r\n".to_string())).await;
-
         // Perform the spawn that used to be in get_project
         let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
         
@@ -433,10 +430,10 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             // Chain commands:
             // 1. Inject apt config (rate limiting)
             // 2. Run the distro-specific install script (e.g. install fish/zsh)
-            // 3. Echo READY to signal completion
+            // 3. Clean the terminal after setup completion
             // 4. Exec into the final requested shell
             let auto_type_cmd = format!(
-                "mkdir -p /etc/apt/apt.conf.d && {} && {} && echo '\r\n\r\n READY ' && exec {}\n", 
+                "mkdir -p /etc/apt/apt.conf.d && {} && {} && printf '\\033[2J\\033[3J\\033[H' && exec {}\n", 
                 inject_limit_cmd,
                 install_script, 
                 final_shell
