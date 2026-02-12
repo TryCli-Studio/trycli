@@ -5,6 +5,7 @@ use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use serde::{Deserialize, Serialize};
+use web_sys::window;
 
 #[derive(Clone, PartialEq, Serialize, Deserialize, Debug)]
 enum ProjectState {
@@ -37,7 +38,18 @@ let project_data = create_resource(
                 format!("{}/api/project/{}/{}?key={}", api_base(), u, s, key)
             };
 
-            let req = Request::get(&url).send().await;
+            let parent_referrer = window()
+                .and_then(|w| w.document())
+                .map(|d| d.referrer())
+                .unwrap_or_default();
+
+            let req_builder = if parent_referrer.is_empty() {
+                Request::get(&url)
+            } else {
+                Request::get(&url).header("X-Embed-Referer", &parent_referrer)
+            };
+
+            let req = req_builder.send().await;
 
             match req {
                 Ok(resp) => {
