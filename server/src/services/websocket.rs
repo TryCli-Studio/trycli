@@ -47,7 +47,7 @@ pub async fn ws_handler(
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, session_id, user_id)))
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
+async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
 
     // Track if this is a first-time connection for view counting
     let was_previously_connected = {
@@ -97,6 +97,110 @@ async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, u
         }
     }
 
+    // 1. Check if we need to Spawn a Viewer Container (Lazy Loading)
+    let pending_spawn = {
+        let map = state.lock_sessions();
+        if let Some(ctx) = map.get(&session_id) {
+            // If we have an image tag but no container name, it's a viewer waiting to start
+            if ctx.container_name.is_empty() && ctx.pending_image_tag.is_some() {
+                Some((ctx.pending_image_tag.clone().unwrap(), ctx.shell.clone()))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+
+    if let Some((image_tag, shell)) = pending_spawn {
+        // Send a "Starting..." message to the user
+        let _ = socket.send(Message::Text("\r\n\x1b[33m[TryCLI] Initializing Sandbox...\x1b[0m\r\n".to_string())).await;
+
+        // Perform the spawn that used to be in get_project
+        let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
+        
+        let config = Config {
+            image: Some(image_tag),
+            labels: Some(HashMap::from([
+                ("managed_by".to_string(), "TryCli Studio".to_string())
+            ])),
+            tty: Some(true),
+            user: Some("root".to_string()), 
+            // FIX: Run sleep infinity as PID 1. This uses almost 0 CPU/RAM.
+            // The actual shell will be run via exec later.
+            cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]), 
+            env: Some(vec![
+                "LANG=C.UTF-8".to_string(), 
+                "LC_ALL=C.UTF-8".to_string(),
+                "TERM=xterm-256color".to_string(),
+                format!("SHELL={}", shell) 
+            ]),
+            host_config: Some(HostConfig { 
+                runtime: Some("runsc".to_string()),
+                memory: Some(512 * 1024 * 1024), 
+                nano_cpus: Some(250_000_000),
+                pids_limit: Some(64),
+                network_mode: Some("bridge".to_string()), 
+                cap_drop: Some(vec!["ALL".to_string()]),
+                cap_add: Some(vec![
+                    "NET_BIND_SERVICE".to_string(),
+                    "CHOWN".to_string(),
+                    "SETUID".to_string(),
+                    "SETGID".to_string(),
+                    "DAC_OVERRIDE".to_string()
+                ]),
+                security_opt: Some(vec!["no-new-privileges".to_string()]),
+                readonly_rootfs: Some(true),
+                mounts: Some(vec![
+                    Mount {
+                        target: Some("/root".to_string()), 
+                        typ: Some(MountTypeEnum::TMPFS), 
+                        tmpfs_options: Some(MountTmpfsOptions {
+                            size_bytes: Some(50 * 1024 * 1024), 
+                            mode: Some(0o1777),
+                        }),
+                        ..Default::default()
+                    },
+                    Mount {
+                        target: Some("/tmp".to_string()), 
+                        typ: Some(MountTypeEnum::TMPFS), 
+                        tmpfs_options: Some(MountTmpfsOptions {
+                            size_bytes: Some(50 * 1024 * 1024),
+                            mode: Some(0o1777),
+                        }),
+                        ..Default::default()
+                    }
+                ]),
+                auto_remove: Some(true), 
+                ..Default::default() 
+            }),
+            ..Default::default()
+        };
+
+        // Create & Start
+        let create_res = state.docker.create_container(
+            Some(CreateContainerOptions { name: container_name.clone(), platform: None }), 
+            config
+        ).await;
+
+        if create_res.is_ok() {
+            if state.docker.start_container::<String>(&container_name, None).await.is_ok() {
+                // Update SessionContext with the real container name
+                let mut map = state.lock_sessions();
+                if let Some(ctx) = map.get_mut(&session_id) {
+                    ctx.container_name = container_name.clone();
+                    ctx.pending_image_tag = None; // clear pending
+                }
+            } else {
+                let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to start container.\x1b[0m\r\n".to_string())).await;
+                return;
+            }
+        } else {
+            let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to create container.\x1b[0m\r\n".to_string())).await;
+            return;
+        }
+    }
+
     let is_claimed_by_us = {
         let mut map = state.lock_sessions();
         if map.contains_key(&session_id) {
@@ -105,6 +209,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, session_id: String, u
             map.insert(session_id.clone(), SessionContext {
                 container_name: "INITIALIZING".to_string(),
                 shell: "".to_string(),
+                pending_image_tag: None,
                 owner_id: user_id,
                 project_owner_id: user_id,
                 is_publishing: false,
