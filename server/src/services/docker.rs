@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet}; // Import HashSet
 use futures::StreamExt; 
 use crate::state::{SessionMap, SessionContext};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::models::AnalyticsEventType;
+use crate::models::{AnalyticsEventType, log_analytics_event};
 
 pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap, db: sqlx::PgPool) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(30)); 
@@ -133,19 +133,41 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap, 
         }
 
         // --- 5. CLEANUP ABANDONED SESSIONS ---
-        let abandoned_sessions: Vec<(String, String)> = {
+        let abandoned_sessions: Vec<(String, String, SessionContext)> = {
             let map = sessions.lock().unwrap();
             map.iter()
                 .filter(|(_, ctx)| {
                     // If it's not connected AND it's older than 45 seconds
                     !ctx.is_ws_connected && ctx.created_at.elapsed().as_secs() > 45
                 })
-                .map(|(id, ctx)| (id.clone(), ctx.container_name.clone()))
+                .map(|(id, ctx)| (id.clone(), ctx.container_name.clone(), ctx.clone()))
                 .collect()
         };
 
-        for (session_id, container_name) in abandoned_sessions {
+        for (session_id, container_name, ctx) in abandoned_sessions {
             println!("Reaper: Killing Abandoned Session {} (Never connected)", session_id);
+            
+            // Only log session end event if WebSocket actually connected (not a zombie)
+            if ctx.is_ws_connected && ctx.project_slug.is_some() && ctx.project_owner_id.is_some() {
+                let duration = ctx.created_at.elapsed().as_secs() as i64;
+                
+                if let (Some(owner_id), Some(slug)) = (ctx.project_owner_id, &ctx.project_slug) {
+                    let db_clone = db.clone();
+                    let slug_clone = slug.clone();
+                    tokio::spawn(async move {
+                        if let Ok(Some(project_id)) = sqlx::query_scalar::<_, i64>(
+                            "SELECT id FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)"
+                        )
+                        .bind(owner_id)
+                        .bind(&slug_clone)
+                        .fetch_optional(&db_clone)
+                        .await
+                        {
+                            log_analytics_event(&db_clone, project_id, AnalyticsEventType::SessionEnd, Some(duration), None).await;
+                        }
+                    });
+                }
+            }
             
             // 1. Remove from Map
             {
@@ -233,21 +255,7 @@ async fn log_abuse_and_session_end(db: &sqlx::PgPool, ctx: &SessionContext) {
         .duration_since(ctx.created_at)
         .as_secs() as i64;
 
-    let _ = sqlx::query(
-        "INSERT INTO analytics_events (project_id, event_type, duration_seconds) VALUES ($1, $2, $3)"
-    )
-    .bind(project_id)
-    .bind(AnalyticsEventType::SessionEnd)
-    .bind(duration_seconds)
-    .execute(db)
-    .await;
-
-    let _ = sqlx::query(
-        "INSERT INTO analytics_events (project_id, event_type, error_type) VALUES ($1, $2, $3)"
-    )
-    .bind(project_id)
-    .bind(AnalyticsEventType::Error)
-    .bind("ABUSE")
-    .execute(db)
-    .await;
+    // Use the helper function for both events
+    log_analytics_event(db, project_id, AnalyticsEventType::SessionEnd, Some(duration_seconds), None).await;
+    log_analytics_event(db, project_id, AnalyticsEventType::Error, None, Some("ABUSE".to_string())).await;
 }

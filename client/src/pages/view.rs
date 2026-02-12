@@ -1,9 +1,11 @@
 use crate::api::api_base;
 use crate::components::limit::LimitReached;
 use crate::components::modal::EmbedModal;
+use crate::components::modal::Modal;
 use crate::components::navbar::Navbar;
 use crate::components::terminal::TerminalView;
 use crate::types::User;
+use crate::hooks::use_landscape_lock;
 use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
@@ -120,6 +122,7 @@ fn setup_resize_divider() {
 
 #[component]
 pub fn ViewPage() -> impl IntoView {
+    let is_portrait = use_landscape_lock();
     let params = use_params_map();
     let query_params = use_query_map();
     let username = move || params.get().get("username").cloned().unwrap_or_default();
@@ -289,6 +292,13 @@ pub fn ViewPage() -> impl IntoView {
 
     view! {
         <>
+            <Modal
+                show=is_portrait.into()
+                title="Rotate Device".to_string().into()
+                body="Please rotate your device to Landscape mode for the best experience.".to_string().into()
+                button_label="".to_string().into()
+                on_close=Callback::new(|_| {})
+            />
             <EmbedModal
                 show=embed_modal_open.into()
                 title="Share Project".to_string().into()

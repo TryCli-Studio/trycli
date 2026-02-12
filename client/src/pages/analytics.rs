@@ -173,7 +173,7 @@ pub fn AnalyticsPage() -> impl IntoView {
                                         <th>"Project"</th>
                                         <th>"Status"</th>
                                         <th>"Uptime"</th>
-                                        <th>"Container ID"</th>
+                                        <th class="truncate-cell">"Container ID"</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -196,7 +196,7 @@ pub fn AnalyticsPage() -> impl IntoView {
                                                     <td>
                                                         <span class="uptime-badge">{format_uptime(session.uptime_seconds)}</span>
                                                     </td>
-                                                    <td style="font-family: var(--font-mono); color: var(--text-muted); font-size: 0.85rem;">
+                                                    <td class="truncate-cell" title={session.container_name.clone()} style="font-family: var(--font-mono); color: var(--text-muted); font-size: 0.85rem;">
                                                         {session.container_name}
                                                     </td>
                                                 </tr>
@@ -217,7 +217,7 @@ pub fn AnalyticsPage() -> impl IntoView {
                                         <th>"Total Views"</th>
                                         <th>"Avg Session"</th>
                                         <th>"Errors"</th>
-                                        <th style="width: 30%;">"Engagement"</th>
+                                        <th style="width: 30%; min-width: 180px;">"Engagement"</th>
                                     </tr>
                                 </thead>
                                 <tbody>

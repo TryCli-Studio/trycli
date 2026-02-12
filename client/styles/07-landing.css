@@ -278,3 +278,43 @@
         padding-top: 5.5rem; /* 88px */
     }
 }
+
+/* Mobile Landscape Optimizations */
+@media (max-height: 500px) and (orientation: landscape) {
+    .landing-nav {
+        padding: 0.75rem 1.5rem;
+    }
+
+    .hero-main {
+        padding-top: 3rem;
+        padding-bottom: 1rem;
+        min-height: auto;
+    }
+
+    .hero-title {
+        font-size: 2rem !important;
+        margin-bottom: 0.75rem !important;
+    }
+
+    .hero-subtitle {
+        font-size: 0.9rem !important;
+        margin-bottom: 1.25rem !important;
+        line-height: 1.4 !important;
+    }
+
+    .cta-group {
+        gap: 0.75rem;
+    }
+
+    .btn-hero,
+    .btn-secondary {
+        padding: 0.5rem 1rem !important;
+        font-size: 0.85rem !important;
+    }
+
+    .badge {
+        font-size: 0.75rem !important;
+        padding: 0.25rem 0.75rem !important;
+        margin-bottom: 0.75rem !important;
+    }
+}

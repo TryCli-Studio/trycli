@@ -54,7 +54,7 @@ pub fn BlogsPage() -> impl IntoView {
 
                     // Hamburger Menu Button
                     <button
-                        class="hamburger-menu"
+                        class="hamburger-menu dashboard-hamburger"
                         class:open=move || menu_open.get()
                         on:click=move |_| set_menu_open.update(|open| *open = !*open)
                         aria-label="Toggle menu"

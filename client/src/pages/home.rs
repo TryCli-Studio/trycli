@@ -71,8 +71,9 @@ pub fn LandingPage() -> impl IntoView {
 
             // MAIN CONTENT
             <div class="landing-container">
+                
+                <Navbar is_logged_in=user.get().is_some()>
 
-                <Navbar>
                     <div class="nav-actions">
                         {move || {
                             let (menu_open, set_menu_open) = create_signal(false);

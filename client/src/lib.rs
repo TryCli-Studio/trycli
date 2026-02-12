@@ -3,6 +3,7 @@ use leptos::*;
 pub mod api;
 pub mod app;
 pub mod types;
+pub mod hooks;
 pub mod components {
     pub mod limit;
     pub mod modal;
