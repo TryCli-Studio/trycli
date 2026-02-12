@@ -400,9 +400,15 @@ pub async fn get_project(
         if !vip_allowed {
             // Guest List: validate Referer header against project_whitelists
             let referer = headers
-                .get("Referer")
+                .get("X-Embed-Referer")
                 .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string());
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    headers
+                        .get("Referer")
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| s.to_string())
+                });
 
             // Optional boolean, safely unwrapped later
             let whitelist_allowed: Option<bool> = if let Some(referer_url) = referer {
