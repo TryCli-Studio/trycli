@@ -6,8 +6,6 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
-use bollard::container::{CreateContainerOptions, Config};
-use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
 use bollard::exec::{CreateExecOptions, StartExecResults};
 use bollard::image::{CreateImageOptions, RemoveImageOptions}; 
 use tower_sessions::Session;
@@ -479,103 +477,14 @@ pub async fn get_project(
     }
 
     // 7. Construct JSON response
-    let mut response_json = serde_json::json!({
-        "markdown": markdown,
-        "owner_id": owner_id,
-        // We will insert container_id below
-    });
-
-    // If owner, fetch and attach the secret token for the Share / Embed modal
-    // Note: embed_key is now fetched separately via /api/project/:slug/embed-key endpoint
-    // to prevent accidental exposure in browser dev tools
-    if is_owner {
-        let token_record: Option<(String,)> = sqlx::query_as(
-            "SELECT embed_token FROM projects WHERE owner_id = $1 AND LOWER(slug) = LOWER($2)"
-        )
-        .bind(owner_id)
-        .bind(&slug)
-        .fetch_optional(&state.db)
-        .await
-        .ok()
-        .flatten();
-
-        if let Some((token,)) = token_record {
-            response_json["embed_token"] = serde_json::Value::String(token);
-        }
-    }
-
-    // Spin up container
-    let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
+    // Generate the session ID here, but DO NOT spawn Docker yet.
     let session_id = Uuid::new_v4().to_string();
-
-    let config = Config {
-        image: Some(image_tag),
-        labels: Some(HashMap::from([
-        ("managed_by".to_string(), "TryCli Studio".to_string())
-        ])),
-        tty: Some(true),
-        user: Some("root".to_string()), 
-        cmd: Some(vec![shell.clone()]), 
-        env: Some(vec![
-            "LANG=C.UTF-8".to_string(), 
-            "LC_ALL=C.UTF-8".to_string(),
-            "TERM=xterm-256color".to_string(),
-            format!("SHELL={}", shell) 
-        ]),
-        host_config: Some(HostConfig { 
-            runtime: Some("runsc".to_string()),
-            memory: Some(512 * 1024 * 1024), 
-            nano_cpus: Some(250_000_000),
-            pids_limit: Some(64),
-            network_mode: Some("bridge".to_string()), 
-            cap_drop: Some(vec!["ALL".to_string()]),
-            cap_add: Some(vec![
-                "NET_BIND_SERVICE".to_string(),
-                "CHOWN".to_string(),
-                "SETUID".to_string(),
-                "SETGID".to_string(),
-                "DAC_OVERRIDE".to_string()
-            ]),
-            security_opt: Some(vec!["no-new-privileges".to_string()]),
-            readonly_rootfs: Some(true),
-            mounts: Some(vec![
-                Mount {
-                    target: Some("/root".to_string()), 
-                    typ: Some(MountTypeEnum::TMPFS), 
-                    tmpfs_options: Some(MountTmpfsOptions {
-                        size_bytes: Some(50 * 1024 * 1024), 
-                        mode: Some(0o1777),
-                    }),
-                    ..Default::default()
-                },
-                Mount {
-                    target: Some("/tmp".to_string()),
-                    typ: Some(MountTypeEnum::TMPFS),
-                    tmpfs_options: Some(MountTmpfsOptions {
-                        size_bytes: Some(50 * 1024 * 1024),
-                        mode: Some(0o1777),
-                    }),
-                    ..Default::default()
-                }
-            ]),
-            auto_remove: Some(true), 
-            ..Default::default() 
-        }),
-        ..Default::default()
-    };
-
-    state.docker.create_container(
-        Some(CreateContainerOptions { name: container_name.clone(), platform: None }), 
-        config
-    ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Create Error: {}", e)))?;
-
-    state.docker.start_container::<String>(&container_name, None)
-        .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Docker Start Error: {}", e)))?;
 
     {
         let mut map = state.lock_sessions();
         map.insert(session_id.clone(), SessionContext {
-            container_name: container_name.clone(), 
+            container_name: String::new(), // Empty indicates "Not Started"
+            pending_image_tag: Some(image_tag), // Store tag for WS handler
             shell,
             owner_id: None,
             project_owner_id: Some(owner_id),
@@ -586,8 +495,17 @@ pub async fn get_project(
         }); 
     }
     
-    // Add session ID to the response
-    response_json["container_id"] = serde_json::Value::String(session_id);
+    let mut response_json = serde_json::json!({
+        "markdown": markdown,
+        "owner_id": owner_id,
+        "container_id": session_id // Frontend connects to this UUID
+    });
+
+    if is_owner {
+        if let Some(token) = sqlx::query_scalar::<_, String>("SELECT embed_token FROM projects WHERE id = $1").bind(project_id).fetch_optional(&state.db).await.unwrap_or(None) {
+            response_json["embed_token"] = serde_json::Value::String(token);
+        }
+    }
 
     Ok(Json(response_json))
 }

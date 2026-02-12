@@ -70,6 +70,10 @@ pub async fn start_background_reaper(docker: Arc<Docker>, sessions: SessionMap, 
                 if ctx.container_name == "INITIALIZING" {
                     return true;
                 }
+
+                if ctx.container_name.is_empty() {
+                    return ctx.created_at.elapsed().as_secs() < 60;
+                }
                 
                 let exists = actual_container_names.contains(&ctx.container_name);
                 

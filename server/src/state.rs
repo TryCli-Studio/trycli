@@ -7,11 +7,11 @@ use governor::{Quota, RateLimiter, clock::DefaultClock, state::{InMemoryState, N
 use std::num::NonZeroU32;
 use crate::handlers::project::WHITELIST_RATE_LIMIT_PER_MINUTE;
 
-// New Struct to track container details AND ownership
 #[derive(Clone, Debug)]
 pub struct SessionContext {
     pub container_name: String,
     pub shell: String,
+    pub pending_image_tag: Option<String>, 
     pub owner_id: Option<i64>,
     pub project_owner_id: Option<i64>,
     pub is_publishing: bool,
@@ -29,7 +29,6 @@ pub struct AppState {
     pub github_id: String,
     pub github_secret: String,
     pub sessions: SessionMap,
-    // Rate limiter for whitelist operations: per-user tracking
     pub whitelist_rate_limiters: Arc<DashMap<i64, Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>>>,
 }
 
@@ -44,7 +43,6 @@ impl AppState {
         }
     }
 
-    /// Get or create a rate limiter for a user's whitelist operations
     pub fn get_or_create_whitelist_rate_limiter(&self, user_id: i64) -> Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>> {
         self.whitelist_rate_limiters
             .entry(user_id)

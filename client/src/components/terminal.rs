@@ -3,6 +3,8 @@ use leptos::*;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{ErrorEvent, MessageEvent, WebSocket};
+use std::rc::Rc;
+use std::cell::Cell;
 
 // BINDING 1: FitAddon
 #[wasm_bindgen]
@@ -58,6 +60,7 @@ pub fn TerminalView(container_id: String) -> impl IntoView {
 
             let term_clone: Terminal = term.clone().unchecked_into();
             let ws_url = format!("{}/ws/{}", ws_base(), id_for_effect);
+            let first_message = Rc::new(Cell::new(true));
 
             // FIX: Removed unwrap() on WebSocket::new
             match WebSocket::new(&ws_url) {
@@ -67,12 +70,21 @@ pub fn TerminalView(container_id: String) -> impl IntoView {
                     on_cleanup(move || {
                         let _ = ws_cleanup.close();
                     });
-                    let onmessage =
-                        Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
-                            if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
-                                term_clone.write(&String::from(txt));
+                    let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+                        if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
+                            let text = String::from(txt);
+                            
+                            // If this is the first data packet, clear the screen
+                            if first_message.get() {
+                                // \x1b[2J = Clear entire screen
+                                // \x1b[H = Move cursor to home (top-left)
+                                term_clone.write("\x1b[2J\x1b[H"); 
+                                first_message.set(false);
                             }
-                        });
+                            
+                            term_clone.write(&text);
+                        }
+                    });
                     ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
                     onmessage.forget();
 
