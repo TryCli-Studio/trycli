@@ -54,15 +54,6 @@ pub enum AnalyticsEventType {
     Error,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
-pub struct AnalyticsEvent {
-    pub id: i64,
-    pub project_id: i64,
-    pub event_type: AnalyticsEventType,
-    pub duration_seconds: Option<i64>,
-    pub error_type: Option<String>,
-    pub created_at: time::OffsetDateTime,
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
