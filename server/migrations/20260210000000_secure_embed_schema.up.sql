@@ -12,7 +12,7 @@ WHERE embed_key IS NULL;
 CREATE TABLE IF NOT EXISTS project_whitelists (
     id SERIAL PRIMARY KEY,
     project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    allowed_url TEXT NOT NULL CHECK (length(allowed_url) <= 2048),
+    allowed_url TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(project_id, allowed_url)
 );
