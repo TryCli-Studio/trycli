@@ -358,12 +358,10 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
                 if let Err(e) =
                     state.docker.start_container::<String>(&container_name, None).await
                 {
-                    // Surface detailed error to client and logs
-                    let msg = format!(
-                        "\r\n\x1b[31m[!] Failed to start viewer container: {}\x1b[0m\r\n",
-                        e
-                    );
+                    // Log detailed error server-side only
                     eprintln!("Viewer start error for session {}: {}", session_id, e);
+                    // Send generic error message to client
+                    let msg = "\r\n\x1b[31m[!] Failed to start viewer container. Please try again later.\x1b[0m\r\n";
                     let _ = socket.send(Message::Text(msg.into())).await;
                     return;
                 }
@@ -376,11 +374,10 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
                 }
             }
             Err(e) => {
-                let msg = format!(
-                    "\r\n\x1b[31m[!] Failed to create viewer container: {}\x1b[0m\r\n",
-                    e
-                );
+                // Log detailed error server-side only
                 eprintln!("Viewer create error for session {}: {}", session_id, e);
+                // Send generic error message to client
+                let msg = "\r\n\x1b[31m[!] Failed to create viewer container. Please try again later.\x1b[0m\r\n";
                 let _ = socket.send(Message::Text(msg.into())).await;
                 return;
             }
