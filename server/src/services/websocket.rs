@@ -174,27 +174,48 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
             ..Default::default()
         };
 
-        // Create & Start
-        let create_res = state.docker.create_container(
-            Some(CreateContainerOptions { name: container_name.clone(), platform: None }), 
-            config
-        ).await;
+        // Create & Start (viewer container)
+        match state
+            .docker
+            .create_container(
+                Some(CreateContainerOptions {
+                    name: container_name.clone(),
+                    platform: None,
+                }),
+                config,
+            )
+            .await
+        {
+            Ok(_) => {
+                if let Err(e) =
+                    state.docker.start_container::<String>(&container_name, None).await
+                {
+                    // Surface detailed error to client and logs
+                    let msg = format!(
+                        "\r\n\x1b[31m[!] Failed to start viewer container: {}\x1b[0m\r\n",
+                        e
+                    );
+                    eprintln!("Viewer start error for session {}: {}", session_id, e);
+                    let _ = socket.send(Message::Text(msg.into())).await;
+                    return;
+                }
 
-        if create_res.is_ok() {
-            if state.docker.start_container::<String>(&container_name, None).await.is_ok() {
                 // Update SessionContext with the real container name
                 let mut map = state.lock_sessions();
                 if let Some(ctx) = map.get_mut(&session_id) {
                     ctx.container_name = container_name.clone();
                     ctx.pending_image_tag = None; // clear pending
                 }
-            } else {
-                let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to start container.\x1b[0m\r\n".to_string().into())).await;
+            }
+            Err(e) => {
+                let msg = format!(
+                    "\r\n\x1b[31m[!] Failed to create viewer container: {}\x1b[0m\r\n",
+                    e
+                );
+                eprintln!("Viewer create error for session {}: {}", session_id, e);
+                let _ = socket.send(Message::Text(msg.into())).await;
                 return;
             }
-        } else {
-            let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to create container.\x1b[0m\r\n".to_string().into())).await;
-            return;
         }
     }
 
