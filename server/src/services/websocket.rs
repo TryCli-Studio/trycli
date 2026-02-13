@@ -83,6 +83,23 @@ pub async fn restore_sessions_from_containers(state: &AppState) {
                             
                             // Only restore if not already present (shouldn't happen, but be defensive)
                             if !map.contains_key(&session_id) {
+                                // Calculate elapsed time from container creation
+                                let created_at = if let Some(created_ts) = container.created {
+                                    // Container age in seconds
+                                    let now = std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_secs() as i64;
+                                    let age_secs = now - created_ts;
+                                    
+                                    // Set created_at to approximate original time
+                                    std::time::Instant::now()
+                                        .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
+                                        .unwrap_or_else(|| std::time::Instant::now())
+                                } else {
+                                    std::time::Instant::now()
+                                };
+                                
                                 map.insert(session_id.clone(), SessionContext {
                                     container_name: container_name.clone(),
                                     shell,
@@ -91,20 +108,20 @@ pub async fn restore_sessions_from_containers(state: &AppState) {
                                     project_owner_id,
                                     is_publishing: false,
                                     project_slug,
-                                    created_at: std::time::Instant::now(), // Reset timer
+                                    created_at,
                                     is_ws_connected: false, // Will be set to true on reconnection
                                 });
                                 restored += 1;
-                                println!("Restored session {} with container {}", session_id, container_name);
+                                tracing::info!("Restored session {} with container {}", session_id, container_name);
                             }
                         }
                     }
                 }
             }
-            println!("Session restoration complete: {} sessions restored", restored);
+            tracing::info!("Session restoration complete: {} sessions restored", restored);
         }
         Err(e) => {
-            eprintln!("Failed to restore sessions from containers: {}", e);
+            tracing::error!("Failed to restore sessions from containers: {}", e);
         }
     }
 }
@@ -181,6 +198,21 @@ async fn restore_specific_session(state: &AppState, session_id: &str) {
                         .unwrap_or_default();
                     
                     if !container_name.is_empty() {
+                        // Calculate elapsed time from container creation
+                        let created_at = if let Some(created_ts) = container.created {
+                            let now = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs() as i64;
+                            let age_secs = now - created_ts;
+                            
+                            std::time::Instant::now()
+                                .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
+                                .unwrap_or_else(|| std::time::Instant::now())
+                        } else {
+                            std::time::Instant::now()
+                        };
+                        
                         let mut map = state.lock_sessions();
                         map.insert(session_id.to_string(), SessionContext {
                             container_name: container_name.clone(),
@@ -190,10 +222,10 @@ async fn restore_specific_session(state: &AppState, session_id: &str) {
                             project_owner_id,
                             is_publishing: false,
                             project_slug,
-                            created_at: std::time::Instant::now(),
+                            created_at,
                             is_ws_connected: false,
                         });
-                        println!("Restored session {} from container {}", session_id, container_name);
+                        tracing::info!("Restored session {} from container {}", session_id, container_name);
                         return;
                     }
                 }
@@ -359,7 +391,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
                     state.docker.start_container::<String>(&container_name, None).await
                 {
                     // Log detailed error server-side only
-                    eprintln!("Viewer start error for session {}: {}", session_id, e);
+                    tracing::error!("Viewer start error for session {}: {}", session_id, e);
                     // Send generic error message to client
                     let msg = "\r\n\x1b[31m[!] Failed to start viewer container. Please try again later.\x1b[0m\r\n";
                     let _ = socket.send(Message::Text(msg.into())).await;
@@ -375,7 +407,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
             }
             Err(e) => {
                 // Log detailed error server-side only
-                eprintln!("Viewer create error for session {}: {}", session_id, e);
+                tracing::error!("Viewer create error for session {}: {}", session_id, e);
                 // Send generic error message to client
                 let msg = "\r\n\x1b[31m[!] Failed to create viewer container. Please try again later.\x1b[0m\r\n";
                 let _ = socket.send(Message::Text(msg.into())).await;

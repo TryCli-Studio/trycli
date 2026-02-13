@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = config::setup_database_and_docker().await?;
 
     // Restore sessions from existing Docker containers (critical for reconnecting to pre-existing containers)
-    println!("Restoring sessions from existing containers...");
+    tracing::info!("Restoring sessions from existing containers...");
     restore_sessions_from_containers(&state).await;
 
     // Spawn background reaper
