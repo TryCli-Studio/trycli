@@ -47,6 +47,24 @@ fn create_container_labels(
     labels
 }
 
+/// Calculate an approximate creation time based on container's created timestamp
+/// This converts a Unix timestamp to an Instant for session tracking
+fn calculate_session_created_at(created_ts: Option<i64>) -> std::time::Instant {
+    if let Some(created_ts) = created_ts {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let age_secs = now - created_ts;
+        
+        std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
+            .unwrap_or_else(|| std::time::Instant::now())
+    } else {
+        std::time::Instant::now()
+    }
+}
+
 /// Restore sessions from existing Docker containers on server startup
 /// This allows pre-existing containers to be reconnected after server restart
 pub async fn restore_sessions_from_containers(state: &AppState) {
@@ -71,7 +89,6 @@ pub async fn restore_sessions_from_containers(state: &AppState) {
                     let owner_id = labels.get("owner_id").and_then(|s| s.parse::<i64>().ok());
                     let project_owner_id = labels.get("project_owner_id").and_then(|s| s.parse::<i64>().ok());
                     let project_slug = labels.get("project_slug").map(|s| s.clone());
-                    let container_type = labels.get("container_type").map(|s| s.clone());
                     
                     let container_name = container.names
                         .as_ref()
@@ -88,19 +105,7 @@ pub async fn restore_sessions_from_containers(state: &AppState) {
                         let mut map = state.lock_sessions();
                         
                         if !map.contains_key(&session_id) {
-                            let created_at = if let Some(created_ts) = container.created {
-                                let now = std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs() as i64;
-                                let age_secs = now - created_ts;
-                                
-                                std::time::Instant::now()
-                                    .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
-                                    .unwrap_or_else(|| std::time::Instant::now())
-                            } else {
-                                std::time::Instant::now()
-                            };
+                            let created_at = calculate_session_created_at(container.created);
                             
                             map.insert(session_id.clone(), SessionContext {
                                 container_name: container_name.clone(),
@@ -131,24 +136,10 @@ pub async fn restore_sessions_from_containers(state: &AppState) {
                             let mut map = state.lock_sessions();
                             
                             if !map.contains_key(&legacy_session_id) {
-                                let created_at = if let Some(created_ts) = container.created {
-                                    let now = std::time::SystemTime::now()
-                                        .duration_since(std::time::UNIX_EPOCH)
-                                        .unwrap()
-                                        .as_secs() as i64;
-                                    let age_secs = now - created_ts;
-                                    
-                                    std::time::Instant::now()
-                                        .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
-                                        .unwrap_or_else(|| std::time::Instant::now())
-                                } else {
-                                    std::time::Instant::now()
-                                };
+                                let created_at = calculate_session_created_at(container.created);
                                 
                                 // For legacy containers, we don't know the exact metadata
                                 // Set reasonable defaults based on container type
-                                let _is_builder = container_type.as_deref() != Some("viewer") 
-                                    && container_name.starts_with("trycli-studio-session-");
                                 
                                 map.insert(legacy_session_id.clone(), SessionContext {
                                     container_name: container_name.clone(),
@@ -249,19 +240,7 @@ async fn restore_specific_session(state: &AppState, session_id: &str) {
                         .unwrap_or_default();
                     
                     if !container_name.is_empty() {
-                        let created_at = if let Some(created_ts) = container.created {
-                            let now = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs() as i64;
-                            let age_secs = now - created_ts;
-                            
-                            std::time::Instant::now()
-                                .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
-                                .unwrap_or_else(|| std::time::Instant::now())
-                        } else {
-                            std::time::Instant::now()
-                        };
+                        let created_at = calculate_session_created_at(container.created);
                         
                         let mut map = state.lock_sessions();
                         map.insert(session_id.to_string(), SessionContext {
@@ -316,19 +295,7 @@ async fn restore_specific_session(state: &AppState, session_id: &str) {
                     .map(|n| n.trim_start_matches('/').to_string())
                     .unwrap_or(legacy_name.clone());
                 
-                let created_at = if let Some(created_ts) = container.created {
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64;
-                    let age_secs = now - created_ts;
-                    
-                    std::time::Instant::now()
-                        .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
-                        .unwrap_or_else(|| std::time::Instant::now())
-                } else {
-                    std::time::Instant::now()
-                };
+                let created_at = calculate_session_created_at(container.created);
                 
                 let mut map = state.lock_sessions();
                 map.insert(session_id.to_string(), SessionContext {
