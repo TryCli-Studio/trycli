@@ -21,6 +21,7 @@ pub mod pages {
     pub mod home;
     pub mod policy;
     pub mod view;
+    pub mod notfound;
 }
 
 pub use app::App;

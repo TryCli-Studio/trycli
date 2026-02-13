@@ -624,7 +624,8 @@ pub fn ViewPage() -> impl IntoView {
                 }.into_view(),
                 Some(ProjectState::LimitReached) => view! { <LimitReached /> }.into_view(),
                 Some(ProjectState::NotFound) => view! {
-                    <div style="color: var(--text-muted); text-align: center; margin-top: 100px;">"Project not found."</div>
+                    <div style="color: var(--text-muted); text-align: center; margin-top: 100px;">"Project not found. The link might be broken or the project was deleted."</div>
+                   
                 }.into_view(),
                 _ => view! {
                     <div style="padding: 50px; text-align: center;">
