@@ -112,7 +112,12 @@ let project_data = create_resource(
                      // Inside embed, we remove the "Start" overlay (already gone via if logic) and show Limit
                      view! { <LimitReached /> }.into_view()
                 },
-                Some(ProjectState::NotFound) => view! { <div style="color:red; padding:20px;">"Project not found"</div> }.into_view(),
+                Some(ProjectState::NotFound) => view! { <div style="color:red; padding:20px;">"Project not found. The link might be broken or the project was deleted."</div> 
+                                        <A href="/" class="btn-primary btn-hero">
+                                            "Return to Homepage"
+                                            <span class="arrow">"→"</span>
+                                        </A>
+            }.into_view(),
                 Some(ProjectState::Loading) | None => {
                     if started.get() {
                         view! {
