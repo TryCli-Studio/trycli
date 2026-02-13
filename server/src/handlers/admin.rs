@@ -19,8 +19,8 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/admin/stats", get(get_system_stats))
         .route("/api/admin/projects", get(get_all_projects))
-        .route("/api/admin/container/:id", delete(kill_container))
-        .route("/api/admin/project/:slug", delete(delete_project_admin))
+        .route("/api/admin/container/{id}", delete(kill_container))
+        .route("/api/admin/project/{slug}", delete(delete_project_admin))
 }
 
 // Updated middleware to check the list

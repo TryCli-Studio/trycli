@@ -27,24 +27,23 @@ pub async fn oembed_handler(
         if parts.len() >= 2 && parts[0] == "e" {
             let token = parts[1];
             
-            let project = sqlx::query!(
-                "SELECT slug, owner_username FROM projects WHERE embed_token = $1", 
-                token
+            let project: Option<(String, String)> = sqlx::query_as(
+                "SELECT slug, owner_username FROM projects WHERE embed_token = $1",
             )
+            .bind(token)
             .fetch_optional(&state.db)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-            if let Some(p) = project {
+            if let Some((slug, owner_username)) = project {
                 let origin = std::env::var("FRONTEND_URL").unwrap_or("https://trycli.com".to_string());
-                let embed_src = format!("{}/embed/{}/{}", origin, p.owner_username, p.slug);
+                let embed_src = format!("{}/embed/{}/{}", origin, owner_username, slug);
                 
                 return Ok(Json(OEmbedResponse::Rich {
                     version: "1.0".to_string(),
-                    title: format!("Interactive Demo: {}", p.slug),
-                    // FIX: Clone the username here so it doesn't get moved
-                    author_name: p.owner_username.clone(), 
-                    author_url: format!("{}/{}", origin, p.owner_username),
+                    title: format!("Interactive Demo: {}", slug),
+                    author_name: owner_username.clone(),
+                    author_url: format!("{}/{}", origin, owner_username),
                     provider_name: "TryCLI Studio".to_string(),
                     provider_url: origin.clone(),
                     html: format!(
@@ -62,13 +61,15 @@ pub async fn oembed_handler(
             let username = parts[0];
             let slug = parts[1];
             
-            let exists = sqlx::query!(
-                "SELECT 1 as exists FROM projects WHERE owner_username = $1 AND slug = $2",
-                username, slug
+            let exists: Option<(i32,)> = sqlx::query_as(
+                "SELECT 1 FROM projects WHERE owner_username = $1 AND slug = $2",
             )
+            .bind(username)
+            .bind(slug)
             .fetch_optional(&state.db)
             .await
-            .unwrap_or(None);
+            .ok()
+            .flatten();
 
             if exists.is_some() {
                 let origin = std::env::var("FRONTEND_URL").unwrap_or("https://trycli.com".to_string());

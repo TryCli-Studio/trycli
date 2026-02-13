@@ -189,11 +189,11 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
                     ctx.pending_image_tag = None; // clear pending
                 }
             } else {
-                let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to start container.\x1b[0m\r\n".to_string())).await;
+                let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to start container.\x1b[0m\r\n".to_string().into())).await;
                 return;
             }
         } else {
-            let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to create container.\x1b[0m\r\n".to_string())).await;
+            let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to create container.\x1b[0m\r\n".to_string().into())).await;
             return;
         }
     }
@@ -228,7 +228,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
 
         if let Some(ctx) = existing_session {
             if ctx.container_name == "INITIALIZING" {
-                let _ = socket.close().await;
+                let _ = socket.send(axum::extract::ws::Message::Close(None)).await;
                 return;
             }
             attach_to_container(socket, state, session_id, ctx.container_name, ctx.shell, None).await;
@@ -238,7 +238,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
 
 async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: String, _user_id: Option<i64>) {
     async fn send_txt(ws: &mut WebSocket, txt: &str) {
-        let _ = ws.send(Message::Text(txt.to_string())).await;
+        let _ = ws.send(Message::Text(txt.to_string().into())).await;
     }
     
     let green = "\x1b[32m";
@@ -258,7 +258,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
 
     let mut distro_choice = 0;
     while let Some(Ok(Message::Text(txt))) = socket.recv().await {
-        let input = txt.trim();
+        let input = txt.as_str().trim();
         if input == "1" { distro_choice = 1; break; }
         if input == "2" { distro_choice = 2; break; }
         if input == "3" { distro_choice = 3; break; }
@@ -273,7 +273,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
 
     let mut shell_choice = 0;
     while let Some(Ok(Message::Text(txt))) = socket.recv().await {
-        let input = txt.trim();
+        let input = txt.as_str().trim();
         if input == "1" { shell_choice = 1; break; }
         if input == "2" { shell_choice = 2; break; }
         if input == "3" { shell_choice = 3; break; }
@@ -509,12 +509,12 @@ async fn attach_to_container(
                     Ok(Some(Ok(msg))) => {
                         match msg {
                             Message::Text(text) => {
-                                if input.write_all(text.as_bytes()).await.is_err() {
+                                if input.write_all(text.as_str().as_bytes()).await.is_err() {
                                     break; // Container stdin closed
                                 }
                             },
                             Message::Binary(bin) => {
-                                if input.write_all(&bin).await.is_err() {
+                                if input.write_all(bin.as_ref()).await.is_err() {
                                     break;
                                 }
                             },

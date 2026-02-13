@@ -147,16 +147,16 @@ fn validate_csrf_protection(headers: &HeaderMap) -> Result<(), (StatusCode, Stri
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/my-projects", get(list_user_projects))
-        .route("/api/project/:username/:slug", get(get_project))
-        .route("/api/project/:slug", delete(delete_project))
-        .route("/api/project/:slug/embed-key", get(get_embed_key))
+        .route("/api/project/{username}/{slug}", get(get_project))
+        .route("/api/project/{slug}", delete(delete_project))
+        .route("/api/project/{slug}/embed-key", get(get_embed_key))
         .route(
-            "/api/project/:slug/whitelist",
+            "/api/project/{slug}/whitelist",
             get(get_whitelist).post(add_to_whitelist).delete(remove_from_whitelist),
         )
         .route("/api/search-projects", get(search_projects))
         .route("/api/publish", post(publish_handler))
-        .route("/e/:token", get(resolve_secret_embed)) // Secret Embed Route
+        .route("/e/{token}", get(resolve_secret_embed)) // Secret Embed Route
 }
 
 pub async fn list_user_projects(
