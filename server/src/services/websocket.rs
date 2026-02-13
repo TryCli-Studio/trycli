@@ -71,28 +71,73 @@ pub async fn restore_sessions_from_containers(state: &AppState) {
                     let owner_id = labels.get("owner_id").and_then(|s| s.parse::<i64>().ok());
                     let project_owner_id = labels.get("project_owner_id").and_then(|s| s.parse::<i64>().ok());
                     let project_slug = labels.get("project_slug").map(|s| s.clone());
+                    let container_type = labels.get("container_type").map(|s| s.clone());
                     
-                    if let (Some(session_id), Some(names)) = (session_id, container.names) {
-                        let container_name = names.first()
-                            .map(|n| n.trim_start_matches('/').to_string())
-                            .unwrap_or_default();
+                    let container_name = container.names
+                        .as_ref()
+                        .and_then(|names| names.first())
+                        .map(|n| n.trim_start_matches('/').to_string())
+                        .unwrap_or_default();
+                    
+                    if container_name.is_empty() {
+                        continue;
+                    }
+                    
+                    // Handle new containers (with session_id label)
+                    if let Some(session_id) = session_id {
+                        let mut map = state.lock_sessions();
                         
-                        if !container_name.is_empty() {
-                            // Restore session to in-memory map
+                        if !map.contains_key(&session_id) {
+                            let created_at = if let Some(created_ts) = container.created {
+                                let now = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs() as i64;
+                                let age_secs = now - created_ts;
+                                
+                                std::time::Instant::now()
+                                    .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
+                                    .unwrap_or_else(|| std::time::Instant::now())
+                            } else {
+                                std::time::Instant::now()
+                            };
+                            
+                            map.insert(session_id.clone(), SessionContext {
+                                container_name: container_name.clone(),
+                                shell,
+                                pending_image_tag: None,
+                                owner_id,
+                                project_owner_id,
+                                is_publishing: false,
+                                project_slug,
+                                created_at,
+                                is_ws_connected: false,
+                            });
+                            restored += 1;
+                            tracing::info!("Restored session {} with container {}", session_id, container_name);
+                        }
+                    } else {
+                        // Handle legacy containers (without session_id label)
+                        // Extract UUID from container name for use as session_id
+                        let legacy_session_id = if container_name.starts_with("trycli-studio-viewer-") {
+                            container_name.strip_prefix("trycli-studio-viewer-").map(|s| s.to_string())
+                        } else if container_name.starts_with("trycli-studio-session-") {
+                            container_name.strip_prefix("trycli-studio-session-").map(|s| s.to_string())
+                        } else {
+                            None
+                        };
+                        
+                        if let Some(legacy_session_id) = legacy_session_id {
                             let mut map = state.lock_sessions();
                             
-                            // Only restore if not already present (shouldn't happen, but be defensive)
-                            if !map.contains_key(&session_id) {
-                                // Calculate elapsed time from container creation
+                            if !map.contains_key(&legacy_session_id) {
                                 let created_at = if let Some(created_ts) = container.created {
-                                    // Container age in seconds
                                     let now = std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
                                         .unwrap()
                                         .as_secs() as i64;
                                     let age_secs = now - created_ts;
                                     
-                                    // Set created_at to approximate original time
                                     std::time::Instant::now()
                                         .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
                                         .unwrap_or_else(|| std::time::Instant::now())
@@ -100,19 +145,24 @@ pub async fn restore_sessions_from_containers(state: &AppState) {
                                     std::time::Instant::now()
                                 };
                                 
-                                map.insert(session_id.clone(), SessionContext {
+                                // For legacy containers, we don't know the exact metadata
+                                // Set reasonable defaults based on container type
+                                let _is_builder = container_type.as_deref() != Some("viewer") 
+                                    && container_name.starts_with("trycli-studio-session-");
+                                
+                                map.insert(legacy_session_id.clone(), SessionContext {
                                     container_name: container_name.clone(),
                                     shell,
                                     pending_image_tag: None,
-                                    owner_id,
-                                    project_owner_id,
+                                    owner_id: None, // Unknown for legacy containers
+                                    project_owner_id: None, // Unknown for legacy containers
                                     is_publishing: false,
-                                    project_slug,
+                                    project_slug: None, // Unknown for legacy containers
                                     created_at,
-                                    is_ws_connected: false, // Will be set to true on reconnection
+                                    is_ws_connected: false,
                                 });
                                 restored += 1;
-                                tracing::info!("Restored session {} with container {}", session_id, container_name);
+                                tracing::info!("Restored legacy session {} from container {}", legacy_session_id, container_name);
                             }
                         }
                     }
@@ -171,7 +221,8 @@ pub async fn ws_handler(
 /// Attempt to restore a specific session from Docker containers
 /// This is called when a client tries to connect to a session that isn't in memory
 async fn restore_specific_session(state: &AppState, session_id: &str) {
-    let filters = HashMap::from([
+    // First, try to find a container with the session_id label (new containers)
+    let filters_with_label = HashMap::from([
         ("label".to_string(), vec![
             "managed_by=TryCli Studio".to_string(),
             format!("session_id={}", session_id)
@@ -180,7 +231,7 @@ async fn restore_specific_session(state: &AppState, session_id: &str) {
     
     let opts = ListContainersOptions {
         all: false, // Only running containers
-        filters,
+        filters: filters_with_label,
         ..Default::default()
     };
     
@@ -198,7 +249,6 @@ async fn restore_specific_session(state: &AppState, session_id: &str) {
                         .unwrap_or_default();
                     
                     if !container_name.is_empty() {
-                        // Calculate elapsed time from container creation
                         let created_at = if let Some(created_ts) = container.created {
                             let now = std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
@@ -229,6 +279,71 @@ async fn restore_specific_session(state: &AppState, session_id: &str) {
                         return;
                     }
                 }
+            }
+        }
+    }
+    
+    // If not found, try to find a legacy container by matching container name
+    // Legacy containers have UUID in name: trycli-studio-viewer-{uuid} or trycli-studio-session-{uuid}
+    let legacy_container_names = vec![
+        format!("trycli-studio-viewer-{}", session_id),
+        format!("trycli-studio-session-{}", session_id),
+    ];
+    
+    for legacy_name in legacy_container_names {
+        // Try to find container by exact name match
+        let filters_by_name = HashMap::from([
+            ("label".to_string(), vec!["managed_by=TryCli Studio".to_string()]),
+            ("name".to_string(), vec![legacy_name.clone()])
+        ]);
+        
+        let opts = ListContainersOptions {
+            all: false,
+            filters: filters_by_name,
+            ..Default::default()
+        };
+        
+        if let Ok(containers) = state.docker.list_containers(Some(opts)).await {
+            if let Some(container) = containers.first() {
+                let labels = container.labels.as_ref();
+                let shell = labels
+                    .and_then(|l| l.get("shell"))
+                    .map(|s| s.clone())
+                    .unwrap_or_else(|| "/bin/bash".to_string());
+                
+                let container_name = container.names.as_ref()
+                    .and_then(|names| names.first())
+                    .map(|n| n.trim_start_matches('/').to_string())
+                    .unwrap_or(legacy_name.clone());
+                
+                let created_at = if let Some(created_ts) = container.created {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i64;
+                    let age_secs = now - created_ts;
+                    
+                    std::time::Instant::now()
+                        .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
+                        .unwrap_or_else(|| std::time::Instant::now())
+                } else {
+                    std::time::Instant::now()
+                };
+                
+                let mut map = state.lock_sessions();
+                map.insert(session_id.to_string(), SessionContext {
+                    container_name: container_name.clone(),
+                    shell,
+                    pending_image_tag: None,
+                    owner_id: None, // Unknown for legacy containers
+                    project_owner_id: None,
+                    is_publishing: false,
+                    project_slug: None,
+                    created_at,
+                    is_ws_connected: false,
+                });
+                tracing::info!("Restored legacy session {} from container {}", session_id, container_name);
+                return;
             }
         }
     }

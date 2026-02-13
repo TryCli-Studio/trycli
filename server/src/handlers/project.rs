@@ -7,7 +7,8 @@ use axum::{
     Json, Router,
 };
 use bollard::exec::{CreateExecOptions, StartExecResults};
-use bollard::image::{CreateImageOptions, RemoveImageOptions}; 
+use bollard::image::{CreateImageOptions, RemoveImageOptions};
+use bollard::container::ListContainersOptions; 
 use tower_sessions::Session;
 use uuid::Uuid;
 use serde::Deserialize;
@@ -335,6 +336,53 @@ pub async fn publish_handler(
     Ok(Json("Published!".to_string()))
 }
 
+/// Helper function to find an existing viewer container for a project
+/// This is used to reuse containers for old projects that don't have session_id labels
+async fn find_existing_viewer_container(state: &AppState, project_slug: &str, owner_id: i64) -> Option<String> {
+    // First, check in-memory sessions for a match
+    {
+        let sessions = state.lock_sessions();
+        for (session_id, ctx) in sessions.iter() {
+            if ctx.project_owner_id == Some(owner_id) 
+                && ctx.project_slug.as_deref() == Some(project_slug)
+                && !ctx.container_name.is_empty() 
+                && ctx.container_name != "INITIALIZING" {
+                return Some(session_id.clone());
+            }
+        }
+    }
+    
+    // If not in memory, check Docker containers
+    // First try with project_slug label (new containers)
+    let filters_with_slug = HashMap::from([
+        ("label".to_string(), vec![
+            "managed_by=TryCli Studio".to_string(),
+            "container_type=viewer".to_string(),
+            format!("project_owner_id={}", owner_id),
+            format!("project_slug={}", project_slug),
+        ])
+    ]);
+    
+    let opts = ListContainersOptions {
+        all: false,
+        filters: filters_with_slug,
+        ..Default::default()
+    };
+    
+    if let Ok(containers) = state.docker.list_containers(Some(opts)).await {
+        if let Some(container) = containers.first() {
+            // Extract session_id from labels
+            if let Some(labels) = &container.labels {
+                if let Some(session_id) = labels.get("session_id") {
+                    return Some(session_id.clone());
+                }
+            }
+        }
+    }
+    
+    None
+}
+
 pub async fn get_project(
     Path((username, slug)): Path<(String, String)>, 
     State(state): State<AppState>,
@@ -477,23 +525,32 @@ pub async fn get_project(
     }
 
     // 7. Construct JSON response
-    // Generate the session ID here, but DO NOT spawn Docker yet.
-    let session_id = Uuid::new_v4().to_string();
-
-    {
-        let mut map = state.lock_sessions();
-        map.insert(session_id.clone(), SessionContext {
-            container_name: String::new(), // Empty indicates "Not Started"
-            pending_image_tag: Some(image_tag), // Store tag for WS handler
-            shell,
-            owner_id: None,
-            project_owner_id: Some(owner_id),
-            is_publishing: false,
-            project_slug: Some(slug), 
-            created_at: std::time::Instant::now(),
-            is_ws_connected: false,
-        }); 
-    }
+    // Check if there's an existing viewer container for this project
+    let session_id = match find_existing_viewer_container(&state, &slug, owner_id).await {
+        Some(existing_session_id) => {
+            tracing::info!("Reusing existing session {} for project {}/{}", existing_session_id, username, slug);
+            existing_session_id
+        }
+        None => {
+            // Generate a new session ID and prepare for lazy container spawn
+            let new_session_id = Uuid::new_v4().to_string();
+            
+            let mut map = state.lock_sessions();
+            map.insert(new_session_id.clone(), SessionContext {
+                container_name: String::new(), // Empty indicates "Not Started"
+                pending_image_tag: Some(image_tag.clone()), // Store tag for WS handler
+                shell: shell.clone(),
+                owner_id: None,
+                project_owner_id: Some(owner_id),
+                is_publishing: false,
+                project_slug: Some(slug.clone()), 
+                created_at: std::time::Instant::now(),
+                is_ws_connected: false,
+            });
+            
+            new_session_id
+        }
+    };
     
     let mut response_json = serde_json::json!({
         "markdown": markdown,
