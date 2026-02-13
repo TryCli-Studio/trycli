@@ -147,7 +147,6 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
                     "DAC_OVERRIDE".to_string()
                 ]),
                 security_opt: Some(vec!["no-new-privileges".to_string()]),
-                readonly_rootfs: Some(true),
                 mounts: Some(vec![
                     Mount {
                         target: Some("/root".to_string()), 
@@ -316,7 +315,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
         tty: Some(true),
         open_stdin: Some(true),
         // FIX: Use shell instead of tail to keep it alive reliably
-        cmd: Some(vec!["/bin/sh".to_string()]),
+        cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]),
         env: Some(vec![
             "LANG=C.UTF-8".to_string(),
             "LC_ALL=C.UTF-8".to_string(),
