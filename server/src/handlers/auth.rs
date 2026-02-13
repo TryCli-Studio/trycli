@@ -7,7 +7,7 @@ use axum::{
 };
 use oauth2::{
     basic::BasicClient, AuthUrl, ClientId, ClientSecret, CsrfToken, 
-    RedirectUrl, Scope, TokenUrl, TokenResponse,
+    RedirectUrl, Scope, TokenUrl, TokenResponse, EndpointSet, EndpointNotSet,
 };
 use serde::Deserialize;
 use tower_sessions::Session;
@@ -16,6 +16,9 @@ use crate::models::User;
 
 pub const AUTH_URL: &str = "https://github.com/login/oauth/authorize";
 pub const TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
+
+// Type alias for a fully configured OAuth client with both auth and token endpoints set
+type ConfiguredClient = BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
 
 // Routes for Auth
 pub fn routes() -> Router<AppState> {
@@ -50,17 +53,22 @@ async fn github_callback(
     // FIX: Handle config errors gracefully
     let client = make_client(&state).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
+    // Create a stateful HTTP client with no redirects (for SSRF protection)
+    let http_client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("HTTP Client Error: {}", e)))?;
+
     // 1. Exchange Code
     let token = client
         .exchange_code(oauth2::AuthorizationCode::new(query.code))
-        .request_async(oauth2::reqwest::async_http_client)
+        .request_async(&http_client)
         .await
         .map_err(|e| {
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Token Error: {}", e))
         })?;
 
     // 2. Fetch Profile
-    let http_client = reqwest::Client::new();
     let user_data: User = http_client
         .get("https://api.github.com/user")
         .header("User-Agent", "TryCli Studio")
@@ -99,7 +107,7 @@ async fn get_me(session: Session) -> Result<impl IntoResponse, (StatusCode, Stri
 }
 
 // 4. Helper to create OAuth client (Now returns Result)
-fn make_client(state: &AppState) -> Result<BasicClient, String> {
+fn make_client(state: &AppState) -> Result<ConfiguredClient, String> {
     let auth_url = AuthUrl::new(AUTH_URL.to_string())
         .map_err(|e| format!("Invalid Auth URL: {}", e))?;
     
@@ -112,13 +120,11 @@ fn make_client(state: &AppState) -> Result<BasicClient, String> {
     let redirect_url = RedirectUrl::new(format!("{}/auth/callback", api_url))
         .map_err(|e| format!("Invalid Redirect URL: {}", e))?;
 
-    Ok(BasicClient::new(
-        ClientId::new(state.github_id.clone()),
-        Some(ClientSecret::new(state.github_secret.clone())),
-        auth_url,
-        Some(token_url),
-    )
-    .set_redirect_uri(redirect_url))
+    Ok(BasicClient::new(ClientId::new(state.github_id.clone()))
+        .set_client_secret(ClientSecret::new(state.github_secret.clone()))
+        .set_auth_uri(auth_url)
+        .set_token_uri(token_url)
+        .set_redirect_uri(redirect_url))
 }
 
 async fn logout(session: Session) -> Result<impl IntoResponse, (StatusCode, String)> {
