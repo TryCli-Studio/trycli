@@ -48,7 +48,7 @@ pub async fn oembed_handler(
                     provider_name: "TryCLI Studio".to_string(),
                     provider_url: origin.clone(),
                     html: format!(
-                        r#"<iframe src="{}" width="100%" height="500" frameborder="0" allowtransparency="true" allow="clipboard-read; clipboard-write"></iframe>"#, 
+                        r#"<iframe src="{}" width="800" height="500" frameborder="0" allowtransparency="true" allow="clipboard-read; clipboard-write"></iframe>"#, 
                         embed_src
                     ),
                     width: 800,
