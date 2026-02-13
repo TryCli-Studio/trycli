@@ -16,6 +16,7 @@ mod handlers {
 }
 
 use services::docker::start_background_reaper;
+use services::websocket::restore_sessions_from_containers;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,6 +24,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Setup database and Docker
     let state = config::setup_database_and_docker().await?;
+
+    // Restore sessions from existing Docker containers (critical for reconnecting to pre-existing containers)
+    tracing::info!("Restoring sessions from existing containers...");
+    restore_sessions_from_containers(&state).await;
 
     // Spawn background reaper
     let docker_reaper = state.docker.clone();
