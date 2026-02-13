@@ -68,8 +68,7 @@ pub async fn oembed_handler(
             .bind(slug)
             .fetch_optional(&state.db)
             .await
-            .ok()
-            .flatten();
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
             if exists.is_some() {
                 let origin = std::env::var("FRONTEND_URL").unwrap_or("https://trycli.com".to_string());
