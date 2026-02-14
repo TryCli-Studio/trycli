@@ -3,7 +3,7 @@ use axum::{
     response::Response,
     http::StatusCode,
 };
-use bollard::container::{CreateContainerOptions, Config};
+use bollard::container::{CreateContainerOptions, Config, ListContainersOptions};
 use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
 use bollard::image::CreateImageOptions;
 use bollard::exec::{CreateExecOptions, StartExecResults};
@@ -16,6 +16,157 @@ use tower_sessions::Session;
 use crate::state::{AppState, SessionContext}; 
 use crate::models::{User, AnalyticsEventType, log_analytics_event}; 
 
+/// Helper function to create container labels with session metadata for restoration
+fn create_container_labels(
+    session_id: &str,
+    owner_id: Option<i64>,
+    project_owner_id: Option<i64>,
+    project_slug: Option<&str>,
+    shell: &str,
+    container_type: &str, // "builder" or "viewer"
+) -> HashMap<String, String> {
+    let mut labels = HashMap::from([
+        ("managed_by".to_string(), "TryCli Studio".to_string()),
+        ("session_id".to_string(), session_id.to_string()),
+        ("shell".to_string(), shell.to_string()),
+        ("container_type".to_string(), container_type.to_string()),
+    ]);
+    
+    if let Some(id) = owner_id {
+        labels.insert("owner_id".to_string(), id.to_string());
+    }
+    
+    if let Some(id) = project_owner_id {
+        labels.insert("project_owner_id".to_string(), id.to_string());
+    }
+    
+    if let Some(slug) = project_slug {
+        labels.insert("project_slug".to_string(), slug.to_string());
+    }
+    
+    labels
+}
+
+/// Calculate an approximate creation time based on container's created timestamp
+/// This converts a Unix timestamp to an Instant for session tracking
+fn calculate_session_created_at(created_ts: Option<i64>) -> std::time::Instant {
+    if let Some(created_ts) = created_ts {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let age_secs = now - created_ts;
+        
+        std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(age_secs.max(0) as u64))
+            .unwrap_or_else(|| std::time::Instant::now())
+    } else {
+        std::time::Instant::now()
+    }
+}
+
+/// Restore sessions from existing Docker containers on server startup
+/// This allows pre-existing containers to be reconnected after server restart
+pub async fn restore_sessions_from_containers(state: &AppState) {
+    let filters = HashMap::from([
+        ("label".to_string(), vec!["managed_by=TryCli Studio".to_string()])
+    ]);
+    
+    let opts = ListContainersOptions {
+        all: false, // Only running containers
+        filters,
+        ..Default::default()
+    };
+    
+    match state.docker.list_containers(Some(opts)).await {
+        Ok(containers) => {
+            let mut restored = 0;
+            for container in containers {
+                if let Some(labels) = container.labels {
+                    // Extract session metadata from labels
+                    let session_id = labels.get("session_id").map(|s| s.clone());
+                    let shell = labels.get("shell").map(|s| s.clone()).unwrap_or_else(|| "/bin/bash".to_string());
+                    let owner_id = labels.get("owner_id").and_then(|s| s.parse::<i64>().ok());
+                    let project_owner_id = labels.get("project_owner_id").and_then(|s| s.parse::<i64>().ok());
+                    let project_slug = labels.get("project_slug").map(|s| s.clone());
+                    
+                    let container_name = container.names
+                        .as_ref()
+                        .and_then(|names| names.first())
+                        .map(|n| n.trim_start_matches('/').to_string())
+                        .unwrap_or_default();
+                    
+                    if container_name.is_empty() {
+                        continue;
+                    }
+                    
+                    // Handle new containers (with session_id label)
+                    if let Some(session_id) = session_id {
+                        let mut map = state.lock_sessions();
+                        
+                        if !map.contains_key(&session_id) {
+                            let created_at = calculate_session_created_at(container.created);
+                            
+                            map.insert(session_id.clone(), SessionContext {
+                                container_name: container_name.clone(),
+                                shell,
+                                pending_image_tag: None,
+                                owner_id,
+                                project_owner_id,
+                                is_publishing: false,
+                                project_slug,
+                                created_at,
+                                is_ws_connected: false,
+                            });
+                            restored += 1;
+                            tracing::info!("Restored session {} with container {}", session_id, container_name);
+                        }
+                    } else {
+                        // Handle legacy containers (without session_id label)
+                        // Extract UUID from container name for use as session_id
+                        let legacy_session_id = if container_name.starts_with("trycli-studio-viewer-") {
+                            container_name.strip_prefix("trycli-studio-viewer-").map(|s| s.to_string())
+                        } else if container_name.starts_with("trycli-studio-session-") {
+                            container_name.strip_prefix("trycli-studio-session-").map(|s| s.to_string())
+                        } else {
+                            None
+                        };
+                        
+                        if let Some(legacy_session_id) = legacy_session_id {
+                            let mut map = state.lock_sessions();
+                            
+                            if !map.contains_key(&legacy_session_id) {
+                                let created_at = calculate_session_created_at(container.created);
+                                
+                                // For legacy containers, we don't know the exact metadata
+                                // Set reasonable defaults based on container type
+                                
+                                map.insert(legacy_session_id.clone(), SessionContext {
+                                    container_name: container_name.clone(),
+                                    shell,
+                                    pending_image_tag: None,
+                                    owner_id: None, // Unknown for legacy containers
+                                    project_owner_id: None, // Unknown for legacy containers
+                                    is_publishing: false,
+                                    project_slug: None, // Unknown for legacy containers
+                                    created_at,
+                                    is_ws_connected: false,
+                                });
+                                restored += 1;
+                                tracing::info!("Restored legacy session {} from container {}", legacy_session_id, container_name);
+                            }
+                        }
+                    }
+                }
+            }
+            tracing::info!("Session restoration complete: {} sessions restored", restored);
+        }
+        Err(e) => {
+            tracing::error!("Failed to restore sessions from containers: {}", e);
+        }
+    }
+}
+
 pub async fn ws_handler(
     ws: WebSocketUpgrade, 
     Path(session_id): Path<String>, 
@@ -24,6 +175,17 @@ pub async fn ws_handler(
 ) -> Result<Response, StatusCode> {
     let user: Option<User> = session.get("user").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let user_id = user.map(|u| u.id);
+
+    // Check if session exists in memory, if not, try to restore from Docker
+    let session_exists = {
+        let map = state.lock_sessions();
+        map.contains_key(&session_id)
+    };
+    
+    if !session_exists {
+        // Try to find and restore this specific session from Docker containers
+        restore_specific_session(&state, &session_id).await;
+    }
 
     {
         let map = state.lock_sessions();
@@ -45,6 +207,113 @@ pub async fn ws_handler(
     }
 
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, session_id, user_id)))
+}
+
+/// Attempt to restore a specific session from Docker containers
+/// This is called when a client tries to connect to a session that isn't in memory
+async fn restore_specific_session(state: &AppState, session_id: &str) {
+    // First, try to find a container with the session_id label (new containers)
+    let filters_with_label = HashMap::from([
+        ("label".to_string(), vec![
+            "managed_by=TryCli Studio".to_string(),
+            format!("session_id={}", session_id)
+        ])
+    ]);
+    
+    let opts = ListContainersOptions {
+        all: false, // Only running containers
+        filters: filters_with_label,
+        ..Default::default()
+    };
+    
+    if let Ok(containers) = state.docker.list_containers(Some(opts)).await {
+        for container in containers {
+            if let Some(labels) = container.labels {
+                let shell = labels.get("shell").map(|s| s.clone()).unwrap_or_else(|| "/bin/bash".to_string());
+                let owner_id = labels.get("owner_id").and_then(|s| s.parse::<i64>().ok());
+                let project_owner_id = labels.get("project_owner_id").and_then(|s| s.parse::<i64>().ok());
+                let project_slug = labels.get("project_slug").map(|s| s.clone());
+                
+                if let Some(names) = container.names {
+                    let container_name = names.first()
+                        .map(|n| n.trim_start_matches('/').to_string())
+                        .unwrap_or_default();
+                    
+                    if !container_name.is_empty() {
+                        let created_at = calculate_session_created_at(container.created);
+                        
+                        let mut map = state.lock_sessions();
+                        map.insert(session_id.to_string(), SessionContext {
+                            container_name: container_name.clone(),
+                            shell,
+                            pending_image_tag: None,
+                            owner_id,
+                            project_owner_id,
+                            is_publishing: false,
+                            project_slug,
+                            created_at,
+                            is_ws_connected: false,
+                        });
+                        tracing::info!("Restored session {} from container {}", session_id, container_name);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    
+    // If not found, try to find a legacy container by matching container name
+    // Legacy containers have UUID in name: trycli-studio-viewer-{uuid} or trycli-studio-session-{uuid}
+    let legacy_container_names = vec![
+        format!("trycli-studio-viewer-{}", session_id),
+        format!("trycli-studio-session-{}", session_id),
+    ];
+    
+    for legacy_name in legacy_container_names {
+        // Try to find container by exact name match
+        let filters_by_name = HashMap::from([
+            ("label".to_string(), vec!["managed_by=TryCli Studio".to_string()]),
+            ("name".to_string(), vec![legacy_name.clone()])
+        ]);
+        
+        let opts = ListContainersOptions {
+            all: false,
+            filters: filters_by_name,
+            ..Default::default()
+        };
+        
+        if let Ok(containers) = state.docker.list_containers(Some(opts)).await {
+            if let Some(container) = containers.first() {
+                let labels = container.labels.as_ref();
+                let shell = labels
+                    .and_then(|l| l.get("shell"))
+                    .map(|s| s.clone())
+                    .unwrap_or_else(|| "/bin/bash".to_string());
+                
+                let container_name = container.names.as_ref()
+                    .and_then(|names| names.first())
+                    .map(|n| n.trim_start_matches('/').to_string())
+                    .unwrap_or(legacy_name.clone());
+                
+                let created_at = calculate_session_created_at(container.created);
+                
+                let mut map = state.lock_sessions();
+                map.insert(session_id.to_string(), SessionContext {
+                    container_name: container_name.clone(),
+                    shell,
+                    pending_image_tag: None,
+                    owner_id: None, // Unknown for legacy containers
+                    project_owner_id: None,
+                    is_publishing: false,
+                    project_slug: None,
+                    created_at,
+                    is_ws_connected: false,
+                });
+                tracing::info!("Restored legacy session {} from container {}", session_id, container_name);
+                return;
+            }
+        }
+    }
 }
 
 async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: String, user_id: Option<i64>) {
@@ -103,7 +372,13 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
         if let Some(ctx) = map.get(&session_id) {
             // If we have an image tag but no container name, it's a viewer waiting to start
             if ctx.container_name.is_empty() && ctx.pending_image_tag.is_some() {
-                Some((ctx.pending_image_tag.clone().unwrap(), ctx.shell.clone()))
+                Some((
+                    ctx.pending_image_tag.clone().unwrap(), 
+                    ctx.shell.clone(),
+                    ctx.owner_id,
+                    ctx.project_owner_id,
+                    ctx.project_slug.clone(),
+                ))
             } else {
                 None
             }
@@ -112,15 +387,22 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
         }
     };
 
-    if let Some((image_tag, shell)) = pending_spawn {
+    if let Some((image_tag, shell, owner_id, project_owner_id, project_slug)) = pending_spawn {
         // Perform the spawn that used to be in get_project
         let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
         
+        let labels = create_container_labels(
+            &session_id,
+            owner_id,
+            project_owner_id,
+            project_slug.as_deref(),
+            &shell,
+            "viewer",
+        );
+        
         let config = Config {
             image: Some(image_tag),
-            labels: Some(HashMap::from([
-                ("managed_by".to_string(), "TryCli Studio".to_string())
-            ])),
+            labels: Some(labels),
             tty: Some(true),
             user: Some("root".to_string()), 
             // FIX: Run sleep infinity as PID 1. This uses almost 0 CPU/RAM.
@@ -173,27 +455,45 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
             ..Default::default()
         };
 
-        // Create & Start
-        let create_res = state.docker.create_container(
-            Some(CreateContainerOptions { name: container_name.clone(), platform: None }), 
-            config
-        ).await;
+        // Create & Start (viewer container)
+        match state
+            .docker
+            .create_container(
+                Some(CreateContainerOptions {
+                    name: container_name.clone(),
+                    platform: None,
+                }),
+                config,
+            )
+            .await
+        {
+            Ok(_) => {
+                if let Err(e) =
+                    state.docker.start_container::<String>(&container_name, None).await
+                {
+                    // Log detailed error server-side only
+                    tracing::error!("Viewer start error for session {}: {}", session_id, e);
+                    // Send generic error message to client
+                    let msg = "\r\n\x1b[31m[!] Failed to start viewer container. Please try again later.\x1b[0m\r\n";
+                    let _ = socket.send(Message::Text(msg.into())).await;
+                    return;
+                }
 
-        if create_res.is_ok() {
-            if state.docker.start_container::<String>(&container_name, None).await.is_ok() {
                 // Update SessionContext with the real container name
                 let mut map = state.lock_sessions();
                 if let Some(ctx) = map.get_mut(&session_id) {
                     ctx.container_name = container_name.clone();
                     ctx.pending_image_tag = None; // clear pending
                 }
-            } else {
-                let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to start container.\x1b[0m\r\n".to_string())).await;
+            }
+            Err(e) => {
+                // Log detailed error server-side only
+                tracing::error!("Viewer create error for session {}: {}", session_id, e);
+                // Send generic error message to client
+                let msg = "\r\n\x1b[31m[!] Failed to create viewer container. Please try again later.\x1b[0m\r\n";
+                let _ = socket.send(Message::Text(msg.into())).await;
                 return;
             }
-        } else {
-            let _ = socket.send(Message::Text("\r\n\x1b[31m[!] Failed to create container.\x1b[0m\r\n".to_string())).await;
-            return;
         }
     }
 
@@ -227,7 +527,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
 
         if let Some(ctx) = existing_session {
             if ctx.container_name == "INITIALIZING" {
-                let _ = socket.close().await;
+                let _ = socket.send(axum::extract::ws::Message::Close(None)).await;
                 return;
             }
             attach_to_container(socket, state, session_id, ctx.container_name, ctx.shell, None).await;
@@ -237,7 +537,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
 
 async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: String, _user_id: Option<i64>) {
     async fn send_txt(ws: &mut WebSocket, txt: &str) {
-        let _ = ws.send(Message::Text(txt.to_string())).await;
+        let _ = ws.send(Message::Text(txt.to_string().into())).await;
     }
     
     let green = "\x1b[32m";
@@ -257,7 +557,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
 
     let mut distro_choice = 0;
     while let Some(Ok(Message::Text(txt))) = socket.recv().await {
-        let input = txt.trim();
+        let input = txt.as_str().trim();
         if input == "1" { distro_choice = 1; break; }
         if input == "2" { distro_choice = 2; break; }
         if input == "3" { distro_choice = 3; break; }
@@ -272,7 +572,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
 
     let mut shell_choice = 0;
     while let Some(Ok(Message::Text(txt))) = socket.recv().await {
-        let input = txt.trim();
+        let input = txt.as_str().trim();
         if input == "1" { shell_choice = 1; break; }
         if input == "2" { shell_choice = 2; break; }
         if input == "3" { shell_choice = 3; break; }
@@ -310,6 +610,16 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
     }
 
     let container_name = format!("trycli-studio-session-{}", Uuid::new_v4());
+    
+    let labels = create_container_labels(
+        &session_id,
+        _user_id,
+        None, // Builder sessions don't have project context yet
+        None,
+        final_shell,
+        "builder",
+    );
+    
     let config = Config {
         image: Some(image.to_string()),
         tty: Some(true),
@@ -321,9 +631,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             "LC_ALL=C.UTF-8".to_string(),
             "TERM=xterm-256color".to_string()
         ]),
-        labels: Some(HashMap::from([
-            ("managed_by".to_string(), "TryCli Studio".to_string())
-        ])),
+        labels: Some(labels),
         host_config: Some(HostConfig {
             runtime: Some("runsc".to_string()),
             memory: Some(512 * 1024 * 1024), 
@@ -508,12 +816,12 @@ async fn attach_to_container(
                     Ok(Some(Ok(msg))) => {
                         match msg {
                             Message::Text(text) => {
-                                if input.write_all(text.as_bytes()).await.is_err() {
+                                if input.write_all(text.as_str().as_bytes()).await.is_err() {
                                     break; // Container stdin closed
                                 }
                             },
                             Message::Binary(bin) => {
-                                if input.write_all(&bin).await.is_err() {
+                                if input.write_all(bin.as_ref()).await.is_err() {
                                     break;
                                 }
                             },

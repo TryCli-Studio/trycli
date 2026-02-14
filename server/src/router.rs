@@ -25,7 +25,7 @@ pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Erro
         .merge(spawn::routes())
         .merge(project::routes())
         .merge(admin::routes())
-        .route("/ws/:session_id", get(websocket::ws_handler))
+        .route("/ws/{session_id}", get(websocket::ws_handler))
         .route("/api/analytics", get(analytics::get_analytics))
         .route("/api/oembed", get(oembed::oembed_handler))
         .layer(tower_http::cors::CorsLayer::new()
