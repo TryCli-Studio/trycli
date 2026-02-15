@@ -147,7 +147,6 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
                     "DAC_OVERRIDE".to_string()
                 ]),
                 security_opt: Some(vec!["no-new-privileges".to_string()]),
-                readonly_rootfs: Some(true),
                 mounts: Some(vec![
                     Mount {
                         target: Some("/root".to_string()), 
