@@ -135,8 +135,8 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
             host_config: Some(HostConfig { 
                 runtime: Some("runsc".to_string()),
                 memory: Some(512 * 1024 * 1024), 
-                nano_cpus: Some(250_000_000),
-                pids_limit: Some(64),
+                nano_cpus: Some(500_000_000),
+                pids_limit: Some(128),
                 network_mode: Some("bridge".to_string()), 
                 cap_drop: Some(vec!["ALL".to_string()]),
                 cap_add: Some(vec![
