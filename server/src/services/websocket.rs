@@ -149,15 +149,6 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
                 security_opt: Some(vec!["no-new-privileges".to_string()]),
                 mounts: Some(vec![
                     Mount {
-                        target: Some("/root".to_string()), 
-                        typ: Some(MountTypeEnum::TMPFS), 
-                        tmpfs_options: Some(MountTmpfsOptions {
-                            size_bytes: Some(50 * 1024 * 1024), 
-                            mode: Some(0o1777),
-                        }),
-                        ..Default::default()
-                    },
-                    Mount {
                         target: Some("/tmp".to_string()), 
                         typ: Some(MountTypeEnum::TMPFS), 
                         tmpfs_options: Some(MountTmpfsOptions {
