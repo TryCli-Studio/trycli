@@ -244,8 +244,17 @@ pub async fn publish_handler(
 
     // 2. Prepare Internal Tar Command
     let tar_cmd = vec![
-        "tar", "-cf", "-", "-C", "/", 
-        "bin", "etc", "home", "lib", "media", "mnt", "opt", "root", "sbin", "srv", "usr", "var"
+        "tar",
+        "-cf",
+        "-",
+        "-C",
+        "/",
+        "--exclude", "proc",
+        "--exclude", "sys",
+        "--exclude", "dev",
+        "--exclude", "tmp",
+        "--exclude", "run",
+        "."
     ];
 
     let exec_config = CreateExecOptions {
