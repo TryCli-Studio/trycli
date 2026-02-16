@@ -25,13 +25,13 @@ pub fn EmbedPage() -> impl IntoView {
     let (started, set_started) = create_signal(false);
 
     // Resource now returns ProjectState
-    let project_data = create_resource(
-        move || (started.get(), username(), slug(), query_params.get()), 
-        move |(is_started, u, s, qp)| async move {
+let project_data = create_resource(
+        move || (started.get(), username(), slug()), 
+        move |(is_started, u, s)| async move {
             if !is_started { return ProjectState::Loading; } 
             
             // Fix: Include the 'key' parameter if present (for VIP/Secret embeds)
-            let key = qp.get("key").cloned().unwrap_or_default();
+            let key = query_params.get_untracked().get("key").cloned().unwrap_or_default();
             let url = if key.is_empty() {
                 format!("{}/api/project/{}/{}", api_base(), u, s)
             } else {
