@@ -439,7 +439,7 @@ pub fn ViewPage() -> impl IntoView {
                                         let slug_clone = slug();
                                         let username_clone = username();
                                         spawn_local(async move {
-                                            let url = format!("{}/api/project/{}/embed-key", api_base(), slug_clone);
+                                            let url = format!("{}/api/project/{}/{}/embed-key", api_base(), username_clone, slug_clone);
                                             match Request::get(&url).credentials(RequestCredentials::Include).send().await {
                                                 Ok(resp) => {
                                                     match resp.json::<serde_json::Value>().await {
@@ -492,7 +492,7 @@ pub fn ViewPage() -> impl IntoView {
                                         let slug_clone = slug();
                                         let username_clone = username();
                                         spawn_local(async move {
-                                            let url = format!("{}/api/project/{}/embed-key", api_base(), slug_clone);
+                                            let url = format!("{}/api/project/{}/{}/embed-key", api_base(), username_clone, slug_clone);
                                             match Request::get(&url).credentials(RequestCredentials::Include).send().await {
                                                 Ok(resp) => {
                                                     match resp.json::<serde_json::Value>().await {

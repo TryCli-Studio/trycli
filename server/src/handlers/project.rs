@@ -148,12 +148,12 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/my-projects", get(list_user_projects))
         .route("/api/project/:username/:slug", get(get_project))
-        .route("/api/project/:slug", delete(delete_project))
-        .route("/api/project/:slug/embed-key", get(get_embed_key))
+        .route("/api/project/:username/:slug/embed-key", get(get_embed_key))
         .route(
             "/api/project/:slug/whitelist",
             get(get_whitelist).post(add_to_whitelist).delete(remove_from_whitelist),
         )
+        .route("/api/project/:slug", delete(delete_project))
         .route("/api/search-projects", get(search_projects))
         .route("/api/publish", post(publish_handler))
         .route("/e/:token", get(resolve_secret_embed)) // Secret Embed Route
@@ -749,7 +749,7 @@ pub async fn remove_from_whitelist(
 pub async fn get_embed_key(
     State(state): State<AppState>,
     session: Session,
-    Path(slug): Path<String>,
+    Path((username, slug)): Path<(String, String)>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     // 1. Verify user is authenticated
     let user: Option<User> = session
@@ -758,12 +758,13 @@ pub async fn get_embed_key(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
-    // 2. Fetch project and verify ownership
+    // 2. Fetch project and verify ownership (case-insensitive for username/slug)
     let row_result = sqlx::query_as::<_, (i64, i64, Option<String>)>(
         "SELECT id, owner_id, embed_key \
          FROM projects \
-         WHERE LOWER(slug) = LOWER($1)"
+         WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
     )
+    .bind(&username)
     .bind(&slug)
     .fetch_optional(&state.db)
     .await
