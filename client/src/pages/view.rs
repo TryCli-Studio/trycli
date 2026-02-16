@@ -259,9 +259,10 @@ pub fn ViewPage() -> impl IntoView {
 
     // Project Data Resource (with VIP key and Referer security)
     let project_resource = create_resource(
-        move || (username(), slug(), auth_resource.get(), query_params.get()),
-        move |(u, s, _, qp)| async move {
-            let key = qp
+        move || (username(), slug(), auth_resource.get()),
+        move |(u, s, _)| async move {
+            let key = query_params
+                .get_untracked()
                 .get("key")
                 .cloned()
                 .unwrap_or_default();
