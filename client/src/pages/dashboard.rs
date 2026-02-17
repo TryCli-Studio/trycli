@@ -1,4 +1,5 @@
 use crate::api::api_base;
+use crate::components::hamburger::HamburgerMenu;
 use crate::components::modal::ConfirmModal;
 use crate::components::navbar::Navbar;
 use crate::types::{ProjectSummary, User};
@@ -89,23 +90,6 @@ pub fn DashboardPage() -> impl IntoView {
     let (search_results, set_search_results) = create_signal(Vec::<ProjectSummary>::new());
     let (show_suggestions, set_show_suggestions) = create_signal(false);
     let (debounce_timer, set_debounce_timer) = create_signal::<Option<i32>>(None);
-    let (menu_open, set_menu_open) = create_signal(false);
-
-    // Close menu when clicking outside
-    create_effect(move |_| {
-        if menu_open.get() {
-            if let Some(window) = web_sys::window() {
-                if let Some(document) = window.document() {
-                    let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::Event| {
-                        set_menu_open.set(false);
-                    }) as Box<dyn Fn(web_sys::Event)>);
-                    
-                    let _ = document.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-                    closure.forget();
-                }
-            }
-        }
-    });
 
     let perform_search = move |query: String| {
         if query.is_empty() {
@@ -178,47 +162,17 @@ pub fn DashboardPage() -> impl IntoView {
                             <span class="dashboard-username" style="color: var(--text-main); font-weight: 500;">{u.login.clone()}</span>
                         </div>
                         <div style="position: relative;">
-                            <button 
-                                class="hamburger-menu dashboard-hamburger"
-                                on:click=move |e: ev::MouseEvent| {
-                                    e.stop_propagation();
-                                    set_menu_open.set(!menu_open.get());
-                                }
-                                aria-label="Toggle menu"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                                </svg>
-                            </button>
-                            {move || if menu_open.get() {
-                                view! {
-                                    <div class="dropdown-menu" on:click=move |e: ev::MouseEvent| e.stop_propagation()>
-                                        <a href="/docs" class="dropdown-item" style="text-decoration: none;">
-                                            "Docs"
-                                        </a>
-                                        <a href="/blogs" class="dropdown-item" style="text-decoration: none;">
-                                            "Blogs"
-                                        </a>
-                                        <a href="https://twitter.com" target="_blank" class="dropdown-item" style="text-decoration: none;">
-                                            "Twitter"
-                                        </a>
-                                        <a href="https://ko-fi.com/tryclistudio" target="_blank" class="dropdown-item" style="text-decoration: none;">
-                                            "Support Us"
-                                        </a>
-                                        <div style="border-top: 1px solid var(--border); margin: 4px 0;"></div>
-                                        <a href=format!("{}/auth/logout", api_base()) 
-                                           class="dropdown-item dropdown-item-danger" 
-                                           rel="external"  
-                                           style="text-decoration: none;">
-                                           "Logout"
-                                        </a>
-                                    </div>
-                                }.into_view()
-                            } else {
-                                view! { <></> }.into_view()
-                            }}
+                            <HamburgerMenu
+                                button_class="hamburger-menu dashboard-hamburger"
+                                menu_class="dropdown-menu"
+                                item_class="dropdown-item"
+                                logout_class="dropdown-item dropdown-item-danger"
+                                link_style="text-decoration: none;"
+                                show_logout=true
+                                stop_propagation=true
+                                close_on_outside_click=true
+                                support_target_blank=true
+                            />
                         </div>
                     }.into_view(),
                     None => view! {

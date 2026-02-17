@@ -4,6 +4,7 @@ pub mod api;
 pub mod app;
 pub mod types;
 pub mod components {
+    pub mod hamburger;
     pub mod limit;
     pub mod modal;
     pub mod navbar;

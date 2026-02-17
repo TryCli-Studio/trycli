@@ -1,4 +1,5 @@
 use crate::api::api_base;
+use crate::components::hamburger::HamburgerMenu;
 use crate::components::modal::Modal;
 use crate::components::navbar::Navbar;
 use crate::components::terminal::TerminalView;
@@ -260,7 +261,6 @@ After publishing, you can easily distribute your interactive terminal:
     let (modal_body, set_modal_body) = create_signal(String::new());
     let (modal_success, set_modal_success) = create_signal(false);
     let (publish_modal_open, set_publish_modal_open) = create_signal(false);
-    let (menu_open, set_menu_open) = create_signal(false);
 
     create_resource(
         || (),
@@ -533,50 +533,17 @@ After publishing, you can easily distribute your interactive terminal:
                                      style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border);" />
                              }}
                             <div style="position: relative;">
-                                <button
-                                    class="hamburger-menu create-hamburger"
-                                    on:click=move |e: ev::MouseEvent| {
-                                        e.stop_propagation();
-                                        set_menu_open.set(!menu_open.get());
-                                    }
-                                    aria-label="Toggle menu"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="3" y1="12" x2="21" y2="12"></line>
-                                        <line x1="3" y1="6" x2="21" y2="6"></line>
-                                        <line x1="3" y1="18" x2="21" y2="18"></line>
-                                    </svg>
-                                </button>
-                                {move || if menu_open.get() {
-                                    view! {
-                                        <div class="dropdown-menu" on:click=move |e: ev::MouseEvent| e.stop_propagation()>
-                                            <a href="/dashboard" class="dropdown-item" style="text-decoration: none;">
-                                                "Dashboard"
-                                            </a>
-                                            <a href="/docs" class="dropdown-item" style="text-decoration: none;">
-                                                "Docs"
-                                            </a>
-                                            <a href="/blogs" class="dropdown-item" style="text-decoration: none;">
-                                                "Blogs"
-                                            </a>
-                                            <a href="https://twitter.com" target="_blank" class="dropdown-item" style="text-decoration: none;">
-                                                "Twitter"
-                                            </a>
-                                            <a href="https://ko-fi.com/tryclistudio" target="_blank" class="dropdown-item" style="text-decoration: none;">
-                                                "Support Us"
-                                            </a>
-                                            <div style="border-top: 1px solid var(--border); margin: 4px 0;"></div>
-                                            <a href=format!("{}/auth/logout", api_base())
-                                               class="dropdown-item dropdown-item-danger"
-                                               rel="external"
-                                               style="text-decoration: none;">
-                                               "Logout"
-                                            </a>
-                                        </div>
-                                    }.into_view()
-                                } else {
-                                    view! { <></> }.into_view()
-                                }}
+                                <HamburgerMenu
+                                    button_class="hamburger-menu create-hamburger"
+                                    menu_class="dropdown-menu"
+                                    item_class="dropdown-item"
+                                    logout_class="dropdown-item dropdown-item-danger"
+                                    link_style="text-decoration: none;"
+                                    show_dashboard=true
+                                    show_logout=true
+                                    stop_propagation=true
+                                    support_target_blank=true
+                                />
                             </div>
                         </div>
                     }.into_view(),

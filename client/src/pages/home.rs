@@ -1,4 +1,5 @@
 use crate::api::api_base;
+use crate::components::hamburger::HamburgerMenu;
 use crate::components::navbar::Navbar;
 use crate::types::User;
 use gloo_net::http::Request;
@@ -76,8 +77,6 @@ pub fn LandingPage() -> impl IntoView {
 
                     <div class="nav-actions">
                         {move || {
-                            let (menu_open, set_menu_open) = create_signal(false);
-
                             if auth_checked.get() {
                                 if let Some(u) = user.get() {
                                     // LOGGED IN: Show Profile + Dashboard Button + Hamburger Menu
@@ -93,35 +92,19 @@ pub fn LandingPage() -> impl IntoView {
                                             </div>
                                             <A href="/dashboard" class="btn-secondary btn-action btn-dashboard">"Dashboard"</A>
 
-                                            // Hamburger Menu Button
-                                            <button
-                                                class="hamburger-menu"
-                                                class:open=move || menu_open.get()
-                                                on:click=move |_| set_menu_open.update(|open| *open = !*open)
-                                                aria-label="Toggle menu"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                                                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                                                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                                                </svg>
-                                            </button>
-
-                                            // Mobile Menu Dropdown
-                                            <div class="mobile-menu" class:open=move || menu_open.get()>
-                                                <A href="/dashboard" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Dashboard"</A>
-                                                <A href="/docs" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Docs"</A>
-                                                <A href="/blogs" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Blogs"</A>
-                                                <a href="https://twitter.com" target="_blank" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Twitter"</a>
-                                                <a href="https://ko-fi.com/tryclistudio" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Support Us"</a>
-                                            </div>
+                                            <HamburgerMenu
+                                                button_class="hamburger-menu"
+                                                menu_class="mobile-menu"
+                                                item_class="menu-item"
+                                                show_dashboard=true
+                                                use_open_class=true
+                                                close_on_item_click=true
+                                            />
                                         </div>
                                     }.into_view()
                                 } else {
                                     // LOGGED OUT
                                     let url = auth_github_url();
-                                    let (menu_open, set_menu_open) = create_signal(false);
-
                                     view! {
                                         <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
                                             <a href=url class="btn-secondary btn-action btn-login" rel="external" style="display: flex; align-items: center; gap: 8px;">
@@ -131,25 +114,15 @@ pub fn LandingPage() -> impl IntoView {
                                                 "Login"
                                             </a>
 
-                                            <button
-                                                class="hamburger-menu"
-                                                class:open=move || menu_open.get()
-                                                on:click=move |_| set_menu_open.update(|open| *open = !*open)
-                                                aria-label="Toggle menu"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                    <line x1="3" y1="12" x2="21" y2="12"></line>
-                                                    <line x1="3" y1="6" x2="21" y2="6"></line>
-                                                    <line x1="3" y1="18" x2="21" y2="18"></line>
-                                                </svg>
-                                            </button>
-
-                                            <div class="mobile-menu" class:open=move || menu_open.get()>
-                                                <A href="/docs" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Docs"</A>
-                                                <A href="/blogs" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Blogs"</A>
-                                                <a href="https://twitter.com" target="_blank" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Twitter"</a>
-                                                <a href="/support" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Support Us"</a>
-                                            </div>
+                                            <HamburgerMenu
+                                                button_class="hamburger-menu"
+                                                menu_class="mobile-menu"
+                                                item_class="menu-item"
+                                                support_url="/support"
+                                                support_target_blank=false
+                                                use_open_class=true
+                                                close_on_item_click=true
+                                            />
                                         </div>
                                     }.into_view()
                                 }
