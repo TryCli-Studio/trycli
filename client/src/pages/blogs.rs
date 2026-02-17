@@ -1,4 +1,5 @@
 use crate::api::api_base;
+use crate::components::hamburger::HamburgerMenu;
 use crate::components::navbar::Navbar;
 use crate::types::User;
 use gloo_net::http::Request;
@@ -8,7 +9,6 @@ use web_sys::RequestCredentials;
 
 #[component]
 pub fn BlogsPage() -> impl IntoView {
-    let (menu_open, set_menu_open) = create_signal(false);
     let (user, set_user) = create_signal(None::<User>);
     let (auth_checked, set_auth_checked) = create_signal(false);
 
@@ -52,28 +52,16 @@ pub fn BlogsPage() -> impl IntoView {
                         }
                     }}
 
-                    // Hamburger Menu Button
-                    <button
-                        class="hamburger-menu dashboard-hamburger"
-                        class:open=move || menu_open.get()
-                        on:click=move |_| set_menu_open.update(|open| *open = !*open)
-                        aria-label="Toggle menu"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="3" y1="12" x2="21" y2="12"></line>
-                            <line x1="3" y1="6" x2="21" y2="6"></line>
-                            <line x1="3" y1="18" x2="21" y2="18"></line>
-                        </svg>
-                    </button>
-
-                    // Mobile Menu Dropdown
-                    <div class="mobile-menu" class:open=move || menu_open.get()>
-                        <A href="/" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Home"</A>
-                        <A href="/dashboard" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Dashboard"</A>
-                        <A href="/docs" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Docs"</A>
-                        <a href="https://twitter.com" target="_blank" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Twitter"</a>
-                        <a href="https://ko-fi.com/tryclistudio" class="menu-item" on:click=move |_| set_menu_open.set(false)>"Support Us"</a>
-                    </div>
+                    <HamburgerMenu
+                        button_class="hamburger-menu dashboard-hamburger"
+                        menu_class="mobile-menu"
+                        item_class="menu-item"
+                        show_home=true
+                        show_dashboard=true
+                        show_blogs=false
+                        use_open_class=true
+                        close_on_item_click=true
+                    />
                 </div>
             </Navbar>
 
