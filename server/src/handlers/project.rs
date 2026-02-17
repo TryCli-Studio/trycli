@@ -352,13 +352,12 @@ pub async fn publish_handler(
 pub async fn get_project(
     Path((username, slug)): Path<(String, String)>, 
     State(state): State<AppState>,
-    session: Session, // Session is used to detect owner (bypass checks), lazily create embed_key for owners, and return embed_token/embed_key to them; non-owner secure embeds use VIP key + Referer whitelist
+    session: Session, 
     Query(params): Query<HashMap<String, String>>,
     headers: HeaderMap,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> axum::response::Result<impl axum::response::IntoResponse> { 
     
     // 1. Load project + security metadata (case-insensitive for username/slug)
-    // Query returns: (image_tag, markdown, shell, owner_id, embed_key, id)
     let row_result = sqlx::query_as::<_, (String, String, String, i64, Option<String>, i64)>(
         "SELECT image_tag, markdown, shell, owner_id, embed_key, id \
          FROM projects \
@@ -367,11 +366,12 @@ pub async fn get_project(
     .bind(&username).bind(&slug)
     .fetch_optional(&state.db)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e)))?;
+    .map_err(|e| axum::response::ErrorResponse::from((StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e))))?; 
 
+    // Explicitly destructure so types are known
     let (image_tag, markdown, shell, owner_id, mut embed_key, project_id) = match row_result {
-        Some(r) => r,
-        None => return Err((StatusCode::NOT_FOUND, "Project not found".to_string())),
+        Some(r) => (r.0, r.1, r.2, r.3, r.4, r.5),
+        None => return Err(axum::response::ErrorResponse::from((StatusCode::NOT_FOUND, "Project not found".to_string()))),
     };
 
     // 2. Determine current user & ownership (owners bypass embed security)
@@ -390,10 +390,10 @@ pub async fn get_project(
         .fetch_optional(&state.db)
         .await
         .map_err(|e| {
-            (
+            axum::response::ErrorResponse::from((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to generate VIP key: {}", e),
-            )
+            ))
         })?;
 
         if let Some((k,)) = new_key_row {
@@ -404,29 +404,26 @@ pub async fn get_project(
     // 4. Dual-layer security for embeds (VIP key + Guest List)
     if !is_owner {
         // VIP Pass: compare URL ?key with stored embed_key
-        // Note: Axum's Query extractor already URL-decodes parameters
-            let vip_allowed = match (params.get("key"), embed_key.as_ref()) {
-                (Some(request_key), Some(stored_key)) => {
-                    // Axum already decodes query params; treat spaces as '+' to handle
-                    // unencoded base64 keys in query strings.
-                    let trimmed_request = request_key.trim();
-                    let normalized_request = trimmed_request.replace(' ', "+");
-                    let trimmed_stored = stored_key.trim();
+        let vip_allowed = match (params.get("key"), embed_key.as_ref()) {
+            (Some(request_key), Some(stored_key)) => {
+                let trimmed_request: &str = request_key.trim();
+                let normalized_request = trimmed_request.replace(' ', "+");
+                let trimmed_stored: &str = stored_key.trim();
 
-                    let matches = trimmed_request == trimmed_stored
-                        || normalized_request == trimmed_stored;
+                let matches = trimmed_request == trimmed_stored
+                    || normalized_request == trimmed_stored;
 
-                    tracing::debug!(
-                        "VIP key comparison for project {}: request='{}' normalized='{}' stored='{}' match={}",
-                        project_id,
-                        trimmed_request,
-                        normalized_request,
-                        trimmed_stored,
-                        matches
-                    );
-
+                tracing::debug!(
+                    "VIP key comparison for project {}: request='{}' normalized='{}' stored='{}' match={}",
+                    project_id,
+                    trimmed_request,
+                    normalized_request,
+                    trimmed_stored,
                     matches
-                }
+                );
+
+                matches
+            }
             _ => {
                 tracing::debug!("VIP key check failed for project {}: request_key={:?} stored_key={:?}", 
                     project_id, params.get("key"), embed_key.as_ref());
@@ -436,7 +433,6 @@ pub async fn get_project(
 
         if !vip_allowed {
             // Guest List: validate parent page URL against project_whitelists.
-            // Prefer X-Embed-Referer (forwarded by embed page) and fallback to Referer.
             let referer = headers
                 .get("x-embed-referer")
                 .and_then(|v| v.to_str().ok())
@@ -448,9 +444,10 @@ pub async fn get_project(
                         .map(|s| s.to_string())
                 });
 
-            // Optional boolean, safely unwrapped later
+            // Capture the exact blocked url for the error message
+            let blocked_origin = referer.clone().unwrap_or_else(|| "Unknown Domain".to_string());
+
             let whitelist_allowed: Option<bool> = if let Some(referer_url) = referer {
-                // Normalize the Referer URL to prevent bypasses via query params or fragments
                 let normalized_referer = normalize_url(&referer_url);
 
                 if let Some(normalized) = normalized_referer {
@@ -464,16 +461,14 @@ pub async fn get_project(
                     .fetch_optional(&state.db)
                     .await
                     .map_err(|e| {
-                        (
+                        axum::response::ErrorResponse::from((
                             StatusCode::INTERNAL_SERVER_ERROR,
                             format!("Whitelist DB Error: {}", e),
-                        )
+                        ))
                     })?;
 
-                    // TRUE row exists => allowed; otherwise false
                     Some(exists_row.is_some())
                 } else {
-                    // If URL parsing fails, deny access and log for security monitoring
                     tracing::warn!("Referer normalization failed for project {}: {}", project_id, referer_url);
                     Some(false)
                 }
@@ -484,10 +479,14 @@ pub async fn get_project(
             let is_allowed = whitelist_allowed.unwrap_or(false);
 
             if !is_allowed {
-                return Err((
-                    StatusCode::FORBIDDEN,
-                    "This terminal is restricted to authorized websites.".to_string(),
-                ));
+                // CHANGE: Return JSON with the specific origin instead of just a string
+                return Err(axum::response::ErrorResponse::from((
+                    StatusCode::FORBIDDEN, 
+                    Json(serde_json::json!({
+                        "error": "Unauthorized Embed Location",
+                        "origin": blocked_origin
+                    }))
+                )));
             }
         }
     }
@@ -512,19 +511,18 @@ pub async fn get_project(
             .count();
         
         if active_viewers >= 5 {
-            return Err((StatusCode::TOO_MANY_REQUESTS, "Publisher limit reached".to_string()));
+            return Err(axum::response::ErrorResponse::from((StatusCode::TOO_MANY_REQUESTS, "Publisher limit reached".to_string())));
         }
     }
 
     // 7. Construct JSON response
-    // Generate the session ID here, but DO NOT spawn Docker yet.
     let session_id = Uuid::new_v4().to_string();
 
     {
         let mut map = state.lock_sessions();
         map.insert(session_id.clone(), SessionContext {
-            container_name: String::new(), // Empty indicates "Not Started"
-            pending_image_tag: Some(image_tag), // Store tag for WS handler
+            container_name: String::new(), 
+            pending_image_tag: Some(image_tag),
             shell,
             owner_id: None,
             project_owner_id: Some(owner_id),
