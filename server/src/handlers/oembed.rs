@@ -79,7 +79,7 @@ pub async fn oembed_handler(
                     author_url: format!("{}/{}", origin, username),
                     provider_name: "TryCLI Studio".to_string(),
                     provider_url: origin,
-                    thumbnail_url: Some("https://trycli.com/octopus_terminal_opt.png".to_string()), 
+                    thumbnail_url: Some("https://trycli.com/logo_black.png".to_string()), 
                 }));
             }
         }
