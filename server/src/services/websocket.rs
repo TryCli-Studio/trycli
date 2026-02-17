@@ -6,7 +6,8 @@ use axum::{
 use bollard::container::{CreateContainerOptions, Config};
 use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
 use bollard::image::CreateImageOptions;
-use bollard::exec::{CreateExecOptions, StartExecResults};
+// 1. IMPORT ADDED HERE: ResizeExecOptions
+use bollard::exec::{CreateExecOptions, StartExecResults, ResizeExecOptions};
 use futures::{stream::StreamExt, SinkExt};
 use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
@@ -418,12 +419,14 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             );
 
             // Chain commands:
-            // 1. Inject apt config (rate limiting)
-            // 2. Run the distro-specific install script (e.g. install fish/zsh)
-            // 3. Clean the terminal after setup completion
-            // 4. Exec into the final requested shell
+            // 1. Disable local echo
+            // 2. Create apt config dir
+            // 3. Inject apt rate limiting
+            // 4. Run the distro-specific install script (e.g. install fish/zsh)
+            // 5. Clean the terminal after setup completion
+            // 6. Exec into the final requested shell
             let auto_type_cmd = format!(
-                "mkdir -p /etc/apt/apt.conf.d && {} && {} && printf '\\033[2J\\033[3J\\033[H' && exec {}\n", 
+                "stty -echo; mkdir -p /etc/apt/apt.conf.d && {} && {} && printf '\\033[2J\\033[3J\\033[H' && exec {}\n", 
                 inject_limit_cmd,
                 install_script, 
                 final_shell
@@ -488,19 +491,35 @@ async fn attach_to_container(
         // Clone session_id for logging within the task
         let session_id_log = session_id.clone();
         
+        // 2. FIX: Clone state for the resize task so we don't move the original 'state'
+        let state_resize = state.clone();
+
         let mut recv_task = tokio::spawn(async move {
-            // Guardrail: 20 Minute Idle Timeout
             const IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 20);
 
             loop {
-                // We wrap the receiver.next() in a timeout
                 match tokio::time::timeout(IDLE_TIMEOUT, receiver.next()).await {
-                    // Case A: Received a message within time limit
                     Ok(Some(Ok(msg))) => {
                         match msg {
                             Message::Text(text) => {
-                                if input.write_all(text.as_bytes()).await.is_err() {
-                                    break; // Container stdin closed
+                                // --- RESIZE LOGIC START ---
+                                if text.starts_with("RESIZE:") {
+                                    let parts: Vec<&str> = text.split(':').collect();
+                                    if parts.len() == 3 {
+                                        if let (Ok(w), Ok(h)) = (parts[1].parse::<u16>(), parts[2].parse::<u16>()) {
+                                            // USE state_resize HERE (Arc is cloned)
+                                            let _ = state_resize.docker.resize_exec(&exec.id, ResizeExecOptions {
+                                                width: w,
+                                                height: h
+                                            }).await;
+                                        }
+                                    }
+                                } 
+                                // --- RESIZE LOGIC END ---
+                                else {
+                                    if input.write_all(text.as_bytes()).await.is_err() {
+                                        break; 
+                                    }
                                 }
                             },
                             Message::Binary(bin) => {
@@ -508,15 +527,13 @@ async fn attach_to_container(
                                     break;
                                 }
                             },
-                            Message::Close(_) => break, // Client closed tab
-                            _ => {} // Ignore Pings/Pongs (handled by Axum)
+                            Message::Close(_) => break,
+                            _ => {} 
                         }
                     },
-                    // Case B: Stream ended normally (client disconnected)
                     Ok(None) | Ok(Some(Err(_))) => break,
-                    
-                    // Case C: IDLE TIMEOUT HIT
                     Err(_) => {
+                        // Timeout
                         println!("Session {} timed out due to inactivity (20m). Closing.", session_id_log);
                         break; 
                     }
@@ -585,6 +602,7 @@ async fn attach_to_container(
                 }
             }
             
+            // USE original 'state' here (it was not moved because we only moved 'state_resize' into the closure)
             let _ = state.docker.remove_container(&container_name, Some(
                 bollard::container::RemoveContainerOptions { force: true, ..Default::default() }
             )).await;
