@@ -10,6 +10,8 @@ pub struct ProjectSummary {
     #[serde(default)] 
     pub owner_username: String,
     pub embed_key: Option<String>,
+    #[serde(default)] 
+    pub is_public: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -118,4 +120,9 @@ pub async fn log_analytics_event(
     if let Err(e) = result {
         eprintln!("Failed to log analytics event: {}", e);
     }
+}
+
+#[derive(Deserialize)]
+pub struct TogglePublicRequest {
+    pub is_public: bool,
 }

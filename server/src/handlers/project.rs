@@ -13,7 +13,7 @@ use uuid::Uuid;
 use serde::Deserialize;
 use futures::StreamExt;
 use crate::state::{AppState, SessionContext};
-use crate::models::{User, ProjectSummary, PublishRequest, WhitelistRequest};
+use crate::models::{User, ProjectSummary, PublishRequest, WhitelistRequest, TogglePublicRequest};
 use std::collections::HashMap;
 use url::Url;
 
@@ -162,6 +162,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/search-projects", get(search_projects))
         .route("/api/publish", post(publish_handler))
         .route("/e/:token", get(resolve_secret_embed)) // Secret Embed Route
+        .route("/api/project/:slug/visibility", post(toggle_public_visibility))
 }
 
 pub async fn list_user_projects(
@@ -175,7 +176,7 @@ pub async fn list_user_projects(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, view_count, owner_username, embed_key \
+        "SELECT slug, image_tag, view_count, owner_username, embed_key, is_public \
          FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
     )
     .bind(user.id)
@@ -358,8 +359,8 @@ pub async fn get_project(
 ) -> axum::response::Result<impl axum::response::IntoResponse> { 
     
     // 1. Load project + security metadata (case-insensitive for username/slug)
-    let row_result = sqlx::query_as::<_, (String, String, String, i64, Option<String>, i64)>(
-        "SELECT image_tag, markdown, shell, owner_id, embed_key, id \
+    let row_result = sqlx::query_as::<_, (String, String, String, i64, Option<String>, i64, bool)>(
+        "SELECT image_tag, markdown, shell, owner_id, embed_key, id, is_public \
          FROM projects \
          WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
     )
@@ -369,8 +370,8 @@ pub async fn get_project(
     .map_err(|e| axum::response::ErrorResponse::from((StatusCode::INTERNAL_SERVER_ERROR, format!("DB Read Error: {}", e))))?; 
 
     // Explicitly destructure so types are known
-    let (image_tag, markdown, shell, owner_id, mut embed_key, project_id) = match row_result {
-        Some(r) => (r.0, r.1, r.2, r.3, r.4, r.5),
+    let (image_tag, markdown, shell, owner_id, mut embed_key, project_id, is_public) = match row_result {
+        Some(r) => (r.0, r.1, r.2, r.3, r.4, r.5, r.6),
         None => return Err(axum::response::ErrorResponse::from((StatusCode::NOT_FOUND, "Project not found".to_string()))),
     };
 
@@ -403,6 +404,7 @@ pub async fn get_project(
 
     // 4. Dual-layer security for embeds (VIP key + Guest List)
     if !is_owner {
+        if !is_public {
         // VIP Pass: compare URL ?key with stored embed_key
         let vip_allowed = match (params.get("key"), embed_key.as_ref()) {
             (Some(request_key), Some(stored_key)) => {
@@ -487,7 +489,7 @@ pub async fn get_project(
                         "origin": blocked_origin
                     }))
                 )));
-            }
+            }}
         }
     }
 
@@ -536,7 +538,8 @@ pub async fn get_project(
     let mut response_json = serde_json::json!({
         "markdown": markdown,
         "owner_id": owner_id,
-        "container_id": session_id // Frontend connects to this UUID
+        "container_id": session_id, // Frontend connects to this UUID
+        "is_public": is_public
     });
 
     if is_owner {
@@ -546,6 +549,34 @@ pub async fn get_project(
     }
 
     Ok(Json(response_json))
+}
+
+pub async fn toggle_public_visibility(
+    State(state): State<AppState>,
+    session: Session,
+    Path(slug): Path<String>,
+    Json(payload): Json<TogglePublicRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let user: Option<User> = session.get("user")
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
+    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+
+    let result = sqlx::query(
+        "UPDATE projects SET is_public = $1 WHERE owner_id = $2 AND LOWER(slug) = LOWER($3)"
+    )
+    .bind(payload.is_public)
+    .bind(user.id)
+    .bind(&slug)
+    .execute(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
+    if result.rows_affected() == 0 {
+        return Err((StatusCode::NOT_FOUND, "Project not found".to_string()));
+    }
+
+    Ok(StatusCode::OK)
 }
 
 /// Get the current whitelist (Guest List) for a project owned by the authenticated user.
