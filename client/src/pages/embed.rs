@@ -13,7 +13,7 @@ enum ProjectState {
     NotFound,
     LimitReached,
     Ready(serde_json::Value),
-    Unauthorized,
+    Unauthorized(String),
 }
 
 #[component]
@@ -54,7 +54,15 @@ let project_data = create_resource(
             match req {
                 Ok(resp) => {
                     if resp.status() == 403 {
-                        ProjectState::Unauthorized
+                        if let Ok(json) = resp.json::<serde_json::Value>().await {
+                        let origin = json.get("origin")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("this domain")
+                            .to_string();
+                        ProjectState::Unauthorized(origin)
+                        } else {
+                            ProjectState::Unauthorized("this domain".to_string())
+                        }
                     } else if resp.status() == 429 {
                         ProjectState::LimitReached
                     } else if resp.ok() {
@@ -98,15 +106,21 @@ let project_data = create_resource(
                     let cid = data["container_id"].as_str().unwrap_or_default().to_string();
                     view! { <TerminalView container_id=cid /> }.into_view()
                 },
-                Some(ProjectState::Unauthorized) => {
-        view! {
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#000; color:#ef4444; text-align:center; padding:20px;">
-                <h3 style="font-family: var(--font-sans);">"403: Unauthorized Embed Location"</h3>
-                <p style="color: #666; font-size: 0.9rem; margin-top: 10px;">
-                    "This domain is not on the publisher's Guest List."
-                </p>
-            </div>
-        }.into_view()
+                Some(ProjectState::Unauthorized(origin)) => {
+                view! {
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#09090b; color:#e4e4e7; text-align:center; padding:20px; font-family: 'Inter', sans-serif;">
+                        <div style="max-width: 480px; padding: 32px; border: 1px solid #27272a; border-radius: 12px; background: #18181b;">
+                            <h3 style="font-weight: 600; margin-bottom: 16px; font-size: 1.1rem;">
+                                "Embed Configuration Required"
+                            </h3>
+                            <p style="color: #a1a1aa; font-size: 0.95rem; margin-bottom: 24px; line-height: 1.5;">
+                                "This terminal is not configured for " 
+                                <span style="color: #fff; font-weight: 600;">{origin}</span>
+                                ". Please ask the owner to add it to the Guest List."
+                            </p>
+                        </div>
+                    </div>
+                }.into_view()
                 },
                 Some(ProjectState::LimitReached) => {
                      // Inside embed, we remove the "Start" overlay (already gone via if logic) and show Limit
