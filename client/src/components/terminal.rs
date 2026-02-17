@@ -1,8 +1,8 @@
 use crate::api::ws_base;
 use leptos::*;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast; // Required for unchecked_into
-use web_sys::{MessageEvent, WebSocket}; // Removed unused ErrorEvent
+use wasm_bindgen::JsCast;
+use web_sys::{MessageEvent, WebSocket};
 use std::rc::Rc;
 use std::cell::Cell;
 
@@ -17,7 +17,7 @@ extern "C" {
     fn fit(this: &XtermFitAddon);
 }
 
-//  BINDING 2: Terminal
+// BINDING 2: Terminal
 #[wasm_bindgen]
 extern "C" {
     type Terminal;
@@ -54,27 +54,46 @@ pub fn TerminalView(container_id: String) -> impl IntoView {
 
             let ws_url = format!("{}/ws/{}", ws_base(), id_for_effect);
             
-            // 1. CAST: Ensure clones are treated as Terminal type, not generic JsValue
+            // Cast these now so we can use them in closures safely
             let term_clone = term.clone().unchecked_into::<Terminal>(); 
             let term_resize = term.clone().unchecked_into::<Terminal>(); 
+            let _term_open = term.clone().unchecked_into::<Terminal>(); 
+            
             let first_message = Rc::new(Cell::new(true));
 
             match WebSocket::new(&ws_url) {
                 Ok(ws) => {
+                    // --- 1. DEFINE RESIZE LOGIC ---
                     let ws_resize = ws.clone();
                     let fit_addon_resize = fit_addon.clone().unchecked_into::<XtermFitAddon>();
                     
-                    let on_resize = Closure::<dyn FnMut()>::new(move || {
+                    // We define the logic once...
+                    let send_resize = Rc::new(move || {
                         fit_addon_resize.fit();
-                        // Now methods like cols() work because term_resize is typed
                         let cols = term_resize.cols();
                         let rows = term_resize.rows();
-                        let _ = ws_resize.send_with_str(&format!("RESIZE:{}:{}", cols, rows));
+                        if ws_resize.ready_state() == 1 { // 1 = OPEN
+                            let _ = ws_resize.send_with_str(&format!("RESIZE:{}:{}", cols, rows));
+                        }
                     });
-                    
-                    window().set_onresize(Some(on_resize.as_ref().unchecked_ref()));
-                    on_resize.forget();
 
+                    // ...and attach it to Window Resize
+                    let send_resize_window = send_resize.clone();
+                    let on_window_resize = Closure::<dyn FnMut()>::new(move || {
+                        (send_resize_window)();
+                    });
+                    window().set_onresize(Some(on_window_resize.as_ref().unchecked_ref()));
+                    on_window_resize.forget();
+
+                    // --- 2. SEND SIZE ON CONNECT (Fixes your gltich) ---
+                    let send_resize_open = send_resize.clone();
+                    let onopen = Closure::<dyn FnMut()>::new(move || {
+                        (send_resize_open)();
+                    });
+                    ws.set_onopen(Some(onopen.as_ref().unchecked_ref()));
+                    onopen.forget();
+
+                    // --- 3. STANDARD HANDLERS ---
                     let ws_cleanup = ws.clone();
                     on_cleanup(move || {
                         let _ = ws_cleanup.close();
