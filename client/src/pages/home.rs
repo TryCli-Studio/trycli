@@ -66,9 +66,12 @@ pub fn LandingPage() -> impl IntoView {
             <Meta property="og:description" content="Instantly spin up isolated Docker containers and share your CLI projects with a single link." />
             <Meta property="og:url" content="https://trycli.com" />
 
+            <Meta property="og:image" content="https://trycli.com/logo_black.png" />
+
             <Meta name="twitter:card" content="summary_large_image" />
             <Meta name="twitter:title" content="TryCLI Studio" />
             <Meta name="twitter:description" content="Host, share, and embed fully interactive CLI demos directly in the browser." />
+            <Meta name="twitter:image" content="https://trycli.com/logo_black.png" />
 
             // MAIN CONTENT
             <div class="landing-container">
