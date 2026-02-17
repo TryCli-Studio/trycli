@@ -1,8 +1,8 @@
 use crate::api::ws_base;
 use leptos::*;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-use web_sys::{ErrorEvent, MessageEvent, WebSocket};
+use wasm_bindgen::JsCast; // Required for unchecked_into
+use web_sys::{MessageEvent, WebSocket}; // Removed unused ErrorEvent
 use std::rc::Rc;
 use std::cell::Cell;
 
@@ -31,6 +31,10 @@ extern "C" {
     fn on_data(this: &Terminal, callback: &Closure<dyn FnMut(String)>);
     #[wasm_bindgen(method, js_name = loadAddon)]
     fn load_addon(this: &Terminal, addon: &XtermFitAddon);
+    #[wasm_bindgen(method, getter)]
+    fn cols(this: &Terminal) -> u16;
+    #[wasm_bindgen(method, getter)]
+    fn rows(this: &Terminal) -> u16;
 }
 
 #[component]
@@ -41,79 +45,64 @@ pub fn TerminalView(container_id: String) -> impl IntoView {
     create_effect(move |_| {
         if let Some(div) = terminal_div_ref.get() {
             let term = Terminal::new();
-
             let fit_addon = XtermFitAddon::new();
             term.load_addon(&fit_addon);
             term.open(&div);
-
             fit_addon.fit();
-            let fit_addon_clone = fit_addon.clone().unchecked_into::<XtermFitAddon>();
-            let on_resize = Closure::<dyn FnMut()>::new(move || {
-                fit_addon_clone.fit();
-            });
-            window().set_onresize(Some(on_resize.as_ref().unchecked_ref()));
-            on_resize.forget();
-            on_cleanup(move || {
-                window().set_onresize(None);
-            });
+
             term.write(&format!("Connecting to session {}...\r\n", id_for_effect));
 
-            let term_clone: Terminal = term.clone().unchecked_into();
             let ws_url = format!("{}/ws/{}", ws_base(), id_for_effect);
+            
+            // 1. CAST: Ensure clones are treated as Terminal type, not generic JsValue
+            let term_clone = term.clone().unchecked_into::<Terminal>(); 
+            let term_resize = term.clone().unchecked_into::<Terminal>(); 
             let first_message = Rc::new(Cell::new(true));
 
-            // FIX: Removed unwrap() on WebSocket::new
             match WebSocket::new(&ws_url) {
                 Ok(ws) => {
-                    let ws_cleanup = ws.clone();
+                    let ws_resize = ws.clone();
+                    let fit_addon_resize = fit_addon.clone().unchecked_into::<XtermFitAddon>();
+                    
+                    let on_resize = Closure::<dyn FnMut()>::new(move || {
+                        fit_addon_resize.fit();
+                        // Now methods like cols() work because term_resize is typed
+                        let cols = term_resize.cols();
+                        let rows = term_resize.rows();
+                        let _ = ws_resize.send_with_str(&format!("RESIZE:{}:{}", cols, rows));
+                    });
+                    
+                    window().set_onresize(Some(on_resize.as_ref().unchecked_ref()));
+                    on_resize.forget();
 
+                    let ws_cleanup = ws.clone();
                     on_cleanup(move || {
                         let _ = ws_cleanup.close();
+                        window().set_onresize(None); 
                     });
+
                     let onmessage = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
                         if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
                             let text = String::from(txt);
-                            
-                            // If this is the first data packet, clear the screen
                             if first_message.get() {
-                                // \x1b[2J = Clear entire screen
-                                // \x1b[H = Move cursor to home (top-left)
                                 term_clone.write("\x1b[2J\x1b[H"); 
                                 first_message.set(false);
                             }
-                            
                             term_clone.write(&text);
                         }
                     });
                     ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
                     onmessage.forget();
 
-                    let ws_clone = ws.clone();
-                    let on_data_callback =
-                        Closure::<dyn FnMut(String)>::new(move |data: String| {
-                            let _ = ws_clone.send_with_str(&data);
-                        });
+                    let ws_send = ws.clone();
+                    let on_data_callback = Closure::<dyn FnMut(String)>::new(move |data: String| {
+                        let _ = ws_send.send_with_str(&data);
+                    });
                     term.on_data(&on_data_callback);
                     on_data_callback.forget();
-
-                    let term_err = term.clone().unchecked_into::<Terminal>();
-                    let onerror = Closure::<dyn FnMut(ErrorEvent)>::new(move |_| {
-                        term_err.write("\r\n\x1b[31m[!] Connection Error.\x1b[0m\r\n");
-                    });
-                    ws.set_onerror(Some(onerror.as_ref().unchecked_ref()));
-                    onerror.forget();
-
-                    let term_close = term.clone().unchecked_into::<Terminal>();
-                    let onclose = Closure::<dyn FnMut()>::new(move || {
-                        term_close.write("\r\n\x1b[33m[!] Connection Closed.\x1b[0m\r\n");
-                    });
-                    ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
-                    onclose.forget();
                 }
                 Err(_) => {
-                    term.write(
-                        "\r\n\x1b[31m[!] Failed to initialize WebSocket connection.\x1b[0m\r\n",
-                    );
+                    term.write("\r\n\x1b[31m[!] WebSocket Error.\x1b[0m\r\n");
                 }
             }
         }
