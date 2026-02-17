@@ -8,6 +8,8 @@ pub struct ProjectSummary {
     pub view_count: i64,
     #[serde(default)]
     pub owner_username: String,
+    #[serde(default)]
+    pub is_public: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]

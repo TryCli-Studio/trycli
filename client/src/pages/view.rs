@@ -20,7 +20,7 @@ enum ProjectState {
     Loading,
     NotFound,
     LimitReached,
-    Unauthorized, // Security block state
+    Unauthorized,
     Ready(serde_json::Value),
 }
 
@@ -235,6 +235,10 @@ pub fn ViewPage() -> impl IntoView {
     let (iframe_code, set_iframe_code) = create_signal(String::new());
     let (smart_link, set_smart_link) = create_signal(String::new());
     let (vip_link, set_vip_link) = create_signal(String::new());
+    let (menu_open, set_menu_open) = create_signal(false);
+    
+    // NEW: Public toggle signal
+    let (is_public, set_is_public) = create_signal(false);
 
     let (whitelist, set_whitelist) = create_signal(Vec::<String>::new());
 
@@ -284,10 +288,15 @@ pub fn ViewPage() -> impl IntoView {
                     } else if resp.status() == 429 {
                         ProjectState::LimitReached
                     } else if resp.ok() {
-                        resp.json::<serde_json::Value>()
-                            .await
-                            .map(ProjectState::Ready)
-                            .unwrap_or(ProjectState::NotFound)
+                        if let Ok(json) = resp.json::<serde_json::Value>().await {
+                            // Extract is_public from the response
+                            if let Some(public_flag) = json.get("is_public").and_then(|v| v.as_bool()) {
+                                set_is_public.set(public_flag);
+                            }
+                            ProjectState::Ready(json)
+                        } else {
+                            ProjectState::NotFound
+                        }
                     } else {
                         ProjectState::NotFound
                     }
@@ -334,6 +343,7 @@ pub fn ViewPage() -> impl IntoView {
         }
     };
 
+    // Actions
     let add_whitelist_item = create_action(move |url: &String| {
         let url = url.clone();
         let s = slug();
@@ -392,6 +402,22 @@ pub fn ViewPage() -> impl IntoView {
         }
     });
 
+    // NEW: Toggle public action
+    let toggle_public_action = create_action(move |new_state: &bool| {
+        let s = slug();
+        let val = *new_state;
+        async move {
+            set_is_public.set(val); // Optimistic UI update
+            let req = Request::post(&format!("{}/api/project/{}/visibility", api_base(), s))
+                .credentials(RequestCredentials::Include)
+                .json(&serde_json::json!({ "is_public": val }));
+            
+            if let Ok(builder) = req {
+                let _ = builder.send().await;
+            }
+        }
+    });
+
     view! {
         <>
             <EmbedModal
@@ -401,6 +427,9 @@ pub fn ViewPage() -> impl IntoView {
                 smart_link=smart_link.into()
                 vip_link=vip_link.into()
                 whitelist=whitelist.into()
+                // Pass new props
+                is_public=is_public.into()
+                on_toggle_public=Callback::new(move |val: bool| toggle_public_action.dispatch(val))
                 on_add_url=Callback::new(move |url: String| add_whitelist_item.dispatch(url))
                 on_remove_url=Callback::new(move |url: String| remove_whitelist_item.dispatch(url))
                 on_close=Callback::new(move |_| set_embed_modal_open.set(false))
@@ -503,7 +532,6 @@ pub fn ViewPage() -> impl IntoView {
                                                             let vip = if key.is_empty() {
                                                                 String::new()
                                                             } else {
-                                                                // URL encode the key to handle special characters in base64
                                                                 let encoded_key = js_sys::encode_uri_component(key);
                                                                 format!("{}/{}/{}?key={}", origin_clone, username_clone, slug_clone, encoded_key)
                                                             };

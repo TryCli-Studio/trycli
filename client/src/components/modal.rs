@@ -28,7 +28,6 @@ pub fn Modal(
                         role="dialog" 
                         aria-modal="true"
                         on:click=move |ev: ev::MouseEvent| {
-                            // Only close on overlay click if not a blocking modal
                             if !is_blocking() {
                                 if let Some(target) = ev.target().and_then(|t| t.dyn_into::<HtmlElement>().ok()) {
                                     if target.class_list().contains("modal-overlay") {
@@ -80,6 +79,8 @@ pub fn EmbedModal(
     smart_link: MaybeSignal<String>,
     vip_link: MaybeSignal<String>,
     whitelist: MaybeSignal<Vec<String>>,
+    is_public: MaybeSignal<bool>,
+    on_toggle_public: Callback<bool>,
     on_add_url: Callback<String>,
     on_remove_url: Callback<String>,
     on_close: Callback<()>,
@@ -104,6 +105,8 @@ pub fn EmbedModal(
             let on_close = on_close.clone();
             let on_add_url = on_add_url.clone();
             let on_remove_url = on_remove_url.clone();
+            let is_public = is_public.clone();
+            let on_toggle_public = on_toggle_public.clone();
 
             let iframe_code_for_click = iframe_code.clone();
             let smart_link_for_click = smart_link.clone();
@@ -116,6 +119,37 @@ pub fn EmbedModal(
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                                 <h3 class="modal-title" style="margin: 0; font-size: 1.25rem;">{move || title.get()}</h3>
                                 <button class="btn-nav" on:click=move |_| on_close.call(()) style="font-size: 1.5rem; line-height: 1;">"×"</button>
+                            </div>
+
+                            // --- SECTION 0: VISIBILITY TOGGLE ---
+                            <div style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 8px; padding: 16px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--text-main); margin-bottom: 4px;">"Public Access"</div>
+                                    <div style="font-size: 0.85rem; color: var(--text-muted);">
+                                        "Allow anyone to view/embed this project without whitelist restrictions."
+                                    </div>
+                                </div>
+                                <label class="switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+                                    <input type="checkbox" 
+                                        checked=is_public.get()
+                                        on:change=move |ev| {
+                                            let checked = event_target_checked(&ev);
+                                            on_toggle_public.call(checked);
+                                        }
+                                        style="opacity: 0; width: 0; height: 0;"
+                                    />
+                                    <span class="slider" 
+                                          style=move || {
+                                              let bg = if is_public.get() { "#22c55e" } else { "#3f3f46" };
+                                              format!("position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: {}; transition: .4s; border-radius: 34px;", bg)
+                                          }
+                                    >
+                                        <span style=move || {
+                                            let transform = if is_public.get() { "translateX(20px)" } else { "translateX(0)" };
+                                            format!("position: absolute; content: ''; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; transform: {};", transform)
+                                        }></span>
+                                    </span>
+                                </label>
                             </div>
 
                             // --- SECTION 1: IFRAME ---
@@ -270,64 +304,75 @@ pub fn EmbedModal(
                                 </p>
                             </div>
 
-                            // --- SECTION 4: Guest List / Whitelist ---
-                            <div style="margin-bottom: 24px;">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                    <label style="color:var(--text-main); font-weight:600; font-size: 0.9rem;">
-                                        "Guest List (Authorized URLs)"
-                                    </label>
-                                    <span style="font-size: 0.8rem; color: var(--text-muted);">
-                                        "Only these pages can auto-launch your terminal."
-                                    </span>
-                                </div>
-                                <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-                                    <input
-                                        type="text"
-                                        class="input-slug"
-                                        style="flex: 1;"
-                                        placeholder="https://medium.com/@user/article-slug"
-                                        prop:value=new_url
-                                        on:input=move |ev| set_new_url.set(event_target_value(&ev))
-                                    />
-                                    <button
-                                        class="btn-primary"
-                                        on:click=move |_| {
-                                            let url = new_url.get();
-                                            if !url.is_empty() {
-                                                on_add_url.call(url);
-                                                set_new_url.set(String::new());
-                                            }
-                                        }
-                                        prop:disabled=move || new_url.get().is_empty()
-                                    >
-                                        "Add URL"
-                                    </button>
-                                </div>
-                                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                    <For
-                                        each=move || whitelist.get()
-                                        key=|u| u.clone()
-                                        children=move |url| {
-                                            let on_remove_url = on_remove_url.clone();
-                                            view! {
-                                                <span class="badge" style="margin: 0; display: flex; align-items: center; gap: 8px;">
-                                                    {url.clone()}
-                                                    <button
-                                                        class="btn-nav"
-                                                        style="padding: 0; color: #ef4444; font-weight: bold; font-size: 0.9rem;"
-                                                        aria-label="Remove URL"
-                                                        on:click=move |_| {
-                                                            on_remove_url.call(url.clone());
-                                                        }
-                                                    >
-                                                        "×"
-                                                    </button>
-                                                </span>
-                                            }
-                                        }
-                                    />
-                                </div>
-                            </div>
+                            // --- SECTION 4: Guest List / Whitelist (CONDITIONAL) ---
+                            {move || if !is_public.get() {
+                                let whitelist = whitelist.clone(); // <--- Clone needed for Fn compliance
+                                view! {
+                                    <div style="margin-bottom: 24px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                            <label style="color:var(--text-main); font-weight:600; font-size: 0.9rem;">
+                                                "Guest List (Authorized URLs)"
+                                            </label>
+                                            <span style="font-size: 0.8rem; color: var(--text-muted);">
+                                                "Only these pages can auto-launch your terminal."
+                                            </span>
+                                        </div>
+                                        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                                            <input
+                                                type="text"
+                                                class="input-slug"
+                                                style="flex: 1;"
+                                                placeholder="https://medium.com/@user/article-slug"
+                                                prop:value=new_url
+                                                on:input=move |ev| set_new_url.set(event_target_value(&ev))
+                                            />
+                                            <button
+                                                class="btn-primary"
+                                                on:click=move |_| {
+                                                    let url = new_url.get();
+                                                    if !url.is_empty() {
+                                                        on_add_url.call(url);
+                                                        set_new_url.set(String::new());
+                                                    }
+                                                }
+                                                prop:disabled=move || new_url.get().is_empty()
+                                            >
+                                                "Add URL"
+                                            </button>
+                                        </div>
+                                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                            <For
+                                                each=move || whitelist.get()
+                                                key=|u| u.clone()
+                                                children=move |url| {
+                                                    let on_remove_url = on_remove_url.clone();
+                                                    view! {
+                                                        <span class="badge" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                                                            {url.clone()}
+                                                            <button
+                                                                class="btn-nav"
+                                                                style="padding: 0; color: #ef4444; font-weight: bold; font-size: 0.9rem;"
+                                                                aria-label="Remove URL"
+                                                                on:click=move |_| {
+                                                                    on_remove_url.call(url.clone());
+                                                                }
+                                                            >
+                                                                "×"
+                                                            </button>
+                                                        </span>
+                                                    }
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                }.into_view()
+                            } else {
+                                view! {
+                                    <div style="margin-bottom: 24px; padding: 16px; border: 1px dashed var(--border); border-radius: 8px; text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+                                        "Project is Public. Guest List restrictions are disabled."
+                                    </div>
+                                }.into_view()
+                            }}
 
                             <div class="modal-actions">
                                 <button class="btn-secondary btn-action" on:click=move |_| on_close.call(())>
