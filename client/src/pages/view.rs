@@ -429,7 +429,7 @@ pub fn ViewPage() -> impl IntoView {
                                         let smart_url = format!("{}/e/{}", api_base(), token);
 
                                         set_iframe_code.set(format!(
-                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" referrerpolicy=\"unsafe-url\" allow=\"clipboard-read; clipboard-write\"></iframe>",
+                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
                                             public_url
                                         ));
                                         set_smart_link.set(smart_url);
@@ -485,7 +485,7 @@ pub fn ViewPage() -> impl IntoView {
                                         let smart_url = format!("{}/e/{}", api_base(), token);
 
                                         set_iframe_code.set(format!(
-                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" referrerpolicy=\"unsafe-url\" allow=\"clipboard-read; clipboard-write\"></iframe>",
+                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
                                             public_url
                                         ));
                                         set_smart_link.set(smart_url);

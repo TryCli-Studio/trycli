@@ -435,7 +435,8 @@ pub async fn get_project(
         };
 
         if !vip_allowed {
-            // Guest List: validate Referer header against project_whitelists
+            // Guest List: validate parent page URL against project_whitelists.
+            // Prefer X-Embed-Referer (forwarded by embed page) and fallback to Referer.
             let referer = headers
                 .get("x-embed-referer")
                 .and_then(|v| v.to_str().ok())
@@ -447,25 +448,12 @@ pub async fn get_project(
                         .map(|s| s.to_string())
                 });
 
-            tracing::debug!(
-                "Whitelist check for project {}: referer={:?}",
-                project_id,
-                referer
-            );
-
             // Optional boolean, safely unwrapped later
             let whitelist_allowed: Option<bool> = if let Some(referer_url) = referer {
                 // Normalize the Referer URL to prevent bypasses via query params or fragments
                 let normalized_referer = normalize_url(&referer_url);
 
                 if let Some(normalized) = normalized_referer {
-                    tracing::debug!(
-                        "Normalized referer for project {}: original='{}' normalized='{}'",
-                        project_id,
-                        referer_url,
-                        normalized
-                    );
-
                     let exists_row: Option<(bool,)> = sqlx::query_as(
                         "SELECT TRUE FROM project_whitelists \
                          WHERE project_id = $1 AND allowed_url = $2 \
@@ -482,31 +470,20 @@ pub async fn get_project(
                         )
                     })?;
 
-                    let is_whitelisted = exists_row.is_some();
-                    tracing::debug!(
-                        "Whitelist check result for project {}: whitelisted={}",
-                        project_id,
-                        is_whitelisted
-                    );
-
-                    Some(is_whitelisted)
+                    // TRUE row exists => allowed; otherwise false
+                    Some(exists_row.is_some())
                 } else {
                     // If URL parsing fails, deny access and log for security monitoring
                     tracing::warn!("Referer normalization failed for project {}: {}", project_id, referer_url);
                     Some(false)
                 }
             } else {
-                tracing::debug!("No referer header found for project {}", project_id);
                 None
             };
 
             let is_allowed = whitelist_allowed.unwrap_or(false);
 
             if !is_allowed {
-                tracing::warn!(
-                    "Access denied to project {}: VIP key failed and whitelist failed",
-                    project_id
-                );
                 return Err((
                     StatusCode::FORBIDDEN,
                     "This terminal is restricted to authorized websites.".to_string(),
