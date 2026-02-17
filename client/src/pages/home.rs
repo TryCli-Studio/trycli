@@ -118,8 +118,7 @@ pub fn LandingPage() -> impl IntoView {
                                                 button_class="hamburger-menu"
                                                 menu_class="mobile-menu"
                                                 item_class="menu-item"
-                                                support_url="/support"
-                                                support_target_blank=false
+                                                support_target_blank=true
                                                 use_open_class=true
                                                 close_on_item_click=true
                                             />
