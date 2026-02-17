@@ -26,3 +26,4 @@ openssl-sys = { version = "0.9", features = ["vendored"] }
 url = "2.5.8"
 dashmap = "6.1"
 governor = "0.10"
+urlencoding = "2.1"

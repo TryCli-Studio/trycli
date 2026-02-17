@@ -53,6 +53,7 @@ fn normalize_url(url_str: &str) -> Option<String> {
     
     // Require a valid host for http(s) URLs
     let host = url.host_str()?;
+    let port = url.port();
     let path = url.path();
     
     // Normalize trailing slashes for consistency
@@ -62,7 +63,11 @@ fn normalize_url(url_str: &str) -> Option<String> {
         path.trim_end_matches('/')
     };
     
-    Some(format!("{}://{}{}", scheme, host, normalized_path))
+    if let Some(p) = port {
+        Some(format!("{}://{}:{}{}", scheme, host, p, normalized_path))
+    } else {
+        Some(format!("{}://{}{}", scheme, host, normalized_path))
+    }
 }
 
 /// Validates CSRF protection by checking Origin/Referer headers against expected frontend URL.
@@ -398,31 +403,69 @@ pub async fn get_project(
 
     // 4. Dual-layer security for embeds (VIP key + Guest List)
     if !is_owner {
-        // VIP Pass: compare URL ?key with stored embed_key using a match on Options
-        let vip_allowed = match (params.get("key"), embed_key.as_ref()) {
-            (Some(request_key), Some(stored_key)) if request_key == stored_key => true,
-            _ => false,
+        // VIP Pass: compare URL ?key with stored embed_key
+        // Note: Axum's Query extractor already URL-decodes parameters
+            let vip_allowed = match (params.get("key"), embed_key.as_ref()) {
+                (Some(request_key), Some(stored_key)) => {
+                    // Axum already decodes query params; treat spaces as '+' to handle
+                    // unencoded base64 keys in query strings.
+                    let trimmed_request = request_key.trim();
+                    let normalized_request = trimmed_request.replace(' ', "+");
+                    let trimmed_stored = stored_key.trim();
+
+                    let matches = trimmed_request == trimmed_stored
+                        || normalized_request == trimmed_stored;
+
+                    tracing::debug!(
+                        "VIP key comparison for project {}: request='{}' normalized='{}' stored='{}' match={}",
+                        project_id,
+                        trimmed_request,
+                        normalized_request,
+                        trimmed_stored,
+                        matches
+                    );
+
+                    matches
+                }
+            _ => {
+                tracing::debug!("VIP key check failed for project {}: request_key={:?} stored_key={:?}", 
+                    project_id, params.get("key"), embed_key.as_ref());
+                false
+            }
         };
 
         if !vip_allowed {
             // Guest List: validate Referer header against project_whitelists
             let referer = headers
-                .get("X-Embed-Referer")
+                .get("x-embed-referer")
                 .and_then(|v| v.to_str().ok())
                 .map(|s| s.to_string())
                 .or_else(|| {
                     headers
-                        .get("Referer")
+                        .get("referer")
                         .and_then(|v| v.to_str().ok())
                         .map(|s| s.to_string())
                 });
+
+            tracing::debug!(
+                "Whitelist check for project {}: referer={:?}",
+                project_id,
+                referer
+            );
 
             // Optional boolean, safely unwrapped later
             let whitelist_allowed: Option<bool> = if let Some(referer_url) = referer {
                 // Normalize the Referer URL to prevent bypasses via query params or fragments
                 let normalized_referer = normalize_url(&referer_url);
-                
+
                 if let Some(normalized) = normalized_referer {
+                    tracing::debug!(
+                        "Normalized referer for project {}: original='{}' normalized='{}'",
+                        project_id,
+                        referer_url,
+                        normalized
+                    );
+
                     let exists_row: Option<(bool,)> = sqlx::query_as(
                         "SELECT TRUE FROM project_whitelists \
                          WHERE project_id = $1 AND allowed_url = $2 \
@@ -439,20 +482,31 @@ pub async fn get_project(
                         )
                     })?;
 
-                    // TRUE row exists => allowed; otherwise false
-                    Some(exists_row.is_some())
+                    let is_whitelisted = exists_row.is_some();
+                    tracing::debug!(
+                        "Whitelist check result for project {}: whitelisted={}",
+                        project_id,
+                        is_whitelisted
+                    );
+
+                    Some(is_whitelisted)
                 } else {
                     // If URL parsing fails, deny access and log for security monitoring
                     tracing::warn!("Referer normalization failed for project {}: {}", project_id, referer_url);
                     Some(false)
                 }
             } else {
+                tracing::debug!("No referer header found for project {}", project_id);
                 None
             };
 
             let is_allowed = whitelist_allowed.unwrap_or(false);
 
             if !is_allowed {
+                tracing::warn!(
+                    "Access denied to project {}: VIP key failed and whitelist failed",
+                    project_id
+                );
                 return Err((
                     StatusCode::FORBIDDEN,
                     "This terminal is restricted to authorized websites.".to_string(),
@@ -870,16 +924,16 @@ pub async fn resolve_secret_embed(
     State(state): State<AppState>,
     Path(token): Path<String>,
 ) -> Result<Html<String>, (StatusCode, String)> {
-    // 1. Validate Token from DB
-    let row: Option<(String, String)> = sqlx::query_as(
-        "SELECT owner_username, slug FROM projects WHERE embed_token = $1"
+    // 1. Validate Token from DB and fetch embed_key for VIP access
+    let row: Option<(String, String, Option<String>)> = sqlx::query_as(
+        "SELECT owner_username, slug, embed_key FROM projects WHERE embed_token = $1"
     )
     .bind(&token)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let (owner, slug) = row.ok_or((StatusCode::NOT_FOUND, "Invalid embed token".to_string()))?;
+    let (owner, slug, embed_key) = row.ok_or((StatusCode::NOT_FOUND, "Invalid embed token".to_string()))?;
 
     // 2. Get Configurations
     let api_url = std::env::var("API_URL").unwrap_or("http://localhost:3000".to_string());
@@ -889,8 +943,14 @@ pub async fn resolve_secret_embed(
     // 3. Generate Discovery URL for OEmbed (Points to Backend)
     let oembed_url = format!("{}/api/oembed?url={}/e/{}", api_url, api_url, token);
 
-    // 4. Construct Target URL (Points to Frontend)
-    let target_url = format!("{}/embed/{}/{}", frontend_url, owner, slug);
+    // 4. Construct Target URL with VIP key for bypass (Points to Frontend)
+    let target_url = if let Some(key) = embed_key {
+        // URL encode the key to handle special characters in base64
+        let encoded_key = urlencoding::encode(&key);
+        format!("{}/embed/{}/{}?key={}", frontend_url, owner, slug, encoded_key)
+    } else {
+        format!("{}/embed/{}/{}", frontend_url, owner, slug)
+    };
 
     // 5. Return HTML with <link> tags + Meta Refresh
     let html = format!(r#"<!DOCTYPE html>

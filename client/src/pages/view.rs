@@ -429,7 +429,7 @@ pub fn ViewPage() -> impl IntoView {
                                         let smart_url = format!("{}/e/{}", api_base(), token);
 
                                         set_iframe_code.set(format!(
-                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
+                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" referrerpolicy=\"unsafe-url\" allow=\"clipboard-read; clipboard-write\"></iframe>",
                                             public_url
                                         ));
                                         set_smart_link.set(smart_url);
@@ -448,7 +448,9 @@ pub fn ViewPage() -> impl IntoView {
                                                             let vip = if key.is_empty() {
                                                                 String::new()
                                                             } else {
-                                                                format!("{}/{}/{}?key={}", origin_clone, username_clone, slug_clone, key)
+                                                                // URL encode the key to handle special characters in base64
+                                                                let encoded_key = js_sys::encode_uri_component(key);
+                                                                format!("{}/{}/{}?key={}", origin_clone, username_clone, slug_clone, encoded_key)
                                                             };
                                                             set_vip_link.set(vip);
                                                         }
@@ -483,7 +485,7 @@ pub fn ViewPage() -> impl IntoView {
                                         let smart_url = format!("{}/e/{}", api_base(), token);
 
                                         set_iframe_code.set(format!(
-                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" allow=\"clipboard-read; clipboard-write\"></iframe>",
+                                            "<iframe src=\"{}\" width=\"100%\" height=\"500px\" frameborder=\"0\" allowtransparency=\"true\" loading=\"lazy\" referrerpolicy=\"unsafe-url\" allow=\"clipboard-read; clipboard-write\"></iframe>",
                                             public_url
                                         ));
                                         set_smart_link.set(smart_url);
@@ -501,7 +503,9 @@ pub fn ViewPage() -> impl IntoView {
                                                             let vip = if key.is_empty() {
                                                                 String::new()
                                                             } else {
-                                                                format!("{}/{}/{}?key={}", origin_clone, username_clone, slug_clone, key)
+                                                                // URL encode the key to handle special characters in base64
+                                                                let encoded_key = js_sys::encode_uri_component(key);
+                                                                format!("{}/{}/{}?key={}", origin_clone, username_clone, slug_clone, encoded_key)
                                                             };
                                                             set_vip_link.set(vip);
                                                         }
