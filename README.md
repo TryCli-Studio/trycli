@@ -1,6 +1,6 @@
 # TryCli Studio
 
-**TryCli Studio** is an open-source, full-stack platform that enables developers to host, demo, and share Command Line Interface (CLI) tools directly in the browser.
+**TryCli Studio** is an full-stack platform that enables developers to host, demo, and share Command Line Interface (CLI) tools directly in the browser.
 
 It orchestrates isolated Docker environments on-demand, providing a seamless "Repl.it-like" experience specifically optimized for terminal applications.
 
