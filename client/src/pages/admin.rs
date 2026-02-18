@@ -99,23 +99,27 @@ pub fn AdminPage() -> impl IntoView {
     });
 
     // 4. Define Delete Project Action
-    let delete_project = create_action(move |slug: &String| {
+    let delete_project = create_action(move |(username, slug): &(String, String)| {
+        let username = username.clone();
         let slug = slug.clone();
         async move {
             if !window()
                 .confirm_with_message(&format!(
-                    "DELETE project '{}'?\nThis deletes the DB entry AND Docker image.",
-                    slug
+                    "DELETE project '{}/{}'?\nThis deletes the DB entry AND Docker image.",
+                    username, slug
                 ))
                 .unwrap_or(false)
             {
                 return;
             }
-            let url = format!("{}/api/admin/project/{}", api_base(), slug);
+            
+            let url = format!("{}/api/admin/project/{}/{}", api_base(), username, slug);
+            
             let _ = Request::delete(&url)
                 .credentials(RequestCredentials::Include)
                 .send()
                 .await;
+                
             refresh_action.dispatch(()); // Trigger refresh
         }
     });
@@ -228,6 +232,7 @@ pub fn AdminPage() -> impl IntoView {
                                             projects.get().into_iter().map(|p| {
                                                 let slug = p.slug.clone();
                                                 let owner = p.owner_username.clone();
+                                                let delete_payload = (owner.clone(), slug.clone());
 
                                                 view! {
                                                     <tr>
@@ -243,7 +248,7 @@ pub fn AdminPage() -> impl IntoView {
                                                                    "View"
                                                                 </a>
                                                                 <button class="btn-danger" style="font-size: 0.75rem; padding: 4px 8px;"
-                                                                    on:click=move |_| delete_project.dispatch(slug.clone())>
+                                                                    on:click=move |_| delete_project.dispatch(delete_payload.clone())>
                                                                     "DELETE"
                                                                 </button>
                                                             </div>

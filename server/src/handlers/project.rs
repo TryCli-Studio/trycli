@@ -176,8 +176,11 @@ pub async fn list_user_projects(
     let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, view_count, owner_username, embed_key, is_public \
-         FROM projects WHERE owner_id = $1 ORDER BY slug ASC"
+        "SELECT p.slug, p.image_tag, p.view_count, u.username as owner_username, p.embed_key, p.is_public 
+         FROM projects p
+         JOIN users u ON p.owner_id = u.id
+         WHERE p.owner_id = $1 
+         ORDER BY p.slug ASC"
     )
     .bind(user.id)
     .fetch_all(&state.db)
@@ -204,8 +207,11 @@ pub async fn search_projects(
     let query_term = format!("%{}%", search.q);
     
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, view_count, owner_username, embed_key \
-         FROM projects WHERE owner_id = $1 AND slug ILIKE $2 ORDER BY slug ASC LIMIT 10"
+        "SELECT p.slug, p.image_tag, p.view_count, u.username as owner_username, p.embed_key, p.is_public
+         FROM projects p
+         JOIN users u ON p.owner_id = u.id
+         WHERE p.owner_id = $1 AND p.slug ILIKE $2 
+         ORDER BY p.slug ASC LIMIT 10"
     )
     .bind(user.id)
     .bind(query_term)
@@ -237,7 +243,6 @@ pub async fn publish_handler(
             if ctx.owner_id != Some(user.id) {
                  return Err((StatusCode::FORBIDDEN, "You do not own this session".to_string()));
             }
-            // Set flag to prevent WebSocket from deleting it
             ctx.is_publishing = true;
             (ctx.container_name.clone(), ctx.shell.clone())
         } else {
@@ -250,11 +255,7 @@ pub async fn publish_handler(
 
     // 2. Prepare Internal Tar Command
     let tar_cmd = vec![
-        "tar",
-        "-cf",
-        "-",
-        "-C",
-        "/",
+        "tar", "-cf", "-", "-C", "/",
         "--exclude", "proc",
         "--exclude", "sys",
         "--exclude", "dev",
@@ -318,21 +319,18 @@ pub async fn publish_handler(
         }
     }
 
-    // 6. Update Database with new embed_token logic
-    // gen_random_uuid() requires Postgres 13+. If older, ensure pgcrypto extension is enabled.
-    // Generate embed_key at creation time to ensure VIP links work immediately
+    // 6. Update Database (CORRECTED BINDS)
     sqlx::query("
-            INSERT INTO projects (slug, image_tag, markdown, owner_id, owner_username, shell, embed_token, embed_key) 
-            VALUES ($1, $2, $3, $4, $5, $6, gen_random_uuid()::text, encode(gen_random_bytes(24), 'base64')) 
-            ON CONFLICT (owner_username, slug) 
-            DO UPDATE SET image_tag = $2, markdown = $3, shell = $6
+            INSERT INTO projects (slug, image_tag, markdown, owner_id, shell, embed_token, embed_key) 
+            VALUES ($1, $2, $3, $4, $5, gen_random_uuid()::text, encode(gen_random_bytes(24), 'base64')) 
+            ON CONFLICT (owner_id, slug) 
+            DO UPDATE SET image_tag = $2, markdown = $3, shell = $5
         ")
-        .bind(&safe_slug)
-        .bind(&new_image_tag)
-        .bind(&payload.markdown)
-        .bind(user.id)          
-        .bind(&user.login)
-        .bind(&shell_path) 
+        .bind(&safe_slug)        // $1
+        .bind(&new_image_tag)    // $2
+        .bind(&payload.markdown) // $3
+        .bind(user.id)           // $4
+        .bind(&shell_path)       // $5 (CRITICAL: This must be shell path, not username)
         .execute(&state.db)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
@@ -360,9 +358,10 @@ pub async fn get_project(
     
     // 1. Load project + security metadata (case-insensitive for username/slug)
     let row_result = sqlx::query_as::<_, (String, String, String, i64, Option<String>, i64, bool)>(
-        "SELECT image_tag, markdown, shell, owner_id, embed_key, id, is_public \
-         FROM projects \
-         WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
+        "SELECT p.image_tag, p.markdown, p.shell, p.owner_id, p.embed_key, p.id, p.is_public 
+         FROM projects p
+         JOIN users u ON p.owner_id = u.id
+         WHERE LOWER(u.username) = LOWER($1) AND LOWER(p.slug) = LOWER($2)"
     )
     .bind(&username).bind(&slug)
     .fetch_optional(&state.db)
@@ -820,9 +819,10 @@ pub async fn get_embed_key(
 
     // 2. Fetch project and verify ownership (case-insensitive for username/slug)
     let row_result = sqlx::query_as::<_, (i64, i64, Option<String>)>(
-        "SELECT id, owner_id, embed_key \
-         FROM projects \
-         WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
+        "SELECT p.id, p.owner_id, p.embed_key 
+         FROM projects p
+         JOIN users u ON p.owner_id = u.id
+         WHERE LOWER(u.username) = LOWER($1) AND LOWER(p.slug) = LOWER($2)"
     )
     .bind(&username)
     .bind(&slug)
@@ -932,7 +932,10 @@ pub async fn resolve_secret_embed(
 ) -> Result<Html<String>, (StatusCode, String)> {
     // 1. Validate Token from DB and fetch embed_key for VIP access
     let row: Option<(String, String, Option<String>)> = sqlx::query_as(
-        "SELECT owner_username, slug, embed_key FROM projects WHERE embed_token = $1"
+        "SELECT u.username, p.slug, p.embed_key 
+         FROM projects p
+         JOIN users u ON p.owner_id = u.id
+         WHERE p.embed_token = $1"
     )
     .bind(&token)
     .fetch_optional(&state.db)

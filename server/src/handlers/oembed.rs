@@ -27,8 +27,12 @@ pub async fn oembed_handler(
         if parts.len() >= 2 && parts[0] == "e" {
             let token = parts[1];
             
+            // --- FIX 1: Join users table to get the username ---
             let project = sqlx::query!(
-                "SELECT slug, owner_username FROM projects WHERE embed_token = $1", 
+                "SELECT p.slug, u.username as owner_username 
+                 FROM projects p
+                 JOIN users u ON p.owner_id = u.id
+                 WHERE p.embed_token = $1", 
                 token
             )
             .fetch_optional(&state.db)
@@ -42,7 +46,6 @@ pub async fn oembed_handler(
                 return Ok(Json(OEmbedResponse::Rich {
                     version: "1.0".to_string(),
                     title: format!("Interactive Demo: {}", p.slug),
-                    // FIX: Clone the username here so it doesn't get moved
                     author_name: p.owner_username.clone(), 
                     author_url: format!("{}/{}", origin, p.owner_username),
                     provider_name: "TryCLI Studio".to_string(),
@@ -62,8 +65,13 @@ pub async fn oembed_handler(
             let username = parts[0];
             let slug = parts[1];
             
+            // --- FIX 2: Join users table to check existence by username ---
+            // We verify that a project exists for this username/slug pair
             let exists = sqlx::query!(
-                "SELECT 1 as exists FROM projects WHERE owner_username = $1 AND slug = $2",
+                "SELECT 1 as \"exists!\" 
+                 FROM projects p
+                 JOIN users u ON p.owner_id = u.id
+                 WHERE LOWER(u.username) = LOWER($1) AND LOWER(p.slug) = LOWER($2)",
                 username, slug
             )
             .fetch_optional(&state.db)

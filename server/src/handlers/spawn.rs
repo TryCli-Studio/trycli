@@ -68,7 +68,10 @@ pub async fn spawn_handler(
 
     if let (Some(username), Some(slug)) = (view_query.username, view_query.slug) {
         let project_id: Option<i64> = sqlx::query_scalar(
-            "SELECT id FROM projects WHERE LOWER(owner_username) = LOWER($1) AND LOWER(slug) = LOWER($2)"
+            "SELECT p.id 
+             FROM projects p
+             JOIN users u ON p.owner_id = u.id
+             WHERE LOWER(u.username) = LOWER($1) AND LOWER(p.slug) = LOWER($2)"
         )
         .bind(&username)
         .bind(&slug)
