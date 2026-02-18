@@ -72,6 +72,19 @@ async fn github_callback(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "JSON Error".into()))?;
 
+    sqlx::query(
+        "INSERT INTO users (id, username, avatar_url, last_login) 
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (id) DO UPDATE 
+         SET username = $2, avatar_url = $3, last_login = NOW()"
+    )
+    .bind(user_data.id)
+    .bind(&user_data.login)
+    .bind(&user_data.avatar_url)
+    .execute(&state.db)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
+
     // 3. Save Session
     session.insert("user", &user_data)
         .await

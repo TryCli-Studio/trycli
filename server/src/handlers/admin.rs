@@ -20,7 +20,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/admin/stats", get(get_system_stats))
         .route("/api/admin/projects", get(get_all_projects))
         .route("/api/admin/container/:id", delete(kill_container))
-        .route("/api/admin/project/:slug", delete(delete_project_admin))
+        .route("/api/admin/project/:username/:slug", delete(delete_project_admin))
 }
 
 // Updated middleware to check the list
@@ -110,7 +110,10 @@ pub async fn get_all_projects(
     check_admin(&session).await?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
-        "SELECT slug, image_tag, view_count, owner_username FROM projects ORDER BY view_count DESC LIMIT 100"
+        "SELECT p.slug, p.image_tag, p.view_count, u.username as owner_username, p.embed_key, p.is_public
+         FROM projects p
+         JOIN users u ON p.owner_id = u.id
+         ORDER BY p.view_count DESC LIMIT 100"
     )
     .fetch_all(&state.db)
     .await
@@ -146,32 +149,48 @@ pub async fn kill_container(
 pub async fn delete_project_admin(
     State(state): State<AppState>,
     session: Session,
-    Path(slug): Path<String>,
+    Path((username, slug)): Path<(String, String)>, // Extract both
 ) -> Result<Json<String>, (StatusCode, String)> {
     check_admin(&session).await?;
 
+    // 1. Precise Lookup: Find image_tag using both username and slug
+    // We join users to match the username string to the owner_id
     let record: Option<(String,)> = sqlx::query_as(
-        "SELECT image_tag FROM projects WHERE slug = $1"
+        "SELECT p.image_tag 
+         FROM projects p
+         JOIN users u ON p.owner_id = u.id
+         WHERE LOWER(u.username) = LOWER($1) AND LOWER(p.slug) = LOWER($2)"
     )
+    .bind(&username)
     .bind(&slug)
     .fetch_optional(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if let Some((image_tag,)) = record {
-        sqlx::query("DELETE FROM projects WHERE slug = $1")
-            .bind(&slug)
-            .execute(&state.db)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        // 2. Precise Delete: Use the same WHERE clause
+        // This ensures we only delete the row we just found
+        sqlx::query(
+            "DELETE FROM projects p
+             USING users u
+             WHERE p.owner_id = u.id 
+             AND LOWER(u.username) = LOWER($1) AND LOWER(p.slug) = LOWER($2)"
+        )
+        .bind(&username)
+        .bind(&slug)
+        .execute(&state.db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+        // 3. Cleanup Docker Image
+        // We do this last so if DB fails, we don't orphan the DB record
         let _ = state.docker.remove_image(&image_tag, Some(RemoveImageOptions {
             force: true,
             ..Default::default()
         }), None).await;
         
-        Ok(Json(format!("Deleted project and image: {}", image_tag)))
+        Ok(Json(format!("Deleted project {}/{}", username, slug)))
     } else {
-        Err((StatusCode::NOT_FOUND, "Project not found".to_string()))
+        Err((StatusCode::NOT_FOUND, format!("Project {}/{} not found", username, slug)))
     }
 }
