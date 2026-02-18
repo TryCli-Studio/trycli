@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT 1 as \"exists!\" \n                 FROM projects p\n                 JOIN users u ON p.owner_id = u.id\n                 WHERE LOWER(u.username) = LOWER($1) AND LOWER(p.slug) = LOWER($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fa31fdab92e5c973239b559d6e1d7dd0dbc018182d77ab512fdaaea6beeb852d"
+}

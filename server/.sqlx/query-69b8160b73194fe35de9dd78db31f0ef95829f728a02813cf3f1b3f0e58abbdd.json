@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT slug, owner_username FROM projects WHERE embed_token = $1",
+  "query": "SELECT p.slug, u.username as owner_username \n                 FROM projects p\n                 JOIN users u ON p.owner_id = u.id\n                 WHERE p.embed_token = $1",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "22020954d4903e012ede17f1539309a4eb868333a0a46c4a9555dd931632de21"
+  "hash": "69b8160b73194fe35de9dd78db31f0ef95829f728a02813cf3f1b3f0e58abbdd"
 }
