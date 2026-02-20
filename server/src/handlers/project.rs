@@ -1,17 +1,15 @@
 use axum::{
-    body::Bytes,
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::Html,
     routing::{delete, get, post},
     Json, Router,
 };
-use bollard::exec::{CreateExecOptions, StartExecResults};
-use bollard::image::{CreateImageOptions, RemoveImageOptions}; 
+use bollard::container::Config;
+use bollard::image::{CommitContainerOptions, RemoveImageOptions};
 use tower_sessions::Session;
 use uuid::Uuid;
 use serde::Deserialize;
-use futures::StreamExt;
 use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest, WhitelistRequest, TogglePublicRequest};
 use std::collections::HashMap;
@@ -251,75 +249,27 @@ pub async fn publish_handler(
     };
 
     let safe_slug = payload.slug.trim().to_lowercase();
-    let new_image_tag = format!("trycli-studio-project-{}:latest", safe_slug);
+    let repo_name = format!("trycli-studio-project-{}", safe_slug);
+    let tag_name = "latest".to_string();
+    let new_image_tag = format!("{}:{}", repo_name, tag_name);
 
-    // 2. Prepare Internal Tar Command
-    let tar_cmd = vec![
-        "tar", "-cf", "-", "-C", "/",
-        "--exclude", "proc",
-        "--exclude", "sys",
-        "--exclude", "dev",
-        "--exclude", "tmp",
-        "--exclude", "run",
-        "."
-    ];
-
-    let exec_config = CreateExecOptions {
-        attach_stdout: Some(true),
-        attach_stderr: Some(true), 
-        cmd: Some(tar_cmd),
+    // 2. Commit the container directly via Docker API
+    let commit_opts = CommitContainerOptions {
+        container: container_name.clone(),
+        repo: repo_name.clone(),
+        tag: tag_name.clone(),
+        pause: true, // Pauses container briefly to ensure filesystem consistency
         ..Default::default()
     };
 
-    // 3. Create Exec Instance
-    let exec = state.docker.create_exec(&container_name, exec_config)
+    // Use default config to inherit CMD/ENV from the running container
+    let config = Config::<String>::default();
+
+    state.docker.commit_container(commit_opts, config)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Exec Create Error: {}", e)))?;
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Snapshot failed: {}", e)))?;
 
-    // 4. Start Exec and Capture Stream
-    let mut tar_buffer = Vec::new();
-    
-    if let Ok(StartExecResults::Attached { mut output, .. }) = state.docker.start_exec(&exec.id, None).await {
-        while let Some(msg_result) = output.next().await {
-            match msg_result {
-                Ok(bollard::container::LogOutput::StdOut { message }) => {
-                    tar_buffer.extend_from_slice(&message);
-                },
-                Ok(bollard::container::LogOutput::StdErr { message }) => {
-                    println!("Tar Warning: {}", String::from_utf8_lossy(&message));
-                },
-                Ok(_) => {}, 
-                Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Stream Error: {}", e))),
-            }
-        }
-    } else {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to attach to tar process".to_string()));
-    }
-
-    if tar_buffer.is_empty() {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Snapshot failed: Tar archive was empty".to_string()));
-    }
-
-    // 5. IMPORT the captured tarball
-    let create_opts = CreateImageOptions {
-        from_src: "-".to_string(), 
-        repo: new_image_tag.clone(),
-        ..Default::default()
-    };
-
-    let mut create_image_stream = state.docker.create_image(
-        Some(create_opts),
-        Some(Bytes::from(tar_buffer)), 
-        None
-    );
-
-    while let Some(result) = create_image_stream.next().await {
-        if let Err(e) = result {
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Import Error: {}", e)));
-        }
-    }
-
-    // 6. Update Database (CORRECTED BINDS)
+    // 3. Update Database
     sqlx::query("
             INSERT INTO projects (slug, image_tag, markdown, owner_id, shell, embed_token, embed_key) 
             VALUES ($1, $2, $3, $4, $5, gen_random_uuid()::text, encode(gen_random_bytes(24), 'base64')) 
@@ -335,7 +285,7 @@ pub async fn publish_handler(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)))?;
 
-    // 7. Cleanup
+    // 4. Cleanup Memory and Docker Container
     {
         let mut map = state.lock_sessions();
         map.remove(&payload.container_id);
