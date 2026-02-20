@@ -1,5 +1,6 @@
 mod models;
 mod state;
+mod error;
 mod config;
 mod router;
 mod services {
@@ -15,10 +16,13 @@ mod handlers {
     pub mod oembed;
 }
 
+// Re-export so your handlers can use `crate::Result` and `crate::AppError`
+pub use error::{AppError, Result};
 use services::docker::start_background_reaper;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+// FIX: Use anyhow::Result<()> here so it doesn't clash with your custom crate::Result
+async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok(); 
     
     // Setup database and Docker

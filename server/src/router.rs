@@ -9,7 +9,7 @@ use crate::state::AppState;
 use crate::handlers::{auth, project, spawn, analytics, admin, oembed};
 use crate::services::websocket;
 
-pub fn create_router(state: AppState) -> Result<Router, Box<dyn std::error::Error>> {
+pub fn create_router(state: AppState) -> anyhow::Result<axum::Router> {
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false) 

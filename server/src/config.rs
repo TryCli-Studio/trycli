@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::state::AppState;
 use dashmap::DashMap;
 
-pub async fn setup_database_and_docker() -> Result<AppState, Box<dyn std::error::Error>> {
+pub async fn setup_database_and_docker() -> anyhow::Result<AppState> {
     // 1. Docker setup 
     let docker = Arc::new(Docker::connect_with_local_defaults()?);
     
