@@ -134,7 +134,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
                 format!("SHELL={}", shell) 
             ]),
             host_config: Some(HostConfig { 
-                runtime: Some("kata-clh".to_string()),
+                runtime: Some("io.containerd.kata-clh.v2".to_string()),
                 memory: Some(512 * 1024 * 1024), 
                 nano_cpus: Some(500_000_000),
                 pids_limit: Some(128),
@@ -317,7 +317,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             ("managed_by".to_string(), "TryCli Studio".to_string())
         ])),
         host_config: Some(HostConfig {
-            runtime: Some("kata-clh".to_string()),
+            runtime: Some("io.containerd.kata-clh.v2".to_string()),
             memory: Some(512 * 1024 * 1024), 
             memory_swap: Some(1024 * 1024 * 1024), 
             nano_cpus: Some(500_000_000),   
