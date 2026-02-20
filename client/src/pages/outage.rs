@@ -8,9 +8,6 @@ use crate::components::navbar::Navbar;
 
 #[component]
 pub fn OutagePage() -> impl IntoView {
-    let (user, set_user) = create_signal(None::<User>);
-    let (auth_checked, set_auth_checked) = create_signal(false);    
-
     view!{
         <div class = "landing-container">
             <Navbar>
