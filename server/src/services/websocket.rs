@@ -424,9 +424,10 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             // 3. Inject apt rate limiting
             // 4. Run the distro-specific install script (e.g. install fish/zsh)
             // 5. Clean the terminal after setup completion
-            // 6. Exec into the final requested shell
+            // 6. Re-enable local echo 
+            // 7. Exec into the final requested shell
             let auto_type_cmd = format!(
-                "stty -echo; mkdir -p /etc/apt/apt.conf.d && {} && {} && printf '\\033[2J\\033[3J\\033[H' && exec {}\n", 
+                "stty -echo; mkdir -p /etc/apt/apt.conf.d && {} && {} && printf '\\033[2J\\033[3J\\033[H' && stty echo && exec {}\n", 
                 inject_limit_cmd,
                 install_script, 
                 final_shell

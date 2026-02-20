@@ -23,6 +23,7 @@ pub mod pages {
     pub mod policy;
     pub mod view;
     pub mod notfound;
+    pub mod outage;
 }
 
 pub use app::App;
