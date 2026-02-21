@@ -895,15 +895,41 @@ pub async fn delete_project(
         return Err((StatusCode::NOT_FOUND, "Project not found".to_string()));
     }
 
+    // 1. Delete Local Image Cache (if it exists on this specific node)
     let remove_opts = RemoveImageOptions {
         force: true,
         noprune: false,
     };
+    let _ = state.docker.remove_image(&image_tag, Some(remove_opts), None).await;
 
-    if let Err(e) = state.docker.remove_image(&image_tag, Some(remove_opts), None).await {
-        eprintln!("Warning: Failed to remove docker image {}: {}", image_tag, e);
-    } else {
-        println!("Cleaned up image: {}", image_tag);
+    // 2. Conditionally Delete from Remote Registry (DigitalOcean API)
+    let use_remote = std::env::var("USE_REMOTE_REGISTRY").unwrap_or_default() == "true";
+    
+    if use_remote {
+        let registry_name = std::env::var("REGISTRY_NAME").unwrap_or_else(|_| "trycli-registry".to_string());
+        // Since you used the DO API token as the password, we can reuse it here
+        let do_token = std::env::var("REGISTRY_PASSWORD").unwrap_or_default(); 
+        
+        // DigitalOcean's specific endpoint for deleting a tag
+        let url = format!(
+            "https://api.digitalocean.com/v2/registry/{}/repositories/projects/tags/{}",
+            registry_name, slug
+        );
+
+        let client = reqwest::Client::new();
+        match client.delete(&url).bearer_auth(&do_token).send().await {
+            Ok(resp) => {
+                if resp.status().is_success() || resp.status() == 404 {
+                    println!("Successfully deleted remote image tag: {}", slug);
+                } else {
+                    let err_text = resp.text().await.unwrap_or_default();
+                    eprintln!("Warning: Failed to delete remote image tag. DO API returned: {}", err_text);
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: Network error calling DO Registry API: {}", e);
+            }
+        }
     }
 
     Ok(StatusCode::OK)
