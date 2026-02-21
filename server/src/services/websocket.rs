@@ -6,6 +6,7 @@ use axum::{
 use bollard::container::{CreateContainerOptions, Config};
 use bollard::models::{HostConfig, Mount, MountTypeEnum, MountTmpfsOptions};
 use bollard::image::CreateImageOptions;
+use bollard::auth::DockerCredentials;
 // 1. IMPORT ADDED HERE: ResizeExecOptions
 use bollard::exec::{CreateExecOptions, StartExecResults, ResizeExecOptions};
 use futures::{stream::StreamExt, SinkExt};
@@ -114,8 +115,31 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
     };
 
     if let Some((image_tag, shell)) = pending_spawn {
-        // Perform the spawn that used to be in get_project
         let container_name = format!("trycli-studio-viewer-{}", Uuid::new_v4());
+        let use_remote = std::env::var("USE_REMOTE_REGISTRY").unwrap_or_default() == "true";
+        
+        // 1. Conditionally Pull the Image
+        if use_remote {
+            let credentials = DockerCredentials {
+                username: Some(std::env::var("REGISTRY_USERNAME").unwrap_or_default()),
+                password: Some(std::env::var("REGISTRY_PASSWORD").unwrap_or_default()),
+                serveraddress: Some(std::env::var("REGISTRY_URL").unwrap_or_default()),
+                ..Default::default()
+            };
+
+            let pull_opts = CreateImageOptions {
+                from_image: image_tag.clone(),
+                ..Default::default()
+            };
+            
+            let mut pull_stream = state.docker.create_image(Some(pull_opts), None, Some(credentials));
+            while let Some(pull_result) = pull_stream.next().await {
+                if let Err(e) = pull_result {
+                    let _ = socket.send(Message::Text(format!("\r\n\x1b[31m[!] Failed to pull image from registry: {}\x1b[0m\r\n", e))).await;
+                    return;
+                }
+            }
+        }
         
         let config = Config {
             image: Some(image_tag),
