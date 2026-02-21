@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use bollard::container::Config;
-use bollard::image::{CommitContainerOptions, RemoveImageOptions};
+use bollard::image::{CommitContainerOptions, RemoveImageOptions, PushImageOptions};
 use tower_sessions::Session;
 use uuid::Uuid;
 use serde::Deserialize;
@@ -14,6 +14,8 @@ use crate::state::{AppState, SessionContext};
 use crate::models::{User, ProjectSummary, PublishRequest, WhitelistRequest, TogglePublicRequest};
 use std::collections::HashMap;
 use url::Url;
+use bollard::auth::DockerCredentials;
+use futures::StreamExt;
 
 // Maximum number of whitelist entries allowed per project
 const MAX_WHITELIST_ENTRIES: i64 = 100;
@@ -249,25 +251,54 @@ pub async fn publish_handler(
     };
 
     let safe_slug = payload.slug.trim().to_lowercase();
-    let repo_name = format!("trycli-studio-project-{}", safe_slug);
-    let tag_name = "latest".to_string();
-    let new_image_tag = format!("{}:{}", repo_name, tag_name);
+    let use_remote = std::env::var("USE_REMOTE_REGISTRY").unwrap_or_default() == "true";
+    
+    // 1. Determine the Image Tag based on Environment
+    let (repo_name, new_image_tag) = if use_remote {
+        let registry_url = std::env::var("REGISTRY_URL")
+            .unwrap_or_else(|_| "registry.digitalocean.com/trycli-registry".to_string());
+        let r_name = format!("{}/project-{}", registry_url, safe_slug);
+        (r_name.clone(), format!("{}:latest", r_name))
+    } else {
+        let r_name = format!("trycli-studio-project-{}", safe_slug);
+        (r_name.clone(), format!("{}:latest", r_name))
+    };
 
-    // 2. Commit the container directly via Docker API
     let commit_opts = CommitContainerOptions {
         container: container_name.clone(),
         repo: repo_name.clone(),
-        tag: tag_name.clone(),
-        pause: true, // Pauses container briefly to ensure filesystem consistency
+        tag: "latest".to_string(),
+        pause: true,
         ..Default::default()
     };
 
-    // Use default config to inherit CMD/ENV from the running container
     let config = Config::<String>::default();
 
     state.docker.commit_container(commit_opts, config)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Snapshot failed: {}", e)))?;
+
+    // 2. Conditionally Push to Remote Registry
+    if use_remote {
+        let credentials = DockerCredentials {
+            username: Some(std::env::var("REGISTRY_USERNAME").unwrap_or_default()),
+            password: Some(std::env::var("REGISTRY_PASSWORD").unwrap_or_default()),
+            serveraddress: Some(std::env::var("REGISTRY_URL").unwrap_or_default()),
+            ..Default::default()
+        };
+
+        let mut push_stream = state.docker.push_image(
+            &new_image_tag,
+            None::<PushImageOptions<String>>,
+            Some(credentials)
+        );
+
+        while let Some(push_result) = push_stream.next().await {
+            if let Err(e) = push_result {
+                return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to push image to registry: {}", e)));
+            }
+        }
+    }
 
     // 3. Update Database
     sqlx::query("
