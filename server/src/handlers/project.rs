@@ -253,21 +253,23 @@ pub async fn publish_handler(
     let safe_slug = payload.slug.trim().to_lowercase();
     let use_remote = std::env::var("USE_REMOTE_REGISTRY").unwrap_or_default() == "true";
     
-    // 1. Determine the Image Tag based on Environment
-    let (repo_name, new_image_tag) = if use_remote {
+    // --- CHANGED: Use a single repo, and make the slug the TAG ---
+    let (repo_name, tag_name, new_image_tag) = if use_remote {
         let registry_url = std::env::var("REGISTRY_URL")
             .unwrap_or_else(|_| "registry.digitalocean.com/trycli-registry".to_string());
-        let r_name = format!("{}/project-{}", registry_url, safe_slug);
-        (r_name.clone(), format!("{}:latest", r_name))
+        // Single repository named 'projects'
+        let r_name = format!("{}/projects", registry_url);
+        (r_name.clone(), safe_slug.clone(), format!("{}:{}", r_name, safe_slug))
     } else {
-        let r_name = format!("trycli-studio-project-{}", safe_slug);
-        (r_name.clone(), format!("{}:latest", r_name))
+        // Local fallback
+        let r_name = "trycli-studio-projects".to_string();
+        (r_name.clone(), safe_slug.clone(), format!("{}:{}", r_name, safe_slug))
     };
 
     let commit_opts = CommitContainerOptions {
         container: container_name.clone(),
         repo: repo_name.clone(),
-        tag: "latest".to_string(),
+        tag: tag_name.clone(), // Use the slug as the tag
         pause: true,
         ..Default::default()
     };
