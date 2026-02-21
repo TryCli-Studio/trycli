@@ -301,6 +301,18 @@ pub async fn publish_handler(
             }
         }
     }
+    if use_remote {
+    println!("Push successful. Cleaning up local cache for: {}", new_image_tag);
+    
+    let remove_opts = RemoveImageOptions {
+        force: true,
+        noprune: false,
+    };
+    
+    // This removes the copy from the droplet's disk.
+    // The image remains safe in the DigitalOcean Container Registry.
+    let _ = state.docker.remove_image(&new_image_tag, Some(remove_opts), None).await;
+    }   
 
     // 3. Update Database
     sqlx::query("
