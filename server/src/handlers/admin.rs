@@ -188,6 +188,21 @@ pub async fn delete_project_admin(
             force: true,
             ..Default::default()
         }), None).await;
+
+        // 4. Cleanup Remote Docker Image
+        let use_remote = std::env::var("USE_REMOTE_REGISTRY").unwrap_or_default() == "true";
+        if use_remote {
+            let registry_name = std::env::var("REGISTRY_NAME").unwrap_or_else(|_| "trycli-registry".to_string());
+            let do_token = std::env::var("REGISTRY_PASSWORD").unwrap_or_default();
+            
+            let url = format!(
+                "https://api.digitalocean.com/v2/registry/{}/repositories/projects/tags/{}",
+                registry_name, slug
+            );
+
+            let client = reqwest::Client::new();
+            let _ = client.delete(&url).bearer_auth(do_token).send().await;
+        }
         
         Ok(Json(format!("Deleted project {}/{}", username, slug)))
     } else {
