@@ -2,13 +2,28 @@ use crate::components::protected::ProtectedRoute;
 use crate::pages::{
     admin::AdminPage, analytics::AnalyticsPage, blogs::BlogsPage, create::CreatePage,
     dashboard::DashboardPage, docs::DocsPage, embed::EmbedPage, home::LandingPage,
-    policy::PolicyPage, view::ViewPage,notfound::NotFoundPage, outage::OutagePage
+    notfound::NotFoundPage, outage::OutagePage, policy::PolicyPage, view::ViewPage,
 };
 use leptos::*;
 use leptos_router::*;
 
+const MAINTENANCE_MODE: bool = false;
+
 #[component]
 pub fn App() -> impl IntoView {
+    if MAINTENANCE_MODE {
+        return view! {
+            <Router>
+                <Routes>
+                    <Route path="/" view=LandingPage />
+                    <Route path="/docs" view=DocsPage />
+                    <Route path="/outage" view=move || view! { <OutagePage /> } />
+                    <Route path="/*any" view=move || view! { <OutagePage /> } />
+                </Routes>
+            </Router>
+        };
+    }
+
     view! {
         <Router>
             <Routes>
@@ -43,8 +58,8 @@ pub fn App() -> impl IntoView {
 
                 <Route path="/:username/:slug" view=ViewPage />
                 <Route path="/embed/:username/:slug" view=EmbedPage />
-                <Route path="/*any" view=move || view! { <NotFoundPage /> } />
                 <Route path="/outage" view=move || view! { <OutagePage /> } />
+                <Route path="/*any" view=move || view! { <NotFoundPage /> } />
             </Routes>
         </Router>
     }

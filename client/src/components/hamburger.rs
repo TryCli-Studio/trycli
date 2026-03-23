@@ -4,6 +4,7 @@ use leptos_router::A;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
 
+const GITHUB_URL: &str = "https://github.com/TryCli-Studio/trycli";
 const TWITTER_URL: &str = "https://x.com/tryclistudio";
 const SUPPORT_URL: &str = "https://ko-fi.com/tryclistudio";
 
@@ -19,6 +20,7 @@ pub fn HamburgerMenu(
     #[prop(optional)] show_dashboard: bool,
     #[prop(optional, default = true)] show_docs: bool,
     #[prop(optional, default = true)] show_blogs: bool,
+    #[prop(optional)] show_github: bool,
     #[prop(optional, default = true)] show_twitter: bool,
     #[prop(optional, default = true)] show_support: bool,
     #[prop(optional)] show_logout: bool,
@@ -26,6 +28,7 @@ pub fn HamburgerMenu(
     #[prop(optional)] stop_propagation: bool,
     #[prop(optional)] close_on_item_click: bool,
     #[prop(optional)] close_on_outside_click: bool,
+    #[prop(optional, into)] github_url: String,
     #[prop(optional, default = false)] support_target_blank: bool,
 ) -> impl IntoView {
     let (menu_open, set_menu_open) = create_signal(false);
@@ -35,9 +38,12 @@ pub fn HamburgerMenu(
             if menu_open.get() {
                 if let Some(window) = web_sys::window() {
                     if let Some(document) = window.document() {
-                        let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move |_: web_sys::Event| {
-                            set_menu_open.set(false);
-                        }) as Box<dyn Fn(web_sys::Event)>);
+                        let closure = wasm_bindgen::closure::Closure::wrap(Box::new(
+                            move |_: web_sys::Event| {
+                                set_menu_open.set(false);
+                            },
+                        )
+                            as Box<dyn Fn(web_sys::Event)>);
 
                         let _ = document.add_event_listener_with_callback(
                             "click",
@@ -62,6 +68,12 @@ pub fn HamburgerMenu(
         support_url
     };
 
+    let github_url = if github_url.is_empty() {
+        GITHUB_URL.to_string()
+    } else {
+        github_url
+    };
+
     let menu_items: Rc<dyn Fn() -> View> = Rc::new(move || {
         let item_class_home = item_class.clone();
         let link_style_home = link_style.clone();
@@ -71,12 +83,15 @@ pub fn HamburgerMenu(
         let link_style_docs = link_style.clone();
         let item_class_blogs = item_class.clone();
         let link_style_blogs = link_style.clone();
+        let item_class_github = item_class.clone();
+        let link_style_github = link_style.clone();
         let item_class_twitter = item_class.clone();
         let link_style_twitter = link_style.clone();
         let item_class_support = item_class.clone();
         let link_style_support = link_style.clone();
         let logout_class = logout_class.clone();
         let link_style_logout = link_style.clone();
+        let github_url = github_url.clone();
         let support_url = support_url.clone();
 
         view! {
@@ -131,6 +146,27 @@ pub fn HamburgerMenu(
                     }>
                         "Blogs"
                     </A>
+                }
+                    .into_view()
+            } else {
+                view! { <></> }.into_view()
+            }}
+            {move || if show_github {
+                view! {
+                    <a
+                        href=github_url.clone()
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class=item_class_github.clone()
+                        style=link_style_github.clone()
+                        on:click=move |_| {
+                            if close_on_item_click {
+                                set_menu_open.set(false);
+                            }
+                        }
+                    >
+                        "GitHub Repo"
+                    </a>
                 }
                     .into_view()
             } else {

@@ -1,40 +1,15 @@
-use crate::api::api_base;
 use crate::components::hamburger::HamburgerMenu;
 use crate::components::navbar::Navbar;
-use crate::types::User;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_meta::{Link, Meta, Script, Title};
 use leptos_router::A;
-use web_sys::RequestCredentials;
+
+const GITHUB_REPO_URL: &str = "https://github.com/TryCli-Studio/trycli";
+const SUPPORT_URL: &str = "https://ko-fi.com/V7V21TRPL5";
+const TWITTER_URL: &str = "https://x.com/TryCliStudio";
 
 #[component]
 pub fn LandingPage() -> impl IntoView {
-    let (user, set_user) = create_signal(None::<User>);
-    let (auth_checked, set_auth_checked) = create_signal(false);
-
-    create_resource(
-        || (),
-        move |_| async move {
-            let url = format!("{}/api/me", api_base());
-            if let Ok(resp) = Request::get(&url)
-                .credentials(RequestCredentials::Include)
-                .send()
-                .await
-            {
-                if resp.ok() {
-                    if let Ok(u) = resp.json::<User>().await {
-                        set_user.set(Some(u));
-                    }
-                }
-            }
-            set_auth_checked.set(true);
-        },
-    );
-
-    let auth_github_url = move || format!("{}/auth/github", api_base());
-
-    // 2. STRUCTURED DATA (JSON-LD)
     let schema_json = r#"{
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
@@ -51,9 +26,11 @@ pub fn LandingPage() -> impl IntoView {
 
     view! {
         <>
-            // 4. SEO METADATA
             <Title text="TryCLI - The Standard for Interactive Documentation" />
-            <Meta name="description" content="Turn your static documentation into interactive live demos. Zero-config Docker sandboxes for onboarding users to your CLI tools instantly." />
+            <Meta
+                name="description"
+                content="Turn your static documentation into interactive live demos. Zero-config Docker sandboxes for onboarding users to your CLI tools instantly."
+            />
 
             <Link rel="canonical" href="https://trycli.com" />
 
@@ -63,79 +40,45 @@ pub fn LandingPage() -> impl IntoView {
 
             <Meta property="og:type" content="website" />
             <Meta property="og:title" content="TryCLI - The Standard for Interactive Documentation" />
-            <Meta property="og:description" content="Instantly spin up isolated Docker containers and share your CLI projects with a single link." />
+            <Meta
+                property="og:description"
+                content="Instantly spin up isolated Docker containers and share your CLI projects with a single link."
+            />
             <Meta property="og:url" content="https://trycli.com" />
-
             <Meta property="og:image" content="https://trycli.com/logo_black.png" />
 
             <Meta name="twitter:card" content="summary_large_image" />
             <Meta name="twitter:title" content="TryCLI Studio" />
-            <Meta name="twitter:description" content="Host, share, and embed fully interactive CLI demos directly in the browser." />
+            <Meta
+                name="twitter:description"
+                content="Host, share, and embed fully interactive CLI demos directly in the browser."
+            />
             <Meta name="twitter:image" content="https://trycli.com/logo_black.png" />
 
-            // MAIN CONTENT
             <div class="landing-container">
-                
-                <Navbar is_logged_in=user.get().is_some()>
+                <Navbar>
+                    <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
+                        <A
+                            href="/outage"
+                            class="btn-secondary btn-action btn-login header-login-button"
+                            attr:title="Maintenance mode"
+                        >
+                            <span class="header-login-label">"Login"</span>
+                            <span class="header-maintenance-label">"Maintenance"</span>
+                        </A>
 
-                    <div class="nav-actions">
-                        {move || {
-                            if auth_checked.get() {
-                                if let Some(u) = user.get() {
-                                    // LOGGED IN: Show Profile + Dashboard Button + Hamburger Menu
-                                    view! {
-                                        <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
-                                            <div style="display: flex; align-items: center; gap: 12px;">
-                                                <img src=u.avatar_url
-                                                     style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border);"
-                                                     alt="User Avatar" />
-                                                <span style="color: var(--text-main); font-weight: 500; font-size: 0.95rem;">
-                                                    {u.login}
-                                                </span>
-                                            </div>
-                                            <A href="/dashboard" class="btn-secondary btn-action btn-dashboard">"Dashboard"</A>
-
-                                            <HamburgerMenu
-                                                button_class="hamburger-menu"
-                                                menu_class="mobile-menu"
-                                                item_class="menu-item"
-                                                show_dashboard=true
-                                                use_open_class=true
-                                                close_on_item_click=true
-                                            />
-                                        </div>
-                                    }.into_view()
-                                } else {
-                                    // LOGGED OUT
-                                    let url = auth_github_url();
-                                    view! {
-                                        <div style="display: flex; align-items: center; gap: 20px; width: 100%;">
-                                            <a href=url class="btn-secondary btn-action btn-login" rel="external" style="display: flex; align-items: center; gap: 8px;">
-                                                <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
-                                                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                                                </svg>
-                                                "Login"
-                                            </a>
-
-                                            <HamburgerMenu
-                                                button_class="hamburger-menu"
-                                                menu_class="mobile-menu"
-                                                item_class="menu-item"
-                                                support_target_blank=true
-                                                use_open_class=true
-                                                close_on_item_click=true
-                                            />
-                                        </div>
-                                    }.into_view()
-                                }
-                            } else {
-                                view! { <div class="spinner" style="width: 20px; height: 20px; border-width: 2px;"></div> }.into_view()
-                            }
-                        }}
+                        <HamburgerMenu
+                            button_class="hamburger-menu"
+                            menu_class="mobile-menu"
+                            item_class="menu-item"
+                            show_blogs=false
+                            support_target_blank=true
+                            use_open_class=true
+                            close_on_item_click=true
+                        />
                     </div>
                 </Navbar>
 
-                // Hero Section
                 <main class="hero-main">
                     <div class="hero-content">
                         <div class="badge">"Now supporting Alpine, Debian & Fish Shell"</div>
@@ -150,32 +93,15 @@ pub fn LandingPage() -> impl IntoView {
                         </p>
 
                         <div class="cta-group">
-                            {move || {
-                                let url = auth_github_url();
-                                if auth_checked.get() && user.get().is_some() {
-                                    view! {
-                                        <A href="/dashboard" class="btn-primary btn-hero">
-                                            "Go to Studio"
-                                            <span class="arrow">"→"</span>
-                                        </A>
-                                    }.into_view()
-                                } else {
-                                    view! {
-                                        <a href=url class="btn-primary btn-hero" rel="external" style="display: flex; align-items: center; gap: 10px;">
-                                            <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor" style="color: black;">
-                                                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                                            </svg>
-                                            "Start Building Free"
-                                        </a>
-                                    }.into_view()
-                                }
-                            }}
+                            <A href="/outage" class="btn-primary btn-hero">
+                                "Studio In Maintenance"
+                                <span class="arrow">"→"</span>
+                            </A>
                             <A href="/docs" class="btn-secondary">
                                 "Read Documentation"
                             </A>
                         </div>
 
-                        // TERMINAL PREVIEW
                         <div class="terminal-preview" role="log" aria-label="Terminal Preview Demo">
                             <div class="terminal-header-preview" aria-hidden="true">
                                 <div class="dot red"></div>
@@ -202,7 +128,28 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </main>
 
-                // FEATURES
+                <section class="section-features demo-video-section">
+                    <div class="container-narrow">
+                        <div class="video-placeholder-card" aria-labelledby="demo-video-placeholder">
+                            <div class="video-placeholder-header">
+                                <div>
+                                    <p class="video-placeholder-eyebrow">"Demo Video"</p>
+                                    <h2 id="demo-video-placeholder">"Watch TryCLI in action"</h2>
+                                </div>
+                            </div>
+
+                            <iframe
+                                class="demo-video-embed"
+                                src="https://www.youtube.com/embed/mw_ausmS4vc"
+                                title="TryCLI demo video"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                referrerpolicy="strict-origin-when-cross-origin"
+                                allowfullscreen=true
+                            ></iframe>
+                        </div>
+                    </div>
+                </section>
+
                 <section class="section-features" style="background: rgba(255,255,255,0.01);">
                     <div class="container-narrow">
                         <h2 class="section-title">"Frictionless Onboarding"</h2>
@@ -213,8 +160,6 @@ pub fn LandingPage() -> impl IntoView {
                         </p>
 
                         <div style="display: flex; flex-wrap: wrap; gap: 40px; align-items: center;">
-
-                            // Left Column: Text explanation
                             <div style="flex: 1 1 400px; text-align: left;">
                                 <h3 style="font-size: 1.5rem; margin-bottom: 1rem; color: #fff; font-weight: 700;">"Stop Losing Users at 'npm install'"</h3>
                                 <p style="color: var(--text-muted); line-height: 1.6; margin-bottom: 1.5rem;">
@@ -225,7 +170,6 @@ pub fn LandingPage() -> impl IntoView {
                                 </p>
                             </div>
 
-                            // Right Column: Visual Checklist Card
                             <div style="flex: 1 1 300px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 30px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);">
                                 <ul style="list-style: none; padding: 0; margin: 0; font-family: var(--font-mono); font-size: 0.9rem;">
                                     <li style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; color: #71717a;">
@@ -272,7 +216,6 @@ pub fn LandingPage() -> impl IntoView {
                                 <h3>"Split-Pane Studio"</h3>
                                 <p>"Write beautiful Markdown documentation on the right while running commands on the left. The perfect interface for tutorials and workshops."</p>
                             </article>
-
                             <article class="feature-card">
                                 <div class="icon-box">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
@@ -291,8 +234,6 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </section>
 
-
-                // FINAL CTA
                 <section class="section-usage" style="border-bottom: none;">
                     <div class="container-narrow">
                         <div class="final-cta">
@@ -303,27 +244,14 @@ pub fn LandingPage() -> impl IntoView {
                                 "Join the developers using TryCLI to build the next generation of interactive documentation."
                             </p>
                             <div style="margin-top: 2rem;">
-                                {move || {
-                                    let url = auth_github_url();
-                                    if auth_checked.get() && user.get().is_some() {
-                                        view! { <A href="/new" class="btn-secondary btn-lg">"Create New Project"</A> }.into_view()
-                                    } else {
-                                        view! {
-                                            <a href=url class="btn-primary btn-hero btn-lg" rel="external" style="display: flex; align-items: center; gap: 10px;">
-                                                <svg height="24" width="24" viewBox="0 0 16 16" fill="currentColor" style="color: black;">
-                                                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                                                </svg>
-                                                "Sign Up with GitHub"
-                                            </a>
-                                        }.into_view()
-                                    }
-                                }}
+                                <A href="/outage" class="btn-primary btn-hero btn-lg">
+                                    "Studio In Maintenance"
+                                </A>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                // FOOTER
                 <footer class="landing-footer">
                     <div class="footer-container">
                         <div class="footer-top">
@@ -332,15 +260,14 @@ pub fn LandingPage() -> impl IntoView {
                                 <span class="brand-name">"TryCLI"</span>
                             </div>
                             <div class="footer-links">
-                                <a href="https://ko-fi.com/V7V21TRPL5" target="_blank" rel="noopener noreferrer">"Support us"</a>
-                                <a href="/blogs" rel="noopener noreferrer">"Blogs"</a>
-                                <a href="/policy" rel="noopener noreferrer">"Terms & Policy"</a>
-                                <a href="/docs" rel="noopener noreferrer">"Documentation"</a>
-                                <a href="https://x.com/TryCliStudio" rel="noopener noreferrer">"Twitter"</a>
+                                <a href=SUPPORT_URL target="_blank" rel="noopener noreferrer">"Support us"</a>
+                                <A href="/docs">"Documentation"</A>
+                                <a href=GITHUB_REPO_URL target="_blank" rel="noopener noreferrer">"GitHub Repo"</a>
+                                <a href=TWITTER_URL target="_blank" rel="noopener noreferrer">"Twitter"</a>
                             </div>
                         </div>
                         <div class="footer-bottom">
-                            <span class="copyright">"© 2026 TryCLI Studio. All rights reserved."</span><br/>
+                            <span class="copyright">"© 2026 TryCLI Studio. All rights reserved."</span><br />
                             <span class="copyright">"Built with ❤️"</span>
                         </div>
                     </div>
