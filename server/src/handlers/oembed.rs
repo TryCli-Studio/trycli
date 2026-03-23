@@ -28,26 +28,26 @@ pub async fn oembed_handler(
             let token = parts[1];
             
             // --- FIX 1: Join users table to get the username ---
-            let project = sqlx::query!(
+            let project = sqlx::query_as::<_, (String, String)>(
                 "SELECT p.slug, u.username as owner_username 
                  FROM projects p
                  JOIN users u ON p.owner_id = u.id
-                 WHERE p.embed_token = $1", 
-                token
+                 WHERE p.embed_token = $1"
             )
+            .bind(token)
             .fetch_optional(&state.db)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-            if let Some(p) = project {
+            if let Some((slug, owner_username)) = project {
                 let origin = std::env::var("FRONTEND_URL").unwrap_or("https://trycli.com".to_string());
-                let embed_src = format!("{}/embed/{}/{}", origin, p.owner_username, p.slug);
+                let embed_src = format!("{}/embed/{}/{}", origin, owner_username, slug);
                 
                 return Ok(Json(OEmbedResponse::Rich {
                     version: "1.0".to_string(),
-                    title: format!("Interactive Demo: {}", p.slug),
-                    author_name: p.owner_username.clone(), 
-                    author_url: format!("{}/{}", origin, p.owner_username),
+                    title: format!("Interactive Demo: {}", slug),
+                    author_name: owner_username.clone(), 
+                    author_url: format!("{}/{}", origin, owner_username),
                     provider_name: "TryCLI Studio".to_string(),
                     provider_url: origin.clone(),
                     html: format!(
@@ -67,13 +67,14 @@ pub async fn oembed_handler(
             
             // --- FIX 2: Join users table to check existence by username ---
             // We verify that a project exists for this username/slug pair
-            let exists = sqlx::query!(
-                "SELECT 1 as \"exists!\" 
+            let exists = sqlx::query_scalar::<_, i64>(
+                "SELECT 1
                  FROM projects p
                  JOIN users u ON p.owner_id = u.id
-                 WHERE LOWER(u.username) = LOWER($1) AND LOWER(p.slug) = LOWER($2)",
-                username, slug
+                 WHERE LOWER(u.username) = LOWER($1) AND LOWER(p.slug) = LOWER($2)"
             )
+            .bind(username)
+            .bind(slug)
             .fetch_optional(&state.db)
             .await
             .unwrap_or(None);

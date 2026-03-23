@@ -18,6 +18,13 @@ use tower_sessions::Session;
 use crate::state::{AppState, SessionContext}; 
 use crate::models::{User, AnalyticsEventType, log_analytics_event}; 
 
+fn docker_runtime() -> Option<String> {
+    std::env::var("DOCKER_RUNTIME")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 pub async fn ws_handler(
     ws: WebSocketUpgrade, 
     Path(session_id): Path<String>, 
@@ -158,7 +165,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState, session_id: Strin
                 format!("SHELL={}", shell) 
             ]),
             host_config: Some(HostConfig { 
-                runtime: Some("io.containerd.kata-clh.v2".to_string()),
+                runtime: docker_runtime(),
                 memory: Some(512 * 1024 * 1024), 
                 nano_cpus: Some(500_000_000),
                 pids_limit: Some(128),
@@ -341,7 +348,7 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
             ("managed_by".to_string(), "TryCli Studio".to_string())
         ])),
         host_config: Some(HostConfig {
-            runtime: Some("io.containerd.kata-clh.v2".to_string()),
+            runtime: docker_runtime(),
             memory: Some(512 * 1024 * 1024), 
             memory_swap: Some(1024 * 1024 * 1024), 
             nano_cpus: Some(500_000_000),   
