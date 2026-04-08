@@ -25,6 +25,57 @@ fn docker_runtime() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+fn describe_docker_error(error: &bollard::errors::Error) -> String {
+    let raw = error.to_string();
+
+    if raw.contains("hyper legacy client") || raw.contains("socket") || raw.contains("connect") {
+        format!(
+            "{}. Docker appears unreachable. Make sure the Docker daemon is running and the server can access the local Docker socket.",
+            raw
+        )
+    } else {
+        raw
+    }
+}
+
+async fn pull_image_or_report(
+    socket: &mut WebSocket,
+    state: &AppState,
+    session_id: &str,
+    image: &str,
+) -> Result<(), ()> {
+    let mut pull_stream = state.docker.create_image(
+        Some(CreateImageOptions {
+            from_image: image.to_string(),
+            ..Default::default()
+        }),
+        None,
+        None,
+    );
+
+    while let Some(result) = pull_stream.next().await {
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                {
+                    let mut map = state.lock_sessions();
+                    map.remove(session_id);
+                }
+                let _ = socket
+                    .send(Message::Text(format!(
+                        "\r\n\x1b[31mFailed to pull base image '{}': {}\x1b[0m\r\n",
+                        image,
+                        describe_docker_error(&e)
+                    )))
+                    .await;
+                return Err(());
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn ws_handler(
     ws: WebSocketUpgrade, 
     Path(session_id): Path<String>, 
@@ -322,7 +373,12 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
         }
     }
 
-    let _ = state.docker.create_image(Some(CreateImageOptions { from_image: image, ..Default::default() }), None, None).collect::<Vec<_>>().await;
+    if pull_image_or_report(&mut socket, &state, &session_id, image)
+        .await
+        .is_err()
+    {
+        return;
+    }
 
     {
         let map = state.lock_sessions();
@@ -474,7 +530,11 @@ async fn run_setup_wizard(mut socket: WebSocket, state: AppState, session_id: St
                 let mut map = state.lock_sessions();
                 map.remove(&session_id);
             }
-            send_txt(&mut socket, &format!("Error creating container: {}", e)).await;
+            send_txt(
+                &mut socket,
+                &format!("Error creating container: {}", describe_docker_error(&e)),
+            )
+            .await;
         }
     }
 }

@@ -9,12 +9,12 @@ const LOGO_SRC: &str = "/octopus_terminal_opt.png";
 #[component]
 pub fn Navbar(
     children: Children,
-    #[prop(optional)] is_logged_in: Option<bool>,
+    #[prop(optional, into)] is_logged_in: MaybeSignal<bool>,
 ) -> impl IntoView {
     let location = use_location();
     
     let logo_href = move || {
-        let is_logged_in = is_logged_in.unwrap_or(false);
+        let is_logged_in = is_logged_in.get();
         let current_path = location.pathname.get();
         
         if is_logged_in {

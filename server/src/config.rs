@@ -8,6 +8,10 @@ use dashmap::DashMap;
 pub async fn setup_database_and_docker() -> anyhow::Result<AppState> {
     // 1. Docker setup 
     let docker = Arc::new(Docker::connect_with_local_defaults()?);
+    docker
+        .ping()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to connect to Docker daemon: {e}"))?;
     
     // 2. DB Connection 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");

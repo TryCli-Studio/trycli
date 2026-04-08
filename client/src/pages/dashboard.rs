@@ -90,6 +90,7 @@ pub fn DashboardPage() -> impl IntoView {
     let (search_results, set_search_results) = create_signal(Vec::<ProjectSummary>::new());
     let (show_suggestions, set_show_suggestions) = create_signal(false);
     let (debounce_timer, set_debounce_timer) = create_signal::<Option<i32>>(None);
+    let is_logged_in = create_memo(move |_| user.get().is_some());
 
     let perform_search = move |query: String| {
         if query.is_empty() {
@@ -152,7 +153,7 @@ pub fn DashboardPage() -> impl IntoView {
     };
 
     view! {
-        <Navbar is_logged_in=user.get().is_some()>
+        <Navbar is_logged_in=is_logged_in>
             <div class="controls">
                 {move || match user.get() {
                     Some(u) => view! {
@@ -271,7 +272,7 @@ fn DashboardSearch(
             <input type="text"
                    class="input-hero"
                    placeholder="Search repositories or initialize a new sandbox..."
-                   value=search_input.get()
+                   prop:value=move || search_input.get()
                    on:input=move |ev| {
                        handle_search_input(ev);
                        set_active_index.set(-1);
