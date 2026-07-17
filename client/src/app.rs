@@ -12,7 +12,13 @@ pub fn App() -> impl IntoView {
     view! {
         <Router>
             <Routes>
-                <Route path="/" view=LandingPage />
+                <Route path="/" view=move || {
+                    if option_env!("MAINTENANCE_MODE").unwrap_or("false") == "true" {
+                        view! { <OutagePage /> }.into_view()
+                    } else {
+                        view! { <LandingPage /> }.into_view()
+                    }
+                } />
                 <Route path="/docs" view=DocsPage />
                 <Route path="/blogs" view=BlogsPage />
                 <Route path="/policy" view=PolicyPage />
