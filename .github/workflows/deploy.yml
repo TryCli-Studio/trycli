@@ -93,8 +93,8 @@ jobs:
             # 3. Inject Environment Variables from GitHub Secrets
             cat << EOF > /home/trycliuser/trycli/server/.env
             DATABASE_URL=${{ secrets.DATABASE_URL }}
-            GITHUB_CLIENT_ID=${{ secrets.GITHUB_CLIENT_ID }}
-            GITHUB_CLIENT_SECRET=${{ secrets.GITHUB_CLIENT_SECRET }}
+            GITHUB_CLIENT_ID=${{ secrets.OAUTH_CLIENT_ID }}
+            GITHUB_CLIENT_SECRET=${{ secrets.OAUTH_CLIENT_SECRET }}
             API_URL=https://trycli.com
             FRONTEND_URL=https://trycli.com
             EOF
