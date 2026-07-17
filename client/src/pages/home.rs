@@ -175,29 +175,23 @@ pub fn LandingPage() -> impl IntoView {
                             </A>
                         </div>
 
-                        // TERMINAL PREVIEW
-                        <div class="terminal-preview" role="log" aria-label="Terminal Preview Demo">
-                            <div class="terminal-header-preview" aria-hidden="true">
-                                <div class="dot red"></div>
-                                <div class="dot yellow"></div>
-                                <div class="dot green"></div>
-                                <span class="terminal-title-preview">"developer@trycli-studio:~"</span>
-                            </div>
-                            <div class="terminal-body-preview">
-                                <div class="line">
-                                    <span class="prompt">"➜"</span>
-                                    <span class="cmd">" curl -fsSL https://trycli.com/install.sh | sh"</span>
+                        // DEMO VIDEO
+                        <div class="video-placeholder-card" style="background: linear-gradient(180deg, rgba(13, 13, 15, 0.96), rgba(7, 7, 8, 0.98)); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 22px; padding: 1.5rem; text-align: left; box-shadow: 0 28px 80px -45px rgba(0, 0, 0, 0.9); margin-top: 2rem; width: 100%; max-width: 800px; margin-left: auto; margin-right: auto;">
+                            <div class="video-placeholder-header" style="margin-bottom: 1rem;">
+                                <div>
+                                    <p class="video-placeholder-eyebrow" style="margin: 0 0 0.4rem 0; color: #a1a1aa; font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase;">"Demo Video"</p>
+                                    <h2 id="demo-video-placeholder" style="margin: 0; font-size: 1.5rem;">"Watch TryCLI in action"</h2>
                                 </div>
-                                <div class="line output"><span>"→ Initializing environment (Ubuntu 22.04)..."</span></div>
-                                <div class="line output"><span>"→ Installing dependencies..."</span></div>
-                                <div class="line output"><span class="success">"✔ Environment Ready! Session ID: 9f8a-2b1c"</span></div>
-                                <div class="line">
-                                    <span class="prompt">"➜"</span>
-                                    <span class="cmd">" trycli publish --public"</span>
-                                </div>
-                                <div class="line output"><span>"Snapshotting container state... Done (1.2s)"</span></div>
-                                <div class="line"><span class="prompt">"➜"</span> <span class="cursor">"_"</span></div>
                             </div>
+
+                            <iframe
+                                class="demo-video-embed"
+                                src="https://www.youtube.com/embed/mw_ausmS4vc"
+                                title="TryCLI demo video"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                style="width: 100%; aspect-ratio: 16 / 9; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 18px; background: #000; display: block;"
+                                allowfullscreen=true
+                            ></iframe>
                         </div>
                     </div>
                 </main>
