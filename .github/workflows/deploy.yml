@@ -43,7 +43,7 @@ jobs:
 
       #  BACKEND BUILD (Axum) 
       - name: Install Cross
-        run: cargo install cross
+        uses: taiki-e/install-action@cross
 
       - name: Build Backend (Static Binary)
         # ⚠️ CHANGE: Run from root to ensure workspace lockfile is respected
