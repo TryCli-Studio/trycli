@@ -63,25 +63,42 @@ jobs:
           # Frontend 'dist' is still inside client/ because trunk ran there
           cp -r client/dist deploy_package/dist
 
-      - name: Deploy to DigitalOcean
+      - name: Deploy to Azure VM
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
-          username: deploy
+          username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "deploy_package/*"
-          target: "/home/deploy/app"
+          target: "/home/trycliuser/deploy_tmp"
           strip_components: 1
 
       - name: Restart Application
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
-          username: deploy
+          username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            chmod +x /home/deploy/app/server_bin
+            # 1. Update Backend Binary
+            mkdir -p /home/trycliuser/trycli/target/release
+            cp /home/trycliuser/deploy_tmp/server_bin /home/trycliuser/trycli/target/release/server
+            chmod +x /home/trycliuser/trycli/target/release/server
             
-            # Ensure your systemd file points to /home/deploy/app/server_bin
-            # and Environment="LEPTOS_SITE_ROOT=./dist"
+            # 2. Update Frontend Files
+            mkdir -p /home/trycliuser/trycli/client/dist
+            rm -rf /home/trycliuser/trycli/client/dist/*
+            cp -r /home/trycliuser/deploy_tmp/dist/* /home/trycliuser/trycli/client/dist/
+            
+            # 3. Inject Environment Variables from GitHub Secrets
+            cat << EOF > /home/trycliuser/trycli/server/.env
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            GITHUB_CLIENT_ID=${{ secrets.GITHUB_CLIENT_ID }}
+            GITHUB_CLIENT_SECRET=${{ secrets.GITHUB_CLIENT_SECRET }}
+            API_URL=https://trycli.com
+            FRONTEND_URL=https://trycli.com
+            EOF
+            chmod 600 /home/trycliuser/trycli/server/.env
+            
+            # 4. Restart Backend Service
             sudo systemctl restart trycli
