@@ -18,7 +18,7 @@ pub fn create_router(state: AppState) -> anyhow::Result<axum::Router> {
 
     // 1. DYNAMIC ORIGIN: Reads from env, defaults to localhost for dev
     let frontend_url = std::env::var("FRONTEND_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+        .unwrap_or_else(|_| "http://localhost:8081".to_string());
 
     // Custom header for embed referer
     let x_embed_referer = axum::http::HeaderName::from_static("x-embed-referer");

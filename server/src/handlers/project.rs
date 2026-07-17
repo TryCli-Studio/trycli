@@ -87,7 +87,7 @@ fn normalize_url(url_str: &str) -> Option<String> {
 /// - `Err((StatusCode, String))` if the request fails validation
 fn validate_csrf_protection(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
     let frontend_url = std::env::var("FRONTEND_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
+        .unwrap_or_else(|_| "http://localhost:8081".to_string());
     
     // Parse the expected origin from FRONTEND_URL
     let expected_origin = Url::parse(&frontend_url)
@@ -966,9 +966,9 @@ pub async fn resolve_secret_embed(
     let (owner, slug, embed_key) = row.ok_or((StatusCode::NOT_FOUND, "Invalid embed token".to_string()))?;
 
     // 2. Get Configurations
-    let api_url = std::env::var("API_URL").unwrap_or("http://localhost:3000".to_string());
-    // FIX: Get the Frontend URL so we redirect to the right port (8080 in dev)
-    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or("http://localhost:8080".to_string());
+    let api_url = std::env::var("API_URL").unwrap_or("http://localhost:3002".to_string());
+    // FIX: Get the Frontend URL so we redirect to the right port (8081 in dev)
+    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or("http://localhost:8081".to_string());
     
     // 3. Generate Discovery URL for OEmbed (Points to Backend)
     let oembed_url = format!("{}/api/oembed?url={}/e/{}", api_url, api_url, token);

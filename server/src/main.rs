@@ -40,8 +40,10 @@ async fn main() -> anyhow::Result<()> {
     let app = router::create_router(state)?;
 
     // Start server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
-    println!("Server listening on port 3000...");
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3002".to_string());
+    let bind_address = format!("0.0.0.0:{}", port);
+    let listener = tokio::net::TcpListener::bind(&bind_address).await?;
+    println!("Server listening on port {}...", port);
     axum::serve(listener, app).await?;
     
     Ok(())

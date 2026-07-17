@@ -90,10 +90,10 @@ async fn github_callback(
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Session Insert Error".into()))?;
 
-    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3002".to_string());
 
     let dashboard_url = if api_url.contains("localhost") {
-        "http://localhost:8080/dashboard".to_string()
+        "http://localhost:8081/dashboard".to_string()
     } else {
         format!("{}/dashboard", api_url)
     };
@@ -120,7 +120,7 @@ fn make_client(state: &AppState) -> Result<BasicClient, String> {
         .map_err(|e| format!("Invalid Token URL: {}", e))?;
 
     let api_url = std::env::var("API_URL")
-        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+        .unwrap_or_else(|_| "http://localhost:3002".to_string());
         
     let redirect_url = RedirectUrl::new(format!("{}/auth/callback", api_url))
         .map_err(|e| format!("Invalid Redirect URL: {}", e))?;
@@ -139,9 +139,9 @@ async fn logout(session: Session) -> Result<impl IntoResponse, (StatusCode, Stri
     
     // Check for a specific Frontend URL, fallback to logic if not found
     let redirect_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| {
-        let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+        let api_url = std::env::var("API_URL").unwrap_or_else(|_| "http://localhost:3002".to_string());
         if api_url.contains("localhost") {
-            "http://localhost:8080/".to_string()
+            "http://localhost:8081/".to_string()
         } else {
             api_url
         }

@@ -449,7 +449,7 @@ pub fn ViewPage() -> impl IntoView {
                                     <span style="color: var(--text-main); font-weight: 500;">{login}</span>
                                 </div>
                                 <button class="btn-secondary btn-action btn-success" on:click=move |_| {
-                                    let origin = window().location().origin().unwrap_or_else(|_| "http://localhost:8080".to_string());
+                                    let origin = window().location().origin().unwrap_or_else(|_| "http://localhost:8081".to_string());
                                     if let Some(ProjectState::Ready(data)) = project_resource.get() {
                                         let token = data.get("embed_token").and_then(|v| v.as_str()).unwrap_or_default();
                                         
@@ -507,7 +507,7 @@ pub fn ViewPage() -> impl IntoView {
                             </div>
                             <div class="mobile-only" style="display: flex; align-items: center; gap: 12px;">
                                 <button class="btn-secondary btn-action btn-success" on:click=move |_| {
-                                    let origin = window().location().origin().unwrap_or_else(|_| "http://localhost:8080".to_string());
+                                    let origin = window().location().origin().unwrap_or_else(|_| "http://localhost:8081".to_string());
                                     if let Some(ProjectState::Ready(data)) = project_resource.get() {
                                         let token = data.get("embed_token").and_then(|v| v.as_str()).unwrap_or_default();
                                         let public_url = format!("{}/embed/{}/{}", origin, username(), slug());

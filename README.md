@@ -57,7 +57,7 @@ cd server
 cargo run
 ```
 
-*Server will listen on `0.0.0.0:3000`*
+*Server will listen on `0.0.0.0:3002`*
 
 ### 3. Frontend Setup
 
@@ -68,7 +68,7 @@ cd client
 trunk serve --open
 ```
 
-*Browser will open at `http://localhost:8080`*
+*Browser will open at `http://localhost:8081`*
 
 ## Usage Guide
 
@@ -81,7 +81,7 @@ trunk serve --open
     * Click **Publish Demo**.
 
 2. **Share:**
-    * Copy the URL (e.g., `http://localhost:8080/project/my-cool-tool`).
+    * Copy the URL (e.g., `http://localhost:8081/project/my-cool-tool`).
     * Send it to users. They will get a fresh clone of the environment you set up!
 
 ## Security Architecture

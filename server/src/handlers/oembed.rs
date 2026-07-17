@@ -40,7 +40,7 @@ pub async fn oembed_handler(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
             if let Some((slug, owner_username)) = project {
-                let origin = std::env::var("FRONTEND_URL").unwrap_or("https://trycli.com".to_string());
+                let origin = std::env::var("FRONTEND_URL").unwrap_or("http://localhost:8081".to_string());
                 let embed_src = format!("{}/embed/{}/{}", origin, owner_username, slug);
                 
                 return Ok(Json(OEmbedResponse::Rich {
@@ -80,7 +80,7 @@ pub async fn oembed_handler(
             .unwrap_or(None);
 
             if exists.is_some() {
-                let origin = std::env::var("FRONTEND_URL").unwrap_or("https://trycli.com".to_string());
+                let origin = std::env::var("FRONTEND_URL").unwrap_or("http://localhost:8081".to_string());
                 return Ok(Json(OEmbedResponse::Link {
                     version: "1.0".to_string(),
                     title: format!("Demo: {}", slug),
