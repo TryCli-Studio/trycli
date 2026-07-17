@@ -196,15 +196,9 @@ pub fn LandingPage() -> impl IntoView {
                     </div>
                 </main>
 
-                // FEATURES
                 <section class="section-features" style="background: rgba(255,255,255,0.01);">
                     <div class="container-narrow">
                         <h2 class="section-title">"Frictionless Onboarding"</h2>
-
-                        <p class="section-subtitle" style="text-align: left; margin-bottom: 3rem;">
-                            "The biggest drop-off in developer adoption happens before the first command is ever run. "
-                            "TryCLI bridges the gap between reading about a tool and actually experiencing it."
-                        </p>
 
                         <div style="display: flex; flex-wrap: wrap; gap: 40px; align-items: center;">
 
