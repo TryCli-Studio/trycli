@@ -64,19 +64,37 @@ jobs:
           cp -r client/dist deploy_package/dist
 
       - name: Deploy to Azure VM
+        id: deploy_scp_primary
+        continue-on-error: true
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "deploy_package/*"
           target: "/home/trycliuser/deploy_tmp"
           strip_components: 1
+          timeout: 120s
+
+      - name: Retry Deploy to Azure VM
+        if: steps.deploy_scp_primary.outcome == 'failure'
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "deploy_package/*"
+          target: "/home/trycliuser/deploy_tmp"
+          strip_components: 1
+          timeout: 120s
 
       - name: Restart Application
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
