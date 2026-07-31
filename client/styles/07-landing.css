@@ -65,7 +65,7 @@
 
 .hero-content {
     max-width: 900px;
-    margin: auto 0; /* Centers vertically safely without overflowing top */
+    margin: auto; /* Centers vertically safely without overflowing top, and centers horizontally */
     animation: fadeIn 0.8s ease-out;
 }
 

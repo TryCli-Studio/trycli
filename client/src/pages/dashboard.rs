@@ -193,6 +193,17 @@ pub fn DashboardPage() -> impl IntoView {
                             <div class="dashboard-container">
                                 <div class="dashboard-hero">
                                     <div class="hero-content">
+                                        <div style="background-color: rgba(234, 179, 8, 0.1); border-left: 4px solid #eab308; padding: 16px; margin-bottom: 24px; border-radius: 4px; text-align: left;">
+                                            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                                                <svg style="width: 20px; height: 20px; color: #eab308; margin-right: 8px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                <h3 style="margin: 0; color: #eab308; font-size: 1.1rem; font-weight: 600;">"Service Maintenance Notice"</h3>
+                                            </div>
+                                            <p style="margin: 0; color: var(--text-main); font-size: 0.95rem; line-height: 1.5;">
+                                                "We are currently undergoing scheduled infrastructure upgrades. During this maintenance window, interactive environments and deployments will be temporarily unavailable. We appreciate your patience as we work to enhance our system capabilities."
+                                            </p>
+                                        </div>
                                         <h1 class="hero-title">"Workspace Overview"</h1>
                                         <p class="hero-subtitle">"Manage your interactive sandboxes, monitor deployments, and publish new snapshots."</p>
                                         <DashboardSearch
