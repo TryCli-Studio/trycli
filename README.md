@@ -4,6 +4,7 @@
 
 It orchestrates isolated Docker environments on-demand, providing a seamless "Repl.it-like" experience specifically optimized for terminal applications.
 
+## NOTE: Functionality may go down based on server availability. 
 ## Features
 
 * **Instant Sandboxes:** Spawns a fresh, isolated Ubuntu container for every user session.
