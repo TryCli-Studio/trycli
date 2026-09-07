@@ -1,0 +1,8 @@
+[build]
+  command = "rustup target add wasm32-unknown-unknown && curl -sSfL https://github.com/trunk-rs/trunk/releases/download/v0.21.4/trunk-x86_64-unknown-linux-gnu.tar.gz | tar -xzf- && cd client && ../trunk build --release"
+  publish = "client/dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
