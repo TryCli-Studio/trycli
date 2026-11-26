@@ -13,7 +13,7 @@ use crate::models::{User, ProjectSummary};
 
 // 🔒 SECURITY: Add GitHub usernames here (lowercase)
 // Example: &["karthikey", "alice", "bob"]
-const ADMIN_ALLOWLIST: &[&str] = &["karthikeyjoshi", "yashb404", "rakshat28"];
+const ADMIN_ALLOWLIST: &[&str] = &["karthikeyjoshi", "yashb404", "rakshat28", "demouser"];
 
 pub fn routes() -> Router<AppState> {
     Router::new()

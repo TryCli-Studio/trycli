@@ -16,7 +16,7 @@ use tokio::time::Duration;
 use uuid::Uuid;
 use tower_sessions::Session; 
 use crate::state::{AppState, SessionContext}; 
-use crate::models::{User, AnalyticsEventType, log_analytics_event}; 
+use crate::models::{AnalyticsEventType, log_analytics_event}; 
 
 fn docker_runtime() -> Option<String> {
     std::env::var("DOCKER_RUNTIME")
@@ -82,8 +82,10 @@ pub async fn ws_handler(
     State(state): State<AppState>,
     session: Session, 
 ) -> Result<Response, StatusCode> {
-    let user: Option<User> = session.get("user").await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let user_id = user.map(|u| u.id);
+    let user = crate::handlers::auth::get_current_user_or_demo(&session, &state.db)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let user_id = Some(user.id);
 
     {
         let map = state.lock_sessions();

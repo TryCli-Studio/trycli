@@ -5,17 +5,14 @@ use axum::{
 };
 use tower_sessions::Session;
 use crate::state::AppState;
-use crate::models::{User, AnalyticsDashboardData, AnalyticsProjectSummary, LiveSessionMetric};
+use crate::models::{AnalyticsDashboardData, AnalyticsProjectSummary, LiveSessionMetric};
 
 pub async fn get_analytics(
     State(state): State<AppState>,
     session: Session,
 ) -> Result<Json<AnalyticsDashboardData>, (StatusCode, String)> {
     // 1. Auth Check
-    let user: Option<User> = session.get("user")
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
-    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+    let user = crate::handlers::auth::get_current_user_or_demo(&session, &state.db).await?;
 
     // 2. Fetch Projects & Lifetime Views
     let projects = sqlx::query_as::<_, AnalyticsProjectSummary>(

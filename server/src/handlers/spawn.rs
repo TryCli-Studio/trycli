@@ -8,7 +8,7 @@ use serde::Deserialize;
 use tower_sessions::Session;
 use uuid::Uuid;
 use crate::state::AppState;
-use crate::models::{User, AnalyticsEventType};
+use crate::models::AnalyticsEventType;
 use bollard::container::RemoveContainerOptions;
 
 pub fn routes() -> Router<AppState> {
@@ -27,11 +27,7 @@ pub async fn spawn_handler(
     session: Session, 
     Query(view_query): Query<SpawnViewQuery>,
 ) -> Result<Json<String>, (StatusCode, String)> {
-    let user: Option<User> = session.get("user")
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
-        
-    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Please login first".to_string()))?;
+    let user = crate::handlers::auth::get_current_user_or_demo(&session, &state.db).await?;
 
     // --- FIX: DEDUPLICATION LOGIC ---
     let old_session_to_kill = {

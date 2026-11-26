@@ -87,7 +87,7 @@ fn normalize_url(url_str: &str) -> Option<String> {
 /// - `Err((StatusCode, String))` if the request fails validation
 fn validate_csrf_protection(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
     let frontend_url = std::env::var("FRONTEND_URL")
-        .unwrap_or_else(|_| "http://localhost:8081".to_string());
+        .unwrap_or_else(|_| "http://localhost:8080".to_string());
     
     // Parse the expected origin from FRONTEND_URL
     let expected_origin = Url::parse(&frontend_url)
@@ -169,11 +169,7 @@ pub async fn list_user_projects(
     State(state): State<AppState>,
     session: Session,
 ) -> Result<Json<Vec<ProjectSummary>>, (StatusCode, String)> {
-    let user: Option<User> = session.get("user")
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
-        
-    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+    let user = crate::handlers::auth::get_current_user_or_demo(&session, &state.db).await?;
 
     let projects = sqlx::query_as::<_, ProjectSummary>(
         "SELECT p.slug, p.image_tag, p.view_count, u.username as owner_username, p.embed_key, p.is_public 
@@ -198,11 +194,7 @@ pub async fn search_projects(
     session: Session,
     Query(search): Query<SearchQuery>,
 ) -> Result<Json<Vec<ProjectSummary>>, (StatusCode, String)> {
-    let user: Option<User> = session.get("user")
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
-        
-    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+    let user = crate::handlers::auth::get_current_user_or_demo(&session, &state.db).await?;
 
     let query_term = format!("%{}%", search.q);
     
@@ -230,11 +222,7 @@ pub async fn publish_handler(
     session: Session, 
     Json(payload): Json<PublishRequest>
 ) -> Result<Json<String>, (StatusCode, String)> {
-    
-    let user: Option<User> = session.get("user")
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
-    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+    let user = crate::handlers::auth::get_current_user_or_demo(&session, &state.db).await?;
 
     // 1. Get Session Info & Verify Ownership
     let (container_name, shell_path) = {
@@ -551,10 +539,7 @@ pub async fn toggle_public_visibility(
     Path(slug): Path<String>,
     Json(payload): Json<TogglePublicRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    let user: Option<User> = session.get("user")
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
-    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+    let user = crate::handlers::auth::get_current_user_or_demo(&session, &state.db).await?;
 
     let result = sqlx::query(
         "UPDATE projects SET is_public = $1 WHERE owner_id = $2 AND LOWER(slug) = LOWER($3)"
@@ -874,11 +859,7 @@ pub async fn delete_project(
     session: Session,
     Path(slug): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    let user: Option<User> = session.get("user")
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Session Error: {}", e)))?;
-        
-    let user = user.ok_or((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()))?;
+    let user = crate::handlers::auth::get_current_user_or_demo(&session, &state.db).await?;
 
     let record: Option<(String,)> = sqlx::query_as(
         "SELECT image_tag FROM projects WHERE LOWER(slug) = LOWER($1) AND owner_id = $2"
@@ -966,9 +947,9 @@ pub async fn resolve_secret_embed(
     let (owner, slug, embed_key) = row.ok_or((StatusCode::NOT_FOUND, "Invalid embed token".to_string()))?;
 
     // 2. Get Configurations
-    let api_url = std::env::var("API_URL").unwrap_or("http://localhost:3002".to_string());
-    // FIX: Get the Frontend URL so we redirect to the right port (8081 in dev)
-    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or("http://localhost:8081".to_string());
+    let api_url = std::env::var("API_URL").unwrap_or("http://localhost:3000".to_string());
+    // FIX: Get the Frontend URL so we redirect to the right port (8080 in dev)
+    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or("http://localhost:8080".to_string());
     
     // 3. Generate Discovery URL for OEmbed (Points to Backend)
     let oembed_url = format!("{}/api/oembed?url={}/e/{}", api_url, api_url, token);
